@@ -294,7 +294,7 @@ fn main() -> Result<()> {
                 if entries.is_empty() {
                     println!("(no plugins installed)");
                 } else {
-                    println!("{:<24} {:<12} {}", "NAME", "VERSION", "PATH");
+                    println!("{:<24} {:<12} PATH", "NAME", "VERSION");
                     for e in &entries {
                         println!("{:<24} {:<12} {}", e.name, e.version, e.wasm_path.display());
                     }

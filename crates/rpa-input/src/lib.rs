@@ -220,9 +220,9 @@ fn windows_control(title: &str, action: &str) -> Result<()> {
     let hwnd = unsafe { FindWindowW(PCWSTR::null(), PCWSTR(wide.as_ptr())) }
         .map_err(|_| InputError::Focus(format!("window not found: {title}")))?;
     match action {
-        "focus" => { unsafe { SetForegroundWindow(hwnd) }; }
-        "maximize" => { unsafe { ShowWindow(hwnd, SW_MAXIMIZE) }; }
-        "minimize" => { unsafe { ShowWindow(hwnd, SW_MINIMIZE) }; }
+        "focus" => { let _ = unsafe { SetForegroundWindow(hwnd) }; }
+        "maximize" => { let _ = unsafe { ShowWindow(hwnd, SW_MAXIMIZE) }; }
+        "minimize" => { let _ = unsafe { ShowWindow(hwnd, SW_MINIMIZE) }; }
         "close" => {
             unsafe { PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0)) }
                 .map_err(|e| InputError::Focus(e.to_string()))?;

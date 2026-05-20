@@ -223,9 +223,22 @@ steps:
   - http_put:  { url: "https://api.example.com/items/1", body: "{{ payload }}", save_as: resp }
 
   # Excel (requires feature = "excel-write")
-  - excel_read_cell:  { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, save_as: cell_val }
-  - excel_read_range: { path: data.xlsx, sheet: Sheet1, start_row: 2, end_row: 10, save_as: range }
-  - excel_write_cell: { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, value: "{{ result }}" }
+  - excel_read_cell:   { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, save_as: cell_val }
+  - excel_read_range:  { path: data.xlsx, sheet: Sheet1, start_row: 2, end_row: 10, save_as: range }
+  - excel_write_cell:  { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, value: "{{ result }}" }
+  - excel_write_range: { path: data.xlsx, sheet: Sheet1, start_cell: A2, data: "{{ rows }}" }
+
+  # Webhook notifications
+  - notify_slack: { url: "{{ SLACK_WEBHOOK }}", message: "{{ count }} rows processed" }
+  - notify_teams: { url: "{{ TEAMS_WEBHOOK }}", title: "Done", message: "{{ count }} rows processed" }
+
+  # OS Keychain (macOS Keychain / Windows Credential Manager / Linux Secret Service)
+  - keychain_set:    { service: myapp, account: api_key, value: "{{ secret }}" }
+  - keychain_get:    { service: myapp, account: api_key, save_as: secret }
+  - keychain_delete: { service: myapp, account: api_key }
+
+  # Scheduler (see `rpa schedule` CLI)
+  # Scenarios are triggered via cron — no inline step needed
 
   # Variable persistence
   - import_vars: { path: params.xlsx, row: 2 }
@@ -300,6 +313,11 @@ rpa run <scenario.yaml> [OPTIONS]
 
 rpa plugin install <path.wasm> [-y]
 rpa plugin list
+
+rpa schedule add --cron "<expr>" --scenario <path.yaml> [--name <name>]
+rpa schedule list
+rpa schedule remove <id|name>
+rpa schedule run           # start the scheduler daemon
 ```
 
 ## OCR Feature

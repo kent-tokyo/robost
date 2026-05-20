@@ -223,9 +223,22 @@ steps:
   - http_put:  { url: "https://api.example.com/items/1", body: "{{ payload }}", save_as: resp }
 
   # Excel (feature = "excel-write" が必要)
-  - excel_read_cell:  { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, save_as: cell_val }
-  - excel_read_range: { path: data.xlsx, sheet: Sheet1, start_row: 2, end_row: 10, save_as: range }
-  - excel_write_cell: { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, value: "{{ result }}" }
+  - excel_read_cell:   { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, save_as: cell_val }
+  - excel_read_range:  { path: data.xlsx, sheet: Sheet1, start_row: 2, end_row: 10, save_as: range }
+  - excel_write_cell:  { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, value: "{{ result }}" }
+  - excel_write_range: { path: data.xlsx, sheet: Sheet1, start_cell: A2, data: "{{ rows }}" }
+
+  # Webhook 通知
+  - notify_slack: { url: "{{ SLACK_WEBHOOK }}", message: "{{ count }} 件処理しました" }
+  - notify_teams: { url: "{{ TEAMS_WEBHOOK }}", title: "完了", message: "{{ count }} 件処理しました" }
+
+  # OS キーチェーン (macOS Keychain / Windows 資格情報マネージャー / Linux Secret Service)
+  - keychain_set:    { service: myapp, account: api_key, value: "{{ secret }}" }
+  - keychain_get:    { service: myapp, account: api_key, save_as: secret }
+  - keychain_delete: { service: myapp, account: api_key }
+
+  # スケジューラー (rpa schedule CLI 参照)
+  # シナリオは cron でトリガーされる — ステップ内記述は不要
 
   # 変数永続化
   - import_vars: { path: params.xlsx, row: 2 }
@@ -300,6 +313,11 @@ rpa run <scenario.yaml> [オプション]
 
 rpa plugin install <path.wasm> [-y]
 rpa plugin list
+
+rpa schedule add --cron "<expr>" --scenario <path.yaml> [--name <name>]
+rpa schedule list
+rpa schedule remove <id|name>
+rpa schedule run           # スケジューラーデーモンを起動
 ```
 
 ## OCR 機能

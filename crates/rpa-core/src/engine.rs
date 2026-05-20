@@ -3652,6 +3652,7 @@ steps:
     }
 
     #[test]
+    #[ignore = "requires a real display with screen content"]
     fn screenshot_save_creates_file() {
         let dir = tempfile::tempdir().unwrap();
         let engine = make_engine_for_dir(dir.path());
