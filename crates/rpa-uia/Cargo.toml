@@ -1,9 +1,12 @@
 [package]
 name = "rpa-uia"
-description = "Windows UI Automation integration for rpa-core"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "Windows UI Automation (UIA) integration for Rust RPA — interact by name, ID, or class"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "uia", "accessibility", "windows"]
+categories = ["os::windows-apis", "gui"]
 
 [dependencies]
 thiserror.workspace = true

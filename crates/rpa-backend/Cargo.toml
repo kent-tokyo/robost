@@ -1,9 +1,12 @@
 [package]
 name = "rpa-backend"
-description = "Unified Backend trait for local and remote desktop (RDP/VNC)"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "Unified backend trait abstracting local, RDP, and VNC desktop automation targets"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "rdp", "vnc", "desktop"]
+categories = ["os"]
 
 [dependencies]
 rpa-template.workspace = true

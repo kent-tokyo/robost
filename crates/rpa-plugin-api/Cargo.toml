@@ -1,9 +1,12 @@
 [package]
 name = "rpa-plugin-api"
-description = "Public API for rpa plugin authors (crates.io early-publish candidate)"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "Plugin author API for the Rust RPA automation framework (WASM extension interface)"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "plugin", "wasm", "extension"]
+categories = ["development-tools", "wasm"]
 
 [dependencies]
 serde.workspace = true

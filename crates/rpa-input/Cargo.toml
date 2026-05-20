@@ -1,9 +1,12 @@
 [package]
 name = "rpa-input"
-description = "Mouse/keyboard input emulation with window focus management (enigo wrapper)"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "Mouse and keyboard input emulation with window focus management for desktop automation"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "mouse", "keyboard", "desktop"]
+categories = ["os", "gui"]
 
 [dependencies]
 rpa-template.workspace = true

@@ -1,9 +1,12 @@
 [package]
 name = "rpa-web"
-description = "WebDriver-based browser automation for rpa-core"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "WebDriver browser automation for Rust RPA scenarios (Selenium/fantoccini integration)"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "webdriver", "browser", "selenium"]
+categories = ["web-programming", "development-tools::testing"]
 
 [dependencies]
 thiserror.workspace = true

@@ -1,9 +1,12 @@
 [package]
 name = "rpa-core"
-description = "Scenario engine: YAML parsing, step execution, retry, wait, and sub-scenario support"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "YAML-driven scenario engine for Rust RPA: branching, loops, retry, and sub-scenarios"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "scenario", "workflow", "yaml"]
+categories = ["development-tools"]
 
 [features]
 ocr = ["rpa-vision/ocr"]

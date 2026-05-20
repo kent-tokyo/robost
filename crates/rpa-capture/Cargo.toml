@@ -1,9 +1,12 @@
 [package]
 name = "rpa-capture"
-description = "Screen/window capture (xcap wrapper) with DPI awareness"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "Cross-platform screen and window capture with HiDPI awareness for desktop automation"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "screenshot", "screen-capture", "desktop"]
+categories = ["multimedia::images", "os"]
 
 [dependencies]
 rpa-template.workspace = true

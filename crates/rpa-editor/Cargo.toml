@@ -1,9 +1,12 @@
 [package]
 name = "rpa-editor"
-description = "Minimal visual scenario editor (list-based, egui)"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "Visual scenario editor for Rust RPA — list view, flowchart, and integrated YAML editing"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "editor", "gui", "flowchart"]
+categories = ["gui", "development-tools"]
 
 [[bin]]
 name = "rpa-editor"

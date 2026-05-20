@@ -1,9 +1,12 @@
 [package]
 name = "rpa-snip"
-description = "Template capture GUI — freeze screen and crop templates (tray app)"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "Template capture tray app for Rust RPA — freeze screen and crop image templates instantly"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "screenshot", "template", "gui"]
+categories = ["gui", "multimedia::images"]
 
 [dependencies]
 rpa-template.workspace = true

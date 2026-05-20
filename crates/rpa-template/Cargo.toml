@@ -1,9 +1,12 @@
 [package]
 name = "rpa-template"
-description = "Shared types for rpa (Point, Rect, Target, template metadata)"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "Shared coordinate and template metadata types for Rust RPA desktop automation"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "desktop-automation", "types"]
+categories = ["development-tools"]
 
 [dependencies]
 rpa-vision.workspace = true

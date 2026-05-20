@@ -1,9 +1,12 @@
 [package]
 name = "rpa-stdlib"
-description = "Built-in scenario node library (wait_image, click_image, clipboard, etc.)"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "Built-in node library for Rust RPA: image matching, clipboard, Excel, HTTP, scheduling, and more"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "stdlib", "workflow", "nodes"]
+categories = ["development-tools"]
 
 [features]
 db = ["dep:rusqlite"]

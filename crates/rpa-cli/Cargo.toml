@@ -1,9 +1,12 @@
 [package]
 name = "rpa-cli"
-description = "CLI binary: run scenarios, manage plugins"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+description = "Command-line tool for running RPA automation scenarios with scheduling and plugin management"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "cli", "scheduler", "robot"]
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "rpa"
