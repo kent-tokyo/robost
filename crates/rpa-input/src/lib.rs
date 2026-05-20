@@ -224,7 +224,7 @@ fn windows_control(title: &str, action: &str) -> Result<()> {
         "maximize" => { unsafe { ShowWindow(hwnd, SW_MAXIMIZE) }; }
         "minimize" => { unsafe { ShowWindow(hwnd, SW_MINIMIZE) }; }
         "close" => {
-            unsafe { PostMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0)) }
+            unsafe { PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0)) }
                 .map_err(|e| InputError::Focus(e.to_string()))?;
         }
         other => return Err(InputError::Focus(format!("unknown window action: {other}"))),

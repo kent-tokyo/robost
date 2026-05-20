@@ -93,7 +93,10 @@ impl UiaFinder {
             Ok(UiaElement { inner: el })
         }
         #[cfg(not(target_os = "windows"))]
-        Err(UiaError::Unsupported)
+        {
+            let _ = selector;
+            Err(UiaError::Unsupported)
+        }
     }
 }
 
@@ -119,7 +122,10 @@ impl UiaElement {
         #[cfg(target_os = "windows")]
         return self.inner.set_value(value);
         #[cfg(not(target_os = "windows"))]
-        Err(UiaError::Unsupported)
+        {
+            let _ = value;
+            Err(UiaError::Unsupported)
+        }
     }
 
     /// Invoke the element's default action (equivalent to clicking a button).
