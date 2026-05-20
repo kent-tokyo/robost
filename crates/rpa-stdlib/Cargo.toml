@@ -21,6 +21,8 @@ tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 lettre.workspace = true
+imap.workspace       = true
+native-tls.workspace = true
 umya-spreadsheet.workspace = true
 rusqlite = { workspace = true, optional = true }
 zip.workspace = true
