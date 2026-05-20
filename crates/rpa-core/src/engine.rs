@@ -1742,10 +1742,14 @@ impl ScenarioEngine {
 
     async fn ocr_match(&self, step: &OcrMatchStep, vars: &mut Variables) -> Result<()> {
         #[cfg(not(feature = "ocr"))]
-        return Err(EngineError::Other(
-            "ocr_match requires the 'ocr' feature; rebuild with: cargo build --features ocr"
-                .to_owned(),
-        ));
+        {
+            let _ = step;
+            let _ = vars;
+            return Err(EngineError::Other(
+                "ocr_match requires the 'ocr' feature; rebuild with: cargo build --features ocr"
+                    .to_owned(),
+            ));
+        }
 
         #[cfg(feature = "ocr")]
         {
@@ -1820,10 +1824,14 @@ impl ScenarioEngine {
 
     async fn ml_detect(&self, step: &MlDetectStep, vars: &mut Variables) -> Result<()> {
         #[cfg(not(feature = "ml"))]
-        return Err(EngineError::Other(
-            "ml_detect requires the 'ml' feature; rebuild with: cargo build --features ml"
-                .to_owned(),
-        ));
+        {
+            let _ = step;
+            let _ = vars;
+            return Err(EngineError::Other(
+                "ml_detect requires the 'ml' feature; rebuild with: cargo build --features ml"
+                    .to_owned(),
+            ));
+        }
 
         #[cfg(feature = "ml")]
         {
@@ -2407,10 +2415,14 @@ impl ScenarioEngine {
 
     fn excel_write_cell(&self, step: &ExcelWriteCellStep, vars: &mut Variables) -> Result<()> {
         #[cfg(not(feature = "excel-write"))]
-        return Err(EngineError::Other(
-            "excel_write_cell requires the 'excel-write' feature; rebuild with: cargo build --features excel-write"
-                .to_owned(),
-        ));
+        {
+            let _ = step;
+            let _ = vars;
+            return Err(EngineError::Other(
+                "excel_write_cell requires the 'excel-write' feature; rebuild with: cargo build --features excel-write"
+                    .to_owned(),
+            ));
+        }
 
         #[cfg(feature = "excel-write")]
         {

@@ -157,6 +157,6 @@ fn parse_key(name: &str) -> Option<enigo::Key> {
         "f12" => Some(F12),
         // single unicode character
         s if s.chars().count() == 1 => Some(Unicode(s.chars().next().unwrap())),
-        _ => None,
+        _ => std::option::Option::None,
     }
 }
