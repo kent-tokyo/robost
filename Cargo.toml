@@ -99,10 +99,13 @@ rfd = "0.15"
 arboard = "3"
 
 # HTTP client
-ureq = { version = "2", features = ["json"] }
+ureq   = { version = "2", features = ["json"] }
+base64 = "0.22"
 
 # Mail
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder"] }
+imap       = { version = "2", default-features = false, features = ["tls"] }
+native-tls = "0.2"
 
 # Database (rpa-stdlib db feature)
 rusqlite = { version = "0.32", features = ["bundled"] }

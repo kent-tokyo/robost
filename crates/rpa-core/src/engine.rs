@@ -19,22 +19,25 @@ use crate::scenario::{
     CalcStep, CallScenarioStep, ClickAction, ClickImageStep, ClipboardGetStep, ClipboardSetStep,
     CopyVarStep, CsvReadStep, CsvWriteMode, CsvWriteStep, DateAddStep, DateDiffStep,
     DateFormatStep, DialogInputStep, DialogSelectStep, DialogWaitStep, DiffUnit, DoWhileStep,
-    EnvGetStep, ExcelReadCellStep, ExcelReadRangeStep, ExcelWriteCellStep, FileAppendStep,
-    FileCopyStep, FileDeleteStep, FileExistsStep, FileListStep, FileMoveStep, FileReadStep,
-    FileRenameStep, FileWriteMode, FileWriteStep, FindImageStep, ForeachStep, GetDatetimeStep,
-    GetUsernameStep, GroupStep, IfStep, ImportVarsStep, IncrementStep, JsonParseStep,
-    JsonStringifyStep, KeyComboStep, LibraryStep, LoadVarsStep, LogLevel, LogWriteStep,
-    MatchRectStep, MlDetectStep, MouseClickXyStep, MouseDragStep, MouseMoveStep, MouseScrollStep,
-    NotifyStep, OcrMatchStep, PathBasenameStep, PathDirnameStep, PathJoinStep, ProcessExistsStep,
-    ProcessKillStep, ProcessStartStep, RepeatStep, SaveVarsStep, ScenarioStep, ScreenshotSaveStep,
-    ScriptStep, ShellStep, StringJoinStep, StringRegexStep, StringReplaceStep, StringSplitStep,
+    EnvGetStep, ExcelAddSheetStep, ExcelDeleteSheetStep, ExcelReadCellStep, ExcelReadRangeStep,
+    ExcelRenameSheetStep, ExcelWriteCellStep, FileAppendStep, FileCopyStep, FileDeleteStep,
+    FileExistsStep, FileListStep, FileMoveStep, FileReadStep, FileRenameStep, FileWriteMode,
+    FileWriteStep, FindImageStep, ForeachStep, GetDatetimeStep, GetUsernameStep, GroupStep, IfStep,
+    ImportVarsStep, IncrementStep, JsonParseStep, JsonStringifyStep, KeyComboStep, LibraryStep,
+    LoadVarsStep, LogLevel, LogWriteStep, MailReceiveStep, MatchRectStep, MlDetectStep,
+    MouseClickXyStep, MouseDragStep, MouseMoveStep, MouseScrollStep, NotifyStep, OcrMatchStep,
+    PathBasenameStep, PathDirnameStep, PathJoinStep, ProcessExistsStep, ProcessKillStep,
+    ProcessStartStep, RepeatStep, SaveVarsStep, ScenarioStep, ScreenshotSaveStep, ScriptStep,
+    ShellStep, StringJoinStep, StringRegexStep, StringReplaceStep, StringSplitStep,
     StringSubstringStep, StringTrimStep, SubScenarioStep, SwitchStep, TrimSide, TryCatchStep,
     TypeStep, UiaBy, UiaClickStep, UiaFindStep, UiaGetStep, UiaSetStep, UrlOpenStep, WaitImageStep,
     WaitNoImageStep, WaitWindowStep, WhileStep, WidthStep, WindowControlAction, WindowControlStep,
     WindowState,
 };
 #[cfg(feature = "http")]
-use crate::scenario::{ContentType, HttpGetStep, HttpPostStep, HttpPutStep};
+use crate::scenario::{
+    ContentType, HttpAuth, HttpDeleteStep, HttpGetStep, HttpPatchStep, HttpPostStep, HttpPutStep,
+};
 #[cfg(feature = "web")]
 use crate::scenario::{
     WebClickStep, WebGetStep, WebOpenStep, WebScreenshotStep, WebTypeStep, WebWaitStep,
@@ -842,6 +845,21 @@ impl ScenarioEngine {
                 self.http_put(s, vars).await?;
                 Ok(Flow::Done)
             }
+            #[cfg(feature = "http")]
+            ScenarioStep::HttpDelete(s) => {
+                self.http_delete(s, vars).await?;
+                Ok(Flow::Done)
+            }
+            #[cfg(feature = "http")]
+            ScenarioStep::HttpPatch(s) => {
+                self.http_patch(s, vars).await?;
+                Ok(Flow::Done)
+            }
+            // mail receive
+            ScenarioStep::MailReceive(s) => {
+                self.mail_receive(s, vars).await?;
+                Ok(Flow::Done)
+            }
             // Excel cell nodes
             ScenarioStep::ExcelReadCell(s) => {
                 self.excel_read_cell(s, vars)?;
@@ -853,6 +871,18 @@ impl ScenarioEngine {
             }
             ScenarioStep::ExcelWriteCell(s) => {
                 self.excel_write_cell(s, vars)?;
+                Ok(Flow::Done)
+            }
+            ScenarioStep::ExcelAddSheet(s) => {
+                self.excel_add_sheet(s, vars)?;
+                Ok(Flow::Done)
+            }
+            ScenarioStep::ExcelDeleteSheet(s) => {
+                self.excel_delete_sheet(s, vars)?;
+                Ok(Flow::Done)
+            }
+            ScenarioStep::ExcelRenameSheet(s) => {
+                self.excel_rename_sheet(s, vars)?;
                 Ok(Flow::Done)
             }
 
@@ -2166,6 +2196,22 @@ impl ScenarioEngine {
 
     // ── HTTP client methods ─────────────────────────────────────────────────
 
+    /// Apply optional HTTP authentication to a request.
+    #[cfg(feature = "http")]
+    fn apply_auth(req: ureq::Request, auth: Option<&HttpAuth>) -> ureq::Request {
+        match auth {
+            None => req,
+            Some(HttpAuth::Basic { user, password }) => {
+                use base64::prelude::{Engine as _, BASE64_STANDARD};
+                let encoded = BASE64_STANDARD.encode(format!("{user}:{password}"));
+                req.set("Authorization", &format!("Basic {encoded}"))
+            }
+            Some(HttpAuth::Bearer { token }) => {
+                req.set("Authorization", &format!("Bearer {token}"))
+            }
+        }
+    }
+
     #[cfg(feature = "http")]
     async fn http_get(&self, step: &HttpGetStep, vars: &mut Variables) -> Result<()> {
         let url = vars.expand(&step.url);
@@ -2175,11 +2221,13 @@ impl ScenarioEngine {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
+        let auth = step.auth.clone();
         let result = tokio::task::spawn_blocking(move || {
             let mut req = ureq::get(&url).timeout(timeout);
             for (k, v) in &headers {
                 req = req.set(k, v);
             }
+            req = Self::apply_auth(req, auth.as_ref());
             Self::http_call(req)
         })
         .await
@@ -2202,11 +2250,13 @@ impl ScenarioEngine {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
+        let auth = step.auth.clone();
         let result = tokio::task::spawn_blocking(move || {
             let mut req = ureq::post(&url).timeout(timeout);
             for (k, v) in &headers {
                 req = req.set(k, v);
             }
+            req = Self::apply_auth(req, auth.as_ref());
             Self::http_send_body(req, &content_type, body.as_ref())
         })
         .await
@@ -2229,11 +2279,13 @@ impl ScenarioEngine {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
+        let auth = step.auth.clone();
         let result = tokio::task::spawn_blocking(move || {
             let mut req = ureq::put(&url).timeout(timeout);
             for (k, v) in &headers {
                 req = req.set(k, v);
             }
+            req = Self::apply_auth(req, auth.as_ref());
             Self::http_send_body(req, &content_type, body.as_ref())
         })
         .await
@@ -2241,6 +2293,62 @@ impl ScenarioEngine {
         .map_err(|e| EngineError::Other(format!("http_put: {e}")))?;
         let status = result["status"].as_u64().unwrap_or(0);
         info!(url = %vars.expand(&step.url), status, "http_put");
+        vars.set(&step.save_as, result);
+        Ok(())
+    }
+
+    #[cfg(feature = "http")]
+    async fn http_delete(&self, step: &HttpDeleteStep, vars: &mut Variables) -> Result<()> {
+        let url = vars.expand(&step.url);
+        let timeout = std::time::Duration::from_millis(step.timeout_ms);
+        let headers: Vec<(String, String)> = step
+            .headers
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let auth = step.auth.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            let mut req = ureq::delete(&url).timeout(timeout);
+            for (k, v) in &headers {
+                req = req.set(k, v);
+            }
+            req = Self::apply_auth(req, auth.as_ref());
+            Self::http_call(req)
+        })
+        .await
+        .map_err(|e| EngineError::Other(format!("http_delete join error: {e}")))?
+        .map_err(|e| EngineError::Other(format!("http_delete: {e}")))?;
+        let status = result["status"].as_u64().unwrap_or(0);
+        info!(url = %vars.expand(&step.url), status, "http_delete");
+        vars.set(&step.save_as, result);
+        Ok(())
+    }
+
+    #[cfg(feature = "http")]
+    async fn http_patch(&self, step: &HttpPatchStep, vars: &mut Variables) -> Result<()> {
+        let url = vars.expand(&step.url);
+        let timeout = std::time::Duration::from_millis(step.timeout_ms);
+        let body = step.body.clone();
+        let content_type = step.content_type.clone();
+        let headers: Vec<(String, String)> = step
+            .headers
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let auth = step.auth.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            let mut req = ureq::patch(&url).timeout(timeout);
+            for (k, v) in &headers {
+                req = req.set(k, v);
+            }
+            req = Self::apply_auth(req, auth.as_ref());
+            Self::http_send_body(req, &content_type, body.as_ref())
+        })
+        .await
+        .map_err(|e| EngineError::Other(format!("http_patch join error: {e}")))?
+        .map_err(|e| EngineError::Other(format!("http_patch: {e}")))?;
+        let status = result["status"].as_u64().unwrap_or(0);
+        info!(url = %vars.expand(&step.url), status, "http_patch");
         vars.set(&step.save_as, result);
         Ok(())
     }
@@ -2471,6 +2579,100 @@ impl ScenarioEngine {
             info!(file = %path.display(), cell = %cell_ref, value = %value, "excel_write_cell");
             Ok(())
         }
+    }
+
+    // ── Mail receive method ─────────────────────────────────────────────────
+
+    async fn mail_receive(&self, step: &MailReceiveStep, vars: &mut Variables) -> Result<()> {
+        let host = vars.expand(&step.host);
+        let user = vars.expand(&step.user);
+        let password = vars.expand(&step.password);
+        let folder = vars.expand(&step.folder);
+        let port = step.port;
+        let count = step.count;
+        let only_unseen = step.only_unseen;
+
+        let result = tokio::task::spawn_blocking(move || {
+            let mut inputs = std::collections::HashMap::new();
+            inputs.insert("host".to_owned(), serde_json::Value::String(host));
+            inputs.insert("user".to_owned(), serde_json::Value::String(user));
+            inputs.insert("password".to_owned(), serde_json::Value::String(password));
+            inputs.insert("folder".to_owned(), serde_json::Value::String(folder));
+            inputs.insert("port".to_owned(), serde_json::Value::Number(port.into()));
+            inputs.insert("count".to_owned(), serde_json::Value::Number(count.into()));
+            inputs.insert(
+                "only_unseen".to_owned(),
+                serde_json::Value::Bool(only_unseen),
+            );
+            rpa_stdlib::dispatch("mail.imap_receive", inputs)
+        })
+        .await
+        .map_err(|e| EngineError::Other(format!("mail_receive join: {e}")))?
+        .map_err(|e| EngineError::Other(format!("mail_receive: {e}")))?;
+
+        let messages = result
+            .get("messages")
+            .cloned()
+            .unwrap_or(serde_json::Value::Array(vec![]));
+        let count = messages.as_array().map(|a| a.len()).unwrap_or(0);
+        info!(count, "mail_receive");
+        vars.set(&step.save_as, messages);
+        Ok(())
+    }
+
+    // ── Excel sheet management methods ─────────────────────────────────────
+
+    fn excel_add_sheet(&self, step: &ExcelAddSheetStep, vars: &Variables) -> Result<()> {
+        let file = self.base_dir.join(vars.expand(&step.file));
+        let name = vars.expand(&step.name);
+        let mut inputs = std::collections::HashMap::new();
+        inputs.insert(
+            "file".to_owned(),
+            serde_json::Value::String(file.to_string_lossy().into_owned()),
+        );
+        inputs.insert("name".to_owned(), serde_json::Value::String(name.clone()));
+        rpa_stdlib::dispatch("excel.add_sheet", inputs)
+            .map_err(|e| EngineError::Other(format!("excel_add_sheet: {e}")))?;
+        info!(file = %file.display(), name = %name, "excel_add_sheet");
+        Ok(())
+    }
+
+    fn excel_delete_sheet(&self, step: &ExcelDeleteSheetStep, vars: &Variables) -> Result<()> {
+        let file = self.base_dir.join(vars.expand(&step.file));
+        let name = vars.expand(&step.name);
+        let mut inputs = std::collections::HashMap::new();
+        inputs.insert(
+            "file".to_owned(),
+            serde_json::Value::String(file.to_string_lossy().into_owned()),
+        );
+        inputs.insert("name".to_owned(), serde_json::Value::String(name.clone()));
+        rpa_stdlib::dispatch("excel.delete_sheet", inputs)
+            .map_err(|e| EngineError::Other(format!("excel_delete_sheet: {e}")))?;
+        info!(file = %file.display(), name = %name, "excel_delete_sheet");
+        Ok(())
+    }
+
+    fn excel_rename_sheet(&self, step: &ExcelRenameSheetStep, vars: &Variables) -> Result<()> {
+        let file = self.base_dir.join(vars.expand(&step.file));
+        let from_name = vars.expand(&step.from_name);
+        let to_name = vars.expand(&step.to_name);
+        let mut inputs = std::collections::HashMap::new();
+        inputs.insert(
+            "file".to_owned(),
+            serde_json::Value::String(file.to_string_lossy().into_owned()),
+        );
+        inputs.insert(
+            "from_name".to_owned(),
+            serde_json::Value::String(from_name.clone()),
+        );
+        inputs.insert(
+            "to_name".to_owned(),
+            serde_json::Value::String(to_name.clone()),
+        );
+        rpa_stdlib::dispatch("excel.rename_sheet", inputs)
+            .map_err(|e| EngineError::Other(format!("excel_rename_sheet: {e}")))?;
+        info!(file = %file.display(), from = %from_name, to = %to_name, "excel_rename_sheet");
+        Ok(())
     }
 
     // ── Text file read/write methods ────────────────────────────────────────

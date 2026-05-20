@@ -153,11 +153,23 @@ pub enum ScenarioStep {
     HttpPost(HttpPostStep),
     #[cfg(feature = "http")]
     HttpPut(HttpPutStep),
+    #[cfg(feature = "http")]
+    HttpDelete(HttpDeleteStep),
+    #[cfg(feature = "http")]
+    HttpPatch(HttpPatchStep),
+
+    // --- mail ---
+    MailReceive(MailReceiveStep),
 
     // --- Excel cell nodes ---
     ExcelReadCell(ExcelReadCellStep),
     ExcelReadRange(ExcelReadRangeStep),
     ExcelWriteCell(ExcelWriteCellStep),
+
+    // --- Excel sheet management nodes ---
+    ExcelAddSheet(ExcelAddSheetStep),
+    ExcelDeleteSheet(ExcelDeleteSheetStep),
+    ExcelRenameSheet(ExcelRenameSheetStep),
 
     // --- text file read/write ---
     FileRead(FileReadStep),
@@ -924,6 +936,15 @@ pub enum ContentType {
     Text,
 }
 
+/// HTTP authentication (Basic or Bearer).
+#[cfg(feature = "http")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum HttpAuth {
+    Basic { user: String, password: String },
+    Bearer { token: String },
+}
+
 /// HTTP GET request.
 #[cfg(feature = "http")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -935,6 +956,8 @@ pub struct HttpGetStep {
     pub headers: std::collections::HashMap<String, String>,
     #[serde(default = "default_http_timeout_ms")]
     pub timeout_ms: u64,
+    #[serde(default)]
+    pub auth: Option<HttpAuth>,
 }
 
 /// HTTP POST request.
@@ -950,6 +973,8 @@ pub struct HttpPostStep {
     #[serde(default)]
     pub content_type: ContentType,
     pub body: Option<serde_json::Value>,
+    #[serde(default)]
+    pub auth: Option<HttpAuth>,
 }
 
 /// HTTP PUT request.
@@ -965,6 +990,39 @@ pub struct HttpPutStep {
     #[serde(default)]
     pub content_type: ContentType,
     pub body: Option<serde_json::Value>,
+    #[serde(default)]
+    pub auth: Option<HttpAuth>,
+}
+
+/// HTTP DELETE request.
+#[cfg(feature = "http")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HttpDeleteStep {
+    pub url: String,
+    pub save_as: String,
+    #[serde(default)]
+    pub headers: std::collections::HashMap<String, String>,
+    #[serde(default = "default_http_timeout_ms")]
+    pub timeout_ms: u64,
+    #[serde(default)]
+    pub auth: Option<HttpAuth>,
+}
+
+/// HTTP PATCH request.
+#[cfg(feature = "http")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HttpPatchStep {
+    pub url: String,
+    pub save_as: String,
+    #[serde(default)]
+    pub headers: std::collections::HashMap<String, String>,
+    #[serde(default = "default_http_timeout_ms")]
+    pub timeout_ms: u64,
+    #[serde(default)]
+    pub content_type: ContentType,
+    pub body: Option<serde_json::Value>,
+    #[serde(default)]
+    pub auth: Option<HttpAuth>,
 }
 
 // ── Excel cell step types ─────────────────────────────────────────────────
@@ -994,6 +1052,56 @@ pub struct ExcelWriteCellStep {
     pub sheet: Option<String>,
     pub cell: String,
     pub value: String,
+}
+
+// ── Mail receive step type ────────────────────────────────────────────────────
+
+/// Receive emails via IMAP.  Saves a list of `{subject, from, date, body, seen}` maps.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MailReceiveStep {
+    pub host: String,
+    pub user: String,
+    pub password: String,
+    #[serde(default = "default_imap_port")]
+    pub port: u16,
+    #[serde(default = "default_imap_folder")]
+    pub folder: String,
+    #[serde(default = "default_mail_count")]
+    pub count: u32,
+    #[serde(default)]
+    pub only_unseen: bool,
+    pub save_as: String,
+}
+
+fn default_imap_port() -> u16 {
+    993
+}
+fn default_imap_folder() -> String {
+    "INBOX".to_owned()
+}
+fn default_mail_count() -> u32 {
+    10
+}
+
+// ── Excel sheet management step types ────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExcelAddSheetStep {
+    pub file: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExcelDeleteSheetStep {
+    pub file: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExcelRenameSheetStep {
+    pub file: String,
+    pub from_name: String,
+    pub to_name: String,
 }
 
 // ── text file read/write step types ──────────────────────────────────────────
@@ -1423,9 +1531,15 @@ const KNOWN_VARIANTS: &[&str] = &[
     "http_get",
     "http_post",
     "http_put",
+    "http_delete",
+    "http_patch",
+    "mail_receive",
     "excel_read_cell",
     "excel_read_range",
     "excel_write_cell",
+    "excel_add_sheet",
+    "excel_delete_sheet",
+    "excel_rename_sheet",
     "file_read",
     "file_write",
     "file_append",
@@ -1585,10 +1699,20 @@ impl<'de> serde::de::Visitor<'de> for ScenarioStepVisitor {
             "http_post" => ScenarioStep::HttpPost(map.next_value()?),
             #[cfg(feature = "http")]
             "http_put" => ScenarioStep::HttpPut(map.next_value()?),
+            #[cfg(feature = "http")]
+            "http_delete" => ScenarioStep::HttpDelete(map.next_value()?),
+            #[cfg(feature = "http")]
+            "http_patch" => ScenarioStep::HttpPatch(map.next_value()?),
+            // --- mail ---
+            "mail_receive" => ScenarioStep::MailReceive(map.next_value()?),
             // --- Excel cell nodes ---
             "excel_read_cell" => ScenarioStep::ExcelReadCell(map.next_value()?),
             "excel_read_range" => ScenarioStep::ExcelReadRange(map.next_value()?),
             "excel_write_cell" => ScenarioStep::ExcelWriteCell(map.next_value()?),
+            // --- Excel sheet management nodes ---
+            "excel_add_sheet" => ScenarioStep::ExcelAddSheet(map.next_value()?),
+            "excel_delete_sheet" => ScenarioStep::ExcelDeleteSheet(map.next_value()?),
+            "excel_rename_sheet" => ScenarioStep::ExcelRenameSheet(map.next_value()?),
             // --- text file read/write ---
             "file_read" => ScenarioStep::FileRead(map.next_value()?),
             "file_write" => ScenarioStep::FileWrite(map.next_value()?),
@@ -1731,9 +1855,17 @@ impl ScenarioStep {
             Self::HttpPost(_) => "http_post",
             #[cfg(feature = "http")]
             Self::HttpPut(_) => "http_put",
+            #[cfg(feature = "http")]
+            Self::HttpDelete(_) => "http_delete",
+            #[cfg(feature = "http")]
+            Self::HttpPatch(_) => "http_patch",
+            Self::MailReceive(_) => "mail_receive",
             Self::ExcelReadCell(_) => "excel_read_cell",
             Self::ExcelReadRange(_) => "excel_read_range",
             Self::ExcelWriteCell(_) => "excel_write_cell",
+            Self::ExcelAddSheet(_) => "excel_add_sheet",
+            Self::ExcelDeleteSheet(_) => "excel_delete_sheet",
+            Self::ExcelRenameSheet(_) => "excel_rename_sheet",
             Self::FileRead(_) => "file_read",
             Self::FileWrite(_) => "file_write",
             Self::FileAppend(_) => "file_append",
@@ -2207,6 +2339,53 @@ steps:
         };
         assert_eq!(g.timeout_ms, 30_000);
         assert!(g.headers.is_empty());
+        assert!(g.auth.is_none());
+    }
+
+    #[cfg(feature = "http")]
+    #[test]
+    fn http_delete_and_patch_parse() {
+        let yaml = r#"
+name: test
+steps:
+  - http_delete:
+      url: "https://example.com/api/1"
+      save_as: del_resp
+      auth:
+        type: bearer
+        token: "mytoken"
+  - http_patch:
+      url: "https://example.com/api/1"
+      save_as: patch_resp
+      content_type: json
+      body:
+        status: active
+      auth:
+        type: basic
+        user: alice
+        password: secret
+"#;
+        let s = Scenario::from_yaml(yaml).unwrap();
+        assert_eq!(s.steps.len(), 2);
+        let ScenarioStep::HttpDelete(d) = &s.steps[0] else {
+            panic!()
+        };
+        assert_eq!(d.url, "https://example.com/api/1");
+        assert_eq!(d.save_as, "del_resp");
+        let Some(HttpAuth::Bearer { token }) = &d.auth else {
+            panic!("expected bearer auth")
+        };
+        assert_eq!(token, "mytoken");
+
+        let ScenarioStep::HttpPatch(p) = &s.steps[1] else {
+            panic!()
+        };
+        assert_eq!(p.content_type, ContentType::Json);
+        let Some(HttpAuth::Basic { user, password }) = &p.auth else {
+            panic!("expected basic auth")
+        };
+        assert_eq!(user, "alice");
+        assert_eq!(password, "secret");
     }
 
     #[test]
@@ -2469,6 +2648,85 @@ steps:
             panic!()
         };
         assert_eq!(wc.cell, "C{{ row }}");
+    }
+
+    #[test]
+    fn mail_receive_step_parses() {
+        let yaml = r#"
+name: test
+steps:
+  - mail_receive:
+      host: "imap.example.com"
+      user: "user@example.com"
+      password: "{{ env.MAIL_PASS }}"
+      folder: "INBOX"
+      count: 20
+      only_unseen: true
+      save_as: new_mails
+"#;
+        let s = Scenario::from_yaml(yaml).unwrap();
+        let ScenarioStep::MailReceive(mr) = &s.steps[0] else {
+            panic!()
+        };
+        assert_eq!(mr.host, "imap.example.com");
+        assert_eq!(mr.count, 20);
+        assert!(mr.only_unseen);
+        assert_eq!(mr.save_as, "new_mails");
+    }
+
+    #[test]
+    fn mail_receive_defaults() {
+        let yaml = r#"
+name: test
+steps:
+  - mail_receive:
+      host: "imap.example.com"
+      user: alice
+      password: secret
+      save_as: msgs
+"#;
+        let s = Scenario::from_yaml(yaml).unwrap();
+        let ScenarioStep::MailReceive(mr) = &s.steps[0] else {
+            panic!()
+        };
+        assert_eq!(mr.port, 993);
+        assert_eq!(mr.folder, "INBOX");
+        assert_eq!(mr.count, 10);
+        assert!(!mr.only_unseen);
+    }
+
+    #[test]
+    fn excel_sheet_management_steps_parse() {
+        let yaml = r#"
+name: test
+steps:
+  - excel_add_sheet:
+      file: "book.xlsx"
+      name: "Summary"
+  - excel_delete_sheet:
+      file: "book.xlsx"
+      name: "OldSheet"
+  - excel_rename_sheet:
+      file: "book.xlsx"
+      from_name: "Sheet1"
+      to_name: "Data"
+"#;
+        let s = Scenario::from_yaml(yaml).unwrap();
+        assert_eq!(s.steps.len(), 3);
+        let ScenarioStep::ExcelAddSheet(add) = &s.steps[0] else {
+            panic!()
+        };
+        assert_eq!(add.file, "book.xlsx");
+        assert_eq!(add.name, "Summary");
+        let ScenarioStep::ExcelDeleteSheet(del) = &s.steps[1] else {
+            panic!()
+        };
+        assert_eq!(del.name, "OldSheet");
+        let ScenarioStep::ExcelRenameSheet(ren) = &s.steps[2] else {
+            panic!()
+        };
+        assert_eq!(ren.from_name, "Sheet1");
+        assert_eq!(ren.to_name, "Data");
     }
 
     #[test]
