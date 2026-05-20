@@ -1,0 +1,26 @@
+[package]
+name = "rpa-stdlib"
+description = "Built-in scenario node library (wait_image, click_image, clipboard, etc.)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+db = ["dep:rusqlite"]
+
+[dependencies]
+rpa-template.workspace = true
+rpa-backend.workspace = true
+rpa-vision.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+lettre.workspace = true
+umya-spreadsheet.workspace = true
+rusqlite = { workspace = true, optional = true }
+zip.workspace = true
+pdf-extract.workspace = true
+keyring.workspace = true
+ureq.workspace = true

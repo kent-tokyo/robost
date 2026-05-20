@@ -1,0 +1,25 @@
+name: "data_source_demo"
+
+data_source:
+  file: data.csv
+
+steps:
+  - foreach:
+      var: __rows__
+      do:
+        # CSV values are strings; parse_int converts for numeric comparison.
+        - calc:
+            expr: "item[\"score\"].parse_int() > 80"
+            save_as: passed
+        - if:
+            cond: "passed"
+            then:
+              - script:
+                  script: |
+                    "PASS: " + item["name"] + " score=" + item["score"]
+                  save_as: line
+            else:
+              - script:
+                  script: |
+                    "FAIL: " + item["name"] + " score=" + item["score"]
+                  save_as: line

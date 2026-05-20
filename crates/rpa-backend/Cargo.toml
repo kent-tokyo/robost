@@ -1,0 +1,15 @@
+[package]
+name = "rpa-backend"
+description = "Unified Backend trait for local and remote desktop (RDP/VNC)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rpa-template.workspace = true
+rpa-capture.workspace = true
+rpa-input.workspace = true
+enigo.workspace = true
+image.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

@@ -1,0 +1,13 @@
+[package]
+name = "rpa-script"
+description = "Rhai inline script integration for scenario steps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rhai.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true

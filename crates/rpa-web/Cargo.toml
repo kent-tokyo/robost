@@ -1,0 +1,15 @@
+[package]
+name = "rpa-web"
+description = "WebDriver-based browser automation for rpa-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+serde_json.workspace = true
+fantoccini = "0.21"
+image.workspace = true
+base64 = "0.22"

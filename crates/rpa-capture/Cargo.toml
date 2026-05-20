@@ -1,0 +1,19 @@
+[package]
+name = "rpa-capture"
+description = "Screen/window capture (xcap wrapper) with DPI awareness"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rpa-template.workspace = true
+xcap.workspace = true
+image.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_System_Threading",
+    "Win32_UI_HiDpi",
+] }

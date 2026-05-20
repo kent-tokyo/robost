@@ -1,0 +1,79 @@
+name: "hello"
+
+variables:
+  count: 0
+  message: "world"
+
+steps:
+  - get_datetime:
+      format: "%Y-%m-%d %H:%M:%S"
+      save_as: now
+
+  - get_username:
+      save_as: user
+
+  - script:
+      script: |
+        let greeting = "Hello, " + message + "! User=" + user + " at " + now;
+        greeting
+      save_as: greeting
+
+  - increment:
+      name: count
+      by: 5
+
+  - calc:
+      expr: "count * 2 + 1"
+      save_as: result
+
+  - if:
+      cond: "result > 5"
+      then:
+        - set:
+            name: status
+            value: "ok"
+      else:
+        - set:
+            name: status
+            value: "low"
+
+  - repeat:
+      count: 3
+      do:
+        - increment:
+            name: count
+            by: 1
+
+  - set:
+      name: items
+      value: [1, 2, 3, 4, 5]
+
+  - foreach:
+      var: items
+      do:
+        - calc:
+            expr: "item > 3"
+            save_as: over_three
+        - if:
+            cond: "over_three"
+            then:
+              - break: ~
+
+  - try_catch:
+      try:
+        - shell:
+            cmd: "echo"
+            args: ["from shell"]
+            save_as: shell_out
+      catch:
+        - set:
+            name: shell_out
+            value: "(shell failed)"
+
+  - to_fullwidth:
+      value: "Hello RPA"
+      save_as: fw
+
+  - to_halfwidth:
+      value: "{{ fw }}"
+      save_as: hw

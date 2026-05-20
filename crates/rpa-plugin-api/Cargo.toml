@@ -1,0 +1,10 @@
+[package]
+name = "rpa-plugin-api"
+description = "Public API for rpa plugin authors (crates.io early-publish candidate)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true

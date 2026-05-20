@@ -1,0 +1,130 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rpa-template",
+    "crates/rpa-capture",
+    "crates/rpa-input",
+    "crates/rpa-vision",
+    "crates/rpa-backend",
+    "crates/rpa-core",
+    "crates/rpa-snip",
+    "crates/rpa-editor",
+    "crates/rpa-plugin-api",
+    "crates/rpa-plugin-host",
+    "crates/rpa-script",
+    "crates/rpa-stdlib",
+    "crates/rpa-uia",
+    "crates/rpa-web",
+    "crates/rpa-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/kent-tokyo/rust_rpa"
+rust-version = "1.89"
+
+[workspace.dependencies]
+# Internal crates
+rpa-template   = { path = "crates/rpa-template" }
+rpa-capture    = { path = "crates/rpa-capture" }
+rpa-input      = { path = "crates/rpa-input" }
+rpa-vision     = { path = "crates/rpa-vision", version = "0.1.0" }
+rpa-backend    = { path = "crates/rpa-backend" }
+rpa-core       = { path = "crates/rpa-core" }
+rpa-plugin-api = { path = "crates/rpa-plugin-api" }
+rpa-plugin-host = { path = "crates/rpa-plugin-host" }
+rpa-script     = { path = "crates/rpa-script" }
+rpa-stdlib     = { path = "crates/rpa-stdlib" }
+rpa-uia        = { path = "crates/rpa-uia" }
+rpa-web        = { path = "crates/rpa-web" }
+
+# Error handling
+thiserror = "2.0"
+anyhow    = "1.0"
+
+# Async
+tokio = { version = "1.52", features = ["full"] }
+
+# Logging
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Serialization
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yml  = "0.0.12"
+toml       = "0.8"
+
+# Image processing
+image     = "0.25"
+imageproc = "0.26"
+
+# Screen capture
+xcap = "0.9"
+
+# Input emulation
+enigo = "0.6"
+
+# GUI (rpa-snip)
+eframe        = "0.33"
+egui          = "0.33"
+tray-icon     = "0.24"
+global-hotkey = "0.8"
+
+# Plugin / scripting
+rhai     = { version = "1.24", features = ["sync"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Date/time
+chrono = { version = "0.4", features = ["clock"] }
+
+# Data source (CSV / XLSX)
+csv               = "1"
+calamine          = "0.26"
+rust_xlsxwriter   = "0.78"
+umya-spreadsheet  = "2"
+
+# String / file utilities
+regex = "1"
+glob  = "0.3"
+
+# File dialogs
+rfd = "0.15"
+
+# Clipboard
+arboard = "3"
+
+# Async utilities
+async-recursion = "1"
+
+# HTTP client
+ureq = { version = "2", features = ["json"] }
+
+# Mail
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder"] }
+
+# Database (rpa-stdlib db feature)
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Archive
+zip = "2"
+
+# PDF text extraction
+pdf-extract = "0.7"
+
+# URL open / desktop notification
+open         = "5"
+notify-rust  = "4"
+
+# Test utilities
+tempfile = "3"
+
+# Scheduler (cron expression parsing)
+croner = "2"
+
+# OS keychain credential storage
+keyring = "3"

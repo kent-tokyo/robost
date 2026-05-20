@@ -1,0 +1,23 @@
+[package]
+name = "rpa-snip"
+description = "Template capture GUI — freeze screen and crop templates (tray app)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rpa-template.workspace = true
+rpa-capture.workspace = true
+rpa-vision.workspace = true
+eframe.workspace = true
+egui.workspace = true
+tray-icon.workspace = true
+global-hotkey.workspace = true
+image.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde.workspace = true
+serde_yml.workspace = true
+tokio.workspace = true

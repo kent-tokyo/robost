@@ -1,0 +1,10 @@
+# Rust build artifacts
+/target/
+
+# Personal / local files
+tasks/
+memo.txt
+.claude/
+
+# Scheduler runtime files
+~/.rpa/

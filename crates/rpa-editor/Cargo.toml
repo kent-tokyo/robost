@@ -1,0 +1,19 @@
+[package]
+name = "rpa-editor"
+description = "Minimal visual scenario editor (list-based, egui)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "rpa-editor"
+path = "src/main.rs"
+
+[dependencies]
+eframe.workspace = true
+egui.workspace = true
+serde_yml.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+rfd.workspace = true
