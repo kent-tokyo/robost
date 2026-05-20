@@ -176,9 +176,9 @@ mod windows_impl {
                 Variant::VARIANT,
             },
             UI::Accessibility::{
-                CUIAutomation, IUIAutomation, IUIAutomationCondition, IUIAutomationElement,
-                IUIAutomationValuePattern, TreeScope_Descendants, UIA_AutomationIdPropertyId,
-                UIA_ClassNamePropertyId, UIA_NamePropertyId, UIA_ValuePatternId,
+                CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationValuePattern,
+                TreeScope_Descendants, UIA_AutomationIdPropertyId, UIA_ClassNamePropertyId,
+                UIA_NamePropertyId, UIA_ValuePatternId,
             },
         },
     };
