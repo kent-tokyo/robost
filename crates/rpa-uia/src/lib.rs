@@ -79,7 +79,9 @@ impl UiaFinder {
     pub fn new() -> Result<Self> {
         #[cfg(target_os = "windows")]
         {
-            Ok(Self { inner: windows_impl::Finder::new()? })
+            Ok(Self {
+                inner: windows_impl::Finder::new()?,
+            })
         }
         #[cfg(not(target_os = "windows"))]
         Err(UiaError::Unsupported)
@@ -149,7 +151,10 @@ impl UiaElement {
         #[cfg(target_os = "windows")]
         {
             let children = self.inner.children()?;
-            Ok(children.into_iter().map(|el| UiaElement { inner: el }).collect())
+            Ok(children
+                .into_iter()
+                .map(|el| UiaElement { inner: el })
+                .collect())
         }
         #[cfg(not(target_os = "windows"))]
         Err(UiaError::Unsupported)
@@ -162,10 +167,12 @@ impl UiaElement {
 mod windows_impl {
     use super::{UiaError, UiaSelector};
     use windows::{
-        core::{BSTR, Interface},
+        core::{Interface, BSTR},
         Win32::{
             System::{
-                Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED},
+                Com::{
+                    CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+                },
                 Variant::VARIANT,
             },
             UI::Accessibility::{
@@ -200,7 +207,9 @@ mod windows_impl {
 
         pub fn find(&self, selector: &UiaSelector) -> super::Result<Element> {
             unsafe {
-                let root = self.automation.GetRootElement()
+                let root = self
+                    .automation
+                    .GetRootElement()
                     .map_err(|e| UiaError::Com(e.to_string()))?;
 
                 let (prop_id, value) = match selector {
@@ -210,7 +219,8 @@ mod windows_impl {
                 };
 
                 let variant = VARIANT::from(BSTR::from(value.as_str()));
-                let condition = self.automation
+                let condition = self
+                    .automation
                     .CreatePropertyCondition(prop_id, &variant)
                     .map_err(|e| UiaError::Com(e.to_string()))?;
 
@@ -218,7 +228,10 @@ mod windows_impl {
                     .FindFirst(TreeScope_Descendants, &condition)
                     .map_err(|e| UiaError::Com(e.to_string()))?;
 
-                Ok(Element { el, automation: self.automation.clone() })
+                Ok(Element {
+                    el,
+                    automation: self.automation.clone(),
+                })
             }
         }
     }
@@ -226,7 +239,9 @@ mod windows_impl {
     impl Element {
         pub fn get_name(&self) -> super::Result<String> {
             unsafe {
-                let bstr = self.el.CurrentName()
+                let bstr = self
+                    .el
+                    .CurrentName()
                     .map_err(|e| UiaError::Com(e.to_string()))?;
                 Ok(bstr.to_string())
             }
@@ -234,12 +249,14 @@ mod windows_impl {
 
         pub fn get_value(&self) -> super::Result<String> {
             unsafe {
-                let pattern: IUIAutomationValuePattern = self.el
+                let pattern: IUIAutomationValuePattern = self
+                    .el
                     .GetCurrentPattern(UIA_ValuePatternId)
                     .map_err(|e| UiaError::Com(e.to_string()))?
                     .cast()
                     .map_err(|e| UiaError::Com(e.to_string()))?;
-                let bstr = pattern.CurrentValue()
+                let bstr = pattern
+                    .CurrentValue()
                     .map_err(|e| UiaError::Com(e.to_string()))?;
                 Ok(bstr.to_string())
             }
@@ -247,20 +264,25 @@ mod windows_impl {
 
         pub fn set_value(&self, value: &str) -> super::Result<()> {
             unsafe {
-                let pattern: IUIAutomationValuePattern = self.el
+                let pattern: IUIAutomationValuePattern = self
+                    .el
                     .GetCurrentPattern(UIA_ValuePatternId)
                     .map_err(|e| UiaError::Com(e.to_string()))?
                     .cast()
                     .map_err(|e| UiaError::Com(e.to_string()))?;
-                pattern.SetValue(&BSTR::from(value))
+                pattern
+                    .SetValue(&BSTR::from(value))
                     .map_err(|e| UiaError::Com(e.to_string()))
             }
         }
 
         pub fn invoke(&self) -> super::Result<()> {
-            use windows::Win32::UI::Accessibility::{IUIAutomationInvokePattern, UIA_InvokePatternId};
+            use windows::Win32::UI::Accessibility::{
+                IUIAutomationInvokePattern, UIA_InvokePatternId,
+            };
             unsafe {
-                let pattern: IUIAutomationInvokePattern = self.el
+                let pattern: IUIAutomationInvokePattern = self
+                    .el
                     .GetCurrentPattern(UIA_InvokePatternId)
                     .map_err(|e| UiaError::Com(e.to_string()))?
                     .cast()
@@ -271,27 +293,42 @@ mod windows_impl {
 
         pub fn bounding_rect(&self) -> super::Result<(i32, i32, i32, i32)> {
             unsafe {
-                let rect = self.el.CurrentBoundingRectangle()
+                let rect = self
+                    .el
+                    .CurrentBoundingRectangle()
                     .map_err(|e| UiaError::Com(e.to_string()))?;
-                Ok((rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top))
+                Ok((
+                    rect.left,
+                    rect.top,
+                    rect.right - rect.left,
+                    rect.bottom - rect.top,
+                ))
             }
         }
 
         pub fn children(&self) -> super::Result<Vec<Element>> {
             use windows::Win32::UI::Accessibility::TreeScope_Children;
             unsafe {
-                let true_cond = self.automation.CreateTrueCondition()
+                let true_cond = self
+                    .automation
+                    .CreateTrueCondition()
                     .map_err(|e| UiaError::Com(e.to_string()))?;
-                let el_array = self.el
+                let el_array = self
+                    .el
                     .FindAll(TreeScope_Children, &true_cond)
                     .map_err(|e| UiaError::Com(e.to_string()))?;
-                let count = el_array.Length()
+                let count = el_array
+                    .Length()
                     .map_err(|e| UiaError::Com(e.to_string()))?;
                 let mut result = Vec::with_capacity(count as usize);
                 for i in 0..count {
-                    let child = el_array.GetElement(i)
+                    let child = el_array
+                        .GetElement(i)
                         .map_err(|e| UiaError::Com(e.to_string()))?;
-                    result.push(Element { el: child, automation: self.automation.clone() });
+                    result.push(Element {
+                        el: child,
+                        automation: self.automation.clone(),
+                    });
                 }
                 Ok(result)
             }

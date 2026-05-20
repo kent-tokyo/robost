@@ -5,82 +5,81 @@ use std::path::PathBuf;
 
 // ---- color palette (ajisai-inspired) --------------------------------------
 
-const COL_IMG:   egui::Color32 = egui::Color32::from_rgb(70,  130, 200);
-const COL_FLOW:  egui::Color32 = egui::Color32::from_rgb(200, 140,  50);
+const COL_IMG: egui::Color32 = egui::Color32::from_rgb(70, 130, 200);
+const COL_FLOW: egui::Color32 = egui::Color32::from_rgb(200, 140, 50);
 const COL_INPUT: egui::Color32 = egui::Color32::from_rgb(100, 200, 120);
-const COL_DLG:   egui::Color32 = egui::Color32::from_rgb(180, 100, 200);
-const COL_VAR:   egui::Color32 = egui::Color32::from_rgb(220, 200,  80);
-const COL_WAIT:  egui::Color32 = egui::Color32::from_rgb(140, 140, 140);
-const COL_SCR:   egui::Color32 = egui::Color32::from_rgb(220, 100, 100);
-const COL_CLIP:  egui::Color32 = egui::Color32::from_rgb(100, 200, 220);
-const COL_LIB:   egui::Color32 = egui::Color32::from_rgb(180, 180, 180);
+const COL_DLG: egui::Color32 = egui::Color32::from_rgb(180, 100, 200);
+const COL_VAR: egui::Color32 = egui::Color32::from_rgb(220, 200, 80);
+const COL_WAIT: egui::Color32 = egui::Color32::from_rgb(140, 140, 140);
+const COL_SCR: egui::Color32 = egui::Color32::from_rgb(220, 100, 100);
+const COL_CLIP: egui::Color32 = egui::Color32::from_rgb(100, 200, 220);
+const COL_LIB: egui::Color32 = egui::Color32::from_rgb(180, 180, 180);
 
 fn category_color(category: &str) -> egui::Color32 {
     match category {
-        "画像操作"       => COL_IMG,
-        "制御フロー"     => COL_FLOW,
-        "入力操作"       => COL_INPUT,
-        "ダイアログ"     => COL_DLG,
-        "変数"           => COL_VAR,
-        "待機"           => COL_WAIT,
-        "スクリプト"     => COL_SCR,
+        "画像操作" => COL_IMG,
+        "制御フロー" => COL_FLOW,
+        "入力操作" => COL_INPUT,
+        "ダイアログ" => COL_DLG,
+        "変数" => COL_VAR,
+        "待機" => COL_WAIT,
+        "スクリプト" => COL_SCR,
         "クリップボード" => COL_CLIP,
-        "ライブラリ"     => COL_LIB,
-        _                => egui::Color32::GRAY,
+        "ライブラリ" => COL_LIB,
+        _ => egui::Color32::GRAY,
     }
 }
 
 fn step_key_category(key: &str) -> &str {
     match key {
-        "wait_image" | "click_image" | "find_image" | "match_rect"
-            => "画像操作",
-        "if" | "foreach" | "repeat" | "while" | "do_while" | "try_catch"
-        | "group" | "break" | "continue" | "exit" | "sub_scenario" | "call_scenario"
-            => "制御フロー",
-        "type" | "press"
-            => "入力操作",
-        "dialog_wait" | "dialog_input" | "dialog_select"
-            => "ダイアログ",
-        "set" | "copy_var" | "get_datetime" | "get_username" | "calc"
-        | "increment" | "to_fullwidth" | "to_halfwidth"
-            => "変数",
-        "wait_ms" | "wait_window"
-            => "待機",
-        "shell" | "script"
-            => "スクリプト",
-        "clipboard_set" | "clipboard_get"
-            => "クリップボード",
-        "library"
-            => "ライブラリ",
-        _   => "",
+        "wait_image" | "click_image" | "find_image" | "match_rect" => "画像操作",
+        "if" | "foreach" | "repeat" | "while" | "do_while" | "try_catch" | "group" | "break"
+        | "continue" | "exit" | "sub_scenario" | "call_scenario" => "制御フロー",
+        "type" | "press" => "入力操作",
+        "dialog_wait" | "dialog_input" | "dialog_select" => "ダイアログ",
+        "set" | "copy_var" | "get_datetime" | "get_username" | "calc" | "increment"
+        | "to_fullwidth" | "to_halfwidth" => "変数",
+        "wait_ms" | "wait_window" => "待機",
+        "shell" | "script" => "スクリプト",
+        "clipboard_set" | "clipboard_get" => "クリップボード",
+        "library" => "ライブラリ",
+        _ => "",
     }
 }
 
 // ---- view mode / flowchart types ------------------------------------------
 
 #[derive(PartialEq, Clone, Copy, Default)]
-enum ViewMode { #[default] List, Flow }
+enum ViewMode {
+    #[default]
+    List,
+    Flow,
+}
 
 struct FlowNode {
-    step_idx:    usize,
-    depth:       usize,
-    label:       String,
-    color:       egui::Color32,
-    expand_key:  Option<usize>,
+    step_idx: usize,
+    depth: usize,
+    label: String,
+    color: egui::Color32,
+    expand_key: Option<usize>,
     is_expanded: bool,
-    is_header:   bool,
+    is_header: bool,
 }
 
 // ---- log ------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum LogLevel { Info, Ok, Error }
+enum LogLevel {
+    Info,
+    Ok,
+    Error,
+}
 
 impl LogLevel {
     fn color(self) -> egui::Color32 {
         match self {
-            LogLevel::Info  => egui::Color32::LIGHT_GRAY,
-            LogLevel::Ok    => egui::Color32::from_rgb(100, 220, 100),
+            LogLevel::Info => egui::Color32::LIGHT_GRAY,
+            LogLevel::Ok => egui::Color32::from_rgb(100, 220, 100),
             LogLevel::Error => egui::Color32::from_rgb(255, 100, 100),
         }
     }
@@ -88,16 +87,16 @@ impl LogLevel {
 
 struct LogEntry {
     message: String,
-    level:   LogLevel,
+    level: LogLevel,
 }
 
 // ---- step templates -------------------------------------------------------
 
 struct StepTemplate {
-    category:     &'static str,
+    category: &'static str,
     display_name: &'static str,
-    name:         &'static str,
-    yaml:         &'static str,
+    name: &'static str,
+    yaml: &'static str,
 }
 
 const STEP_TEMPLATES: &[StepTemplate] = &[
@@ -137,7 +136,10 @@ const STEP_TEMPLATES: &[StepTemplate] = &[
 // ---- flowchart helpers ----------------------------------------------------
 
 fn get_inner_steps(step: &serde_yml::Value) -> Vec<(&'static str, Vec<serde_yml::Value>)> {
-    let m = match step.as_mapping() { Some(m) => m, None => return vec![] };
+    let m = match step.as_mapping() {
+        Some(m) => m,
+        None => return vec![],
+    };
     let key = m.iter().next().and_then(|(k, _)| k.as_str()).unwrap_or("");
     match key {
         "if" => {
@@ -151,7 +153,8 @@ fn get_inner_steps(step: &serde_yml::Value) -> Vec<(&'static str, Vec<serde_yml:
             out
         }
         "foreach" | "repeat" | "while" | "do_while" => {
-            if let Some(seq) = m.get(key)
+            if let Some(seq) = m
+                .get(key)
                 .and_then(|v| v.as_mapping())
                 .and_then(|im| im.get("do"))
                 .and_then(|v| v.as_sequence())
@@ -175,7 +178,8 @@ fn get_inner_steps(step: &serde_yml::Value) -> Vec<(&'static str, Vec<serde_yml:
             out
         }
         "group" => {
-            if let Some(seq) = m.get("group")
+            if let Some(seq) = m
+                .get("group")
                 .and_then(|v| v.as_mapping())
                 .and_then(|im| im.get("steps"))
                 .and_then(|v| v.as_sequence())
@@ -199,7 +203,8 @@ fn collect_nodes(
         let key = get_step_key(step);
         let color = category_color(step_key_category(key));
         let summary = step_summary(step);
-        let is_compound = matches!(key,
+        let is_compound = matches!(
+            key,
             "if" | "foreach" | "repeat" | "while" | "do_while" | "try_catch" | "group"
         );
         let step_idx = i;
@@ -208,9 +213,21 @@ fn collect_nodes(
         } else {
             (None, false)
         };
-        let label = if depth == 0 { format!("{i}  {summary}") } else { summary };
+        let label = if depth == 0 {
+            format!("{i}  {summary}")
+        } else {
+            summary
+        };
 
-        nodes.push(FlowNode { step_idx, depth, label, color, expand_key, is_expanded, is_header: false });
+        nodes.push(FlowNode {
+            step_idx,
+            depth,
+            label,
+            color,
+            expand_key,
+            is_expanded,
+            is_header: false,
+        });
 
         if depth == 0 && is_compound && is_expanded {
             for (branch_name, branch_steps) in get_inner_steps(step) {
@@ -243,7 +260,11 @@ fn collect_nodes(
 // ---- helpers --------------------------------------------------------------
 
 fn step_display_name(key: &str) -> &str {
-    STEP_TEMPLATES.iter().find(|t| t.name == key).map(|t| t.display_name).unwrap_or(key)
+    STEP_TEMPLATES
+        .iter()
+        .find(|t| t.name == key)
+        .map(|t| t.display_name)
+        .unwrap_or(key)
 }
 
 fn get_step_key(v: &serde_yml::Value) -> &str {
@@ -264,10 +285,14 @@ fn step_summary(v: &serde_yml::Value) -> String {
         let val_str = match val {
             serde_yml::Value::String(s) => s.clone(),
             serde_yml::Value::Number(n) => n.to_string(),
-            serde_yml::Value::Bool(b)   => b.to_string(),
+            serde_yml::Value::Bool(b) => b.to_string(),
             serde_yml::Value::Mapping(m) => {
                 if let Some((sk, sv)) = m.iter().next() {
-                    format!("{}: {}", sk.as_str().unwrap_or("?"), sv.as_str().unwrap_or("…"))
+                    format!(
+                        "{}: {}",
+                        sk.as_str().unwrap_or("?"),
+                        sv.as_str().unwrap_or("…")
+                    )
                 } else {
                     "{}".into()
                 }
@@ -282,47 +307,61 @@ fn step_summary(v: &serde_yml::Value) -> String {
 
 fn parse_scenario_steps(text: &str) -> Result<(String, Vec<serde_yml::Value>)> {
     let doc: serde_yml::Value = serde_yml::from_str(text)?;
-    let name = doc.get("name").and_then(|v| v.as_str()).unwrap_or("unnamed").to_owned();
-    let steps = doc.get("steps").and_then(|v| v.as_sequence()).cloned().unwrap_or_default();
+    let name = doc
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unnamed")
+        .to_owned();
+    let steps = doc
+        .get("steps")
+        .and_then(|v| v.as_sequence())
+        .cloned()
+        .unwrap_or_default();
     Ok((name, steps))
 }
 
 fn build_scenario_yaml(name: &str, steps: &[serde_yml::Value]) -> Result<String> {
     let mut map = serde_yml::Mapping::new();
-    map.insert(serde_yml::Value::String("name".into()),  serde_yml::Value::String(name.into()));
-    map.insert(serde_yml::Value::String("steps".into()), serde_yml::Value::Sequence(steps.to_vec()));
+    map.insert(
+        serde_yml::Value::String("name".into()),
+        serde_yml::Value::String(name.into()),
+    );
+    map.insert(
+        serde_yml::Value::String("steps".into()),
+        serde_yml::Value::Sequence(steps.to_vec()),
+    );
     Ok(serde_yml::to_string(&serde_yml::Value::Mapping(map))?)
 }
 
 // ---- app ------------------------------------------------------------------
 
 struct EditorApp {
-    path:           Option<PathBuf>,
-    name:           String,
-    steps:          Vec<serde_yml::Value>,
-    selected:       Option<usize>,
-    edit_buf:       String,
-    parse_error:    Option<String>,
-    add_menu_open:  bool,
-    add_filter:     String,
-    log:            Vec<LogEntry>,
-    view_mode:      ViewMode,
+    path: Option<PathBuf>,
+    name: String,
+    steps: Vec<serde_yml::Value>,
+    selected: Option<usize>,
+    edit_buf: String,
+    parse_error: Option<String>,
+    add_menu_open: bool,
+    add_filter: String,
+    log: Vec<LogEntry>,
+    view_mode: ViewMode,
     expanded_steps: HashSet<usize>,
 }
 
 impl Default for EditorApp {
     fn default() -> Self {
         Self {
-            path:           None,
-            name:           "new_scenario".into(),
-            steps:          Vec::new(),
-            selected:       None,
-            edit_buf:       String::new(),
-            parse_error:    None,
-            add_menu_open:  false,
-            add_filter:     String::new(),
-            log:            Vec::new(),
-            view_mode:      ViewMode::List,
+            path: None,
+            name: "new_scenario".into(),
+            steps: Vec::new(),
+            selected: None,
+            edit_buf: String::new(),
+            parse_error: None,
+            add_menu_open: false,
+            add_filter: String::new(),
+            log: Vec::new(),
+            view_mode: ViewMode::List,
             expanded_steps: HashSet::new(),
         }
     }
@@ -330,17 +369,29 @@ impl Default for EditorApp {
 
 impl EditorApp {
     fn push_log(&mut self, message: impl Into<String>, level: LogLevel) {
-        self.log.push(LogEntry { message: message.into(), level });
+        self.log.push(LogEntry {
+            message: message.into(),
+            level,
+        });
         if self.log.len() > 500 {
             self.log.drain(0..100);
         }
     }
-    fn log_ok(&mut self, msg: impl Into<String>)  { self.push_log(msg, LogLevel::Ok); }
-    fn log_err(&mut self, msg: impl Into<String>) { self.push_log(msg, LogLevel::Error); }
-    fn log_info(&mut self, msg: impl Into<String>){ self.push_log(msg, LogLevel::Info); }
+    fn log_ok(&mut self, msg: impl Into<String>) {
+        self.push_log(msg, LogLevel::Ok);
+    }
+    fn log_err(&mut self, msg: impl Into<String>) {
+        self.push_log(msg, LogLevel::Error);
+    }
+    fn log_info(&mut self, msg: impl Into<String>) {
+        self.push_log(msg, LogLevel::Info);
+    }
 
     fn open_file(&mut self) {
-        if let Some(p) = rfd::FileDialog::new().add_filter("YAML", &["yaml", "yml"]).pick_file() {
+        if let Some(p) = rfd::FileDialog::new()
+            .add_filter("YAML", &["yaml", "yml"])
+            .pick_file()
+        {
             match std::fs::read_to_string(&p) {
                 Ok(text) => match parse_scenario_steps(&text) {
                     Ok((name, steps)) => {
@@ -362,7 +413,10 @@ impl EditorApp {
         self.flush_edit();
         let path = if let Some(ref p) = self.path {
             p.clone()
-        } else if let Some(p) = rfd::FileDialog::new().add_filter("YAML", &["yaml", "yml"]).save_file() {
+        } else if let Some(p) = rfd::FileDialog::new()
+            .add_filter("YAML", &["yaml", "yml"])
+            .save_file()
+        {
             self.path = Some(p.clone());
             p
         } else {
@@ -381,7 +435,9 @@ impl EditorApp {
         if let Some(idx) = self.selected {
             match serde_yml::from_str::<serde_yml::Value>(&self.edit_buf) {
                 Ok(v) => {
-                    if idx < self.steps.len() { self.steps[idx] = v; }
+                    if idx < self.steps.len() {
+                        self.steps[idx] = v;
+                    }
                     self.parse_error = None;
                 }
                 Err(e) => {
@@ -409,8 +465,11 @@ impl EditorApp {
             self.log_err("実行するにはまず保存してください");
             return;
         };
-        match std::process::Command::new("rpa").args(["run", &path.to_string_lossy()]).spawn() {
-            Ok(_)  => self.log_ok("rpa を起動しました"),
+        match std::process::Command::new("rpa")
+            .args(["run", &path.to_string_lossy()])
+            .spawn()
+        {
+            Ok(_) => self.log_ok("rpa を起動しました"),
             Err(e) => self.log_err(format!("起動に失敗しました: {e}")),
         }
     }
@@ -422,14 +481,14 @@ impl EditorApp {
     }
 
     fn show_flowchart(&mut self, ui: &mut egui::Ui) {
-        const NODE_W:  f32 = 300.0;
-        const NODE_H:  f32 = 42.0;
-        const HEAD_H:  f32 = 22.0;
-        const INDENT:  f32 = 24.0;
-        const GAP_Y:   f32 = 7.0;
-        const PAD_X:   f32 = 20.0;
+        const NODE_W: f32 = 300.0;
+        const NODE_H: f32 = 42.0;
+        const HEAD_H: f32 = 22.0;
+        const INDENT: f32 = 24.0;
+        const GAP_Y: f32 = 7.0;
+        const PAD_X: f32 = 20.0;
         const PAD_TOP: f32 = 16.0;
-        const ICON_W:  f32 = 22.0;
+        const ICON_W: f32 = 22.0;
 
         let nodes = self.build_flow_nodes();
         let selected = self.selected;
@@ -443,31 +502,41 @@ impl EditorApp {
 
         // Pre-compute (x, y, height) for each node
         let mut y_cur = 0.0_f32;
-        let positions: Vec<(f32, f32, f32)> = nodes.iter().map(|n| {
-            let x = n.depth as f32 * INDENT;
-            let h = if n.is_header { HEAD_H } else { NODE_H };
-            let pos = (x, y_cur, h);
-            y_cur += h + GAP_Y;
-            pos
-        }).collect();
+        let positions: Vec<(f32, f32, f32)> = nodes
+            .iter()
+            .map(|n| {
+                let x = n.depth as f32 * INDENT;
+                let h = if n.is_header { HEAD_H } else { NODE_H };
+                let pos = (x, y_cur, h);
+                y_cur += h + GAP_Y;
+                pos
+            })
+            .collect();
 
-        let total_w = (PAD_X * 2.0 + NODE_W + nodes.iter().map(|n| n.depth as f32 * INDENT).fold(0.0_f32, f32::max))
-            .max(ui.available_width());
+        let total_w = (PAD_X * 2.0
+            + NODE_W
+            + nodes
+                .iter()
+                .map(|n| n.depth as f32 * INDENT)
+                .fold(0.0_f32, f32::max))
+        .max(ui.available_width());
         let total_h = PAD_TOP * 2.0 + y_cur;
 
         let mut toggle_expand: Option<usize> = None;
-        let mut click_select:  Option<usize> = None;
+        let mut click_select: Option<usize> = None;
 
         egui::ScrollArea::both()
             .id_salt("flow_canvas")
             .show(ui, |ui| {
-                let (resp, painter) = ui.allocate_painter(
-                    egui::vec2(total_w, total_h),
-                    egui::Sense::click(),
-                );
+                let (resp, painter) =
+                    ui.allocate_painter(egui::vec2(total_w, total_h), egui::Sense::click());
 
-                let origin   = resp.rect.min + egui::vec2(PAD_X, PAD_TOP);
-                let click_pos = if resp.clicked() { resp.interact_pointer_pos() } else { None };
+                let origin = resp.rect.min + egui::vec2(PAD_X, PAD_TOP);
+                let click_pos = if resp.clicked() {
+                    resp.interact_pointer_pos()
+                } else {
+                    None
+                };
 
                 for (ni, (node, &(nx, ny, nh))) in nodes.iter().zip(positions.iter()).enumerate() {
                     let node_rect = egui::Rect::from_min_size(
@@ -479,7 +548,7 @@ impl EditorApp {
                     if ni > 0 {
                         let &(prev_x, prev_y, prev_h) = &positions[ni - 1];
                         let from = origin + egui::vec2(prev_x + 14.0, prev_y + prev_h);
-                        let to   = origin + egui::vec2(nx   + 14.0, ny);
+                        let to = origin + egui::vec2(nx + 14.0, ny);
                         let stroke = egui::Stroke::new(1.5, egui::Color32::from_gray(65));
 
                         if (from.x - to.x).abs() < 0.5 {
@@ -487,7 +556,10 @@ impl EditorApp {
                         } else {
                             let mid_y = from.y + GAP_Y / 2.0;
                             painter.line_segment([from, egui::pos2(from.x, mid_y)], stroke);
-                            painter.line_segment([egui::pos2(from.x, mid_y), egui::pos2(to.x, mid_y)], stroke);
+                            painter.line_segment(
+                                [egui::pos2(from.x, mid_y), egui::pos2(to.x, mid_y)],
+                                stroke,
+                            );
                             painter.line_segment([egui::pos2(to.x, mid_y), to], stroke);
                         }
 
@@ -514,15 +586,23 @@ impl EditorApp {
 
                     // ── node box ───────────────────────────────────────────────
                     let is_selected = selected == Some(node.step_idx);
-                    let bg = if is_selected { egui::Color32::from_rgb(28, 52, 88) }
-                             else { egui::Color32::from_gray(40) };
+                    let bg = if is_selected {
+                        egui::Color32::from_rgb(28, 52, 88)
+                    } else {
+                        egui::Color32::from_gray(40)
+                    };
                     painter.rect_filled(node_rect, 5.0, bg);
-                    painter.rect_stroke(node_rect, 5.0,
-                        egui::Stroke::new(1.0, if is_selected {
-                            egui::Color32::from_rgb(70, 125, 200)
-                        } else {
-                            egui::Color32::from_gray(58)
-                        }),
+                    painter.rect_stroke(
+                        node_rect,
+                        5.0,
+                        egui::Stroke::new(
+                            1.0,
+                            if is_selected {
+                                egui::Color32::from_rgb(70, 125, 200)
+                            } else {
+                                egui::Color32::from_gray(58)
+                            },
+                        ),
                         egui::StrokeKind::Inside,
                     );
 
@@ -544,8 +624,8 @@ impl EditorApp {
 
                     // ── expand / collapse icon ─────────────────────────────────
                     if let Some(expand_key) = node.expand_key {
-                        let icon_pos = node_rect.right_center()
-                            + egui::vec2(-(ICON_W / 2.0 + 5.0), 0.0);
+                        let icon_pos =
+                            node_rect.right_center() + egui::vec2(-(ICON_W / 2.0 + 5.0), 0.0);
                         painter.text(
                             icon_pos,
                             egui::Align2::CENTER_CENTER,
@@ -555,7 +635,9 @@ impl EditorApp {
                         );
 
                         if let Some(cp) = click_pos {
-                            if egui::Rect::from_center_size(icon_pos, egui::vec2(ICON_W, ICON_W)).contains(cp) {
+                            if egui::Rect::from_center_size(icon_pos, egui::vec2(ICON_W, ICON_W))
+                                .contains(cp)
+                            {
                                 toggle_expand = Some(expand_key);
                             }
                         }
@@ -571,8 +653,11 @@ impl EditorApp {
             });
 
         if let Some(key) = toggle_expand {
-            if self.expanded_steps.contains(&key) { self.expanded_steps.remove(&key); }
-            else { self.expanded_steps.insert(key); }
+            if self.expanded_steps.contains(&key) {
+                self.expanded_steps.remove(&key);
+            } else {
+                self.expanded_steps.insert(key);
+            }
         } else if let Some(idx) = click_select {
             self.select_step(idx);
         }
@@ -584,13 +669,19 @@ impl eframe::App for EditorApp {
         // ── Toolbar ──────────────────────────────────────────────────────────
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("📂 開く").clicked()  { self.open_file(); }
-                if ui.button("💾 保存").clicked()  { self.save_file(); }
+                if ui.button("📂 開く").clicked() {
+                    self.open_file();
+                }
+                if ui.button("💾 保存").clicked() {
+                    self.save_file();
+                }
                 ui.separator();
                 ui.label("シナリオ名:");
                 ui.text_edit_singleline(&mut self.name);
                 ui.separator();
-                if ui.button("▶ 実行").clicked()  { self.run_scenario(); }
+                if ui.button("▶ 実行").clicked() {
+                    self.run_scenario();
+                }
                 ui.separator();
                 ui.selectable_value(&mut self.view_mode, ViewMode::List, "リスト");
                 ui.selectable_value(&mut self.view_mode, ViewMode::Flow, "フロー");
@@ -617,7 +708,9 @@ impl eframe::App for EditorApp {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.strong("ログ");
-                    if ui.small_button("クリア").clicked() { self.log.clear(); }
+                    if ui.small_button("クリア").clicked() {
+                        self.log.clear();
+                    }
                     if let Some(ref p) = self.path {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.weak(p.display().to_string());
@@ -638,69 +731,82 @@ impl eframe::App for EditorApp {
             });
 
         // ── Left: step list ───────────────────────────────────────────────
-        egui::SidePanel::left("steps_panel").min_width(210.0).show(ctx, |ui| {
-            ui.heading("ステップ一覧");
-            ui.separator();
+        egui::SidePanel::left("steps_panel")
+            .min_width(210.0)
+            .show(ctx, |ui| {
+                ui.heading("ステップ一覧");
+                ui.separator();
 
-            let mut action: Option<StepAction> = None;
-            let step_count = self.steps.len();
+                let mut action: Option<StepAction> = None;
+                let step_count = self.steps.len();
 
-            egui::ScrollArea::vertical().id_salt("step_list").show(ui, |ui| {
-                for i in 0..step_count {
-                    let key   = get_step_key(&self.steps[i]);
-                    let cat   = step_key_category(key);
-                    let color = category_color(cat);
-                    let summary  = step_summary(&self.steps[i]);
-                    let selected = self.selected == Some(i);
+                egui::ScrollArea::vertical()
+                    .id_salt("step_list")
+                    .show(ui, |ui| {
+                        for i in 0..step_count {
+                            let key = get_step_key(&self.steps[i]);
+                            let cat = step_key_category(key);
+                            let color = category_color(cat);
+                            let summary = step_summary(&self.steps[i]);
+                            let selected = self.selected == Some(i);
 
-                    ui.horizontal(|ui| {
-                        // Category color indicator (ajisai header-bar concept)
-                        ui.colored_label(color, "▌");
-                        if ui.selectable_label(selected, format!("{i}: {summary}")).clicked() {
-                            action = Some(StepAction::Select(i));
-                        }
-                        if ui.small_button("↑").clicked() && i > 0 {
-                            action = Some(StepAction::MoveUp(i));
-                        }
-                        if ui.small_button("↓").clicked() && i + 1 < step_count {
-                            action = Some(StepAction::MoveDown(i));
-                        }
-                        if ui.small_button("×").clicked() {
-                            action = Some(StepAction::Delete(i));
+                            ui.horizontal(|ui| {
+                                // Category color indicator (ajisai header-bar concept)
+                                ui.colored_label(color, "▌");
+                                if ui
+                                    .selectable_label(selected, format!("{i}: {summary}"))
+                                    .clicked()
+                                {
+                                    action = Some(StepAction::Select(i));
+                                }
+                                if ui.small_button("↑").clicked() && i > 0 {
+                                    action = Some(StepAction::MoveUp(i));
+                                }
+                                if ui.small_button("↓").clicked() && i + 1 < step_count {
+                                    action = Some(StepAction::MoveDown(i));
+                                }
+                                if ui.small_button("×").clicked() {
+                                    action = Some(StepAction::Delete(i));
+                                }
+                            });
                         }
                     });
+
+                ui.separator();
+                if ui.button("+ ステップ追加").clicked() {
+                    self.add_menu_open = true;
+                    self.add_filter.clear();
                 }
-            });
 
-            ui.separator();
-            if ui.button("+ ステップ追加").clicked() {
-                self.add_menu_open = true;
-                self.add_filter.clear();
-            }
-
-            if let Some(act) = action {
-                match act {
-                    StepAction::Select(i) => self.select_step(i),
-                    StepAction::MoveUp(i) => {
-                        self.steps.swap(i - 1, i);
-                        if self.selected == Some(i) { self.selected = Some(i - 1); }
-                    }
-                    StepAction::MoveDown(i) => {
-                        self.steps.swap(i, i + 1);
-                        if self.selected == Some(i) { self.selected = Some(i + 1); }
-                    }
-                    StepAction::Delete(i) => {
-                        self.steps.remove(i);
-                        if self.selected == Some(i) {
-                            self.selected = None;
-                            self.edit_buf.clear();
-                        } else if let Some(s) = self.selected {
-                            if s > i { self.selected = Some(s - 1); }
+                if let Some(act) = action {
+                    match act {
+                        StepAction::Select(i) => self.select_step(i),
+                        StepAction::MoveUp(i) => {
+                            self.steps.swap(i - 1, i);
+                            if self.selected == Some(i) {
+                                self.selected = Some(i - 1);
+                            }
+                        }
+                        StepAction::MoveDown(i) => {
+                            self.steps.swap(i, i + 1);
+                            if self.selected == Some(i) {
+                                self.selected = Some(i + 1);
+                            }
+                        }
+                        StepAction::Delete(i) => {
+                            self.steps.remove(i);
+                            if self.selected == Some(i) {
+                                self.selected = None;
+                                self.edit_buf.clear();
+                            } else if let Some(s) = self.selected {
+                                if s > i {
+                                    self.selected = Some(s - 1);
+                                }
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
 
         // ── Center: flowchart or YAML editor / onboarding ────────────────
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -723,14 +829,19 @@ impl eframe::App for EditorApp {
                         });
                 }
 
-                let key   = get_step_key(&self.steps[idx]);
-                let cat   = step_key_category(key);
+                let key = get_step_key(&self.steps[idx]);
+                let cat = step_key_category(key);
                 let color = category_color(cat);
                 ui.horizontal(|ui| {
                     ui.colored_label(color, "▌");
-                    ui.label(egui::RichText::new(
-                        format!("ステップ {}  —  {}", idx, step_display_name(key))
-                    ).strong());
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "ステップ {}  —  {}",
+                            idx,
+                            step_display_name(key)
+                        ))
+                        .strong(),
+                    );
                 });
                 ui.separator();
 
@@ -774,7 +885,7 @@ impl eframe::App for EditorApp {
 
         // ── Add step popup ────────────────────────────────────────────────
         if self.add_menu_open {
-            let mut close  = false;
+            let mut close = false;
             let mut insert: Option<&'static str> = None;
 
             egui::Window::new("ステップを追加")
@@ -788,48 +899,57 @@ impl eframe::App for EditorApp {
                     });
                     ui.separator();
 
-                    egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
-                        let filter = self.add_filter.to_lowercase();
-                        let mut last_cat = "";
+                    egui::ScrollArea::vertical()
+                        .max_height(340.0)
+                        .show(ui, |ui| {
+                            let filter = self.add_filter.to_lowercase();
+                            let mut last_cat = "";
 
-                        for t in STEP_TEMPLATES {
-                            if !filter.is_empty()
-                                && !t.name.to_lowercase().contains(&filter)
-                                && !t.display_name.to_lowercase().contains(&filter)
-                                && !t.category.to_lowercase().contains(&filter)
-                            {
-                                continue;
-                            }
-                            if t.category != last_cat {
-                                ui.add_space(4.0);
-                                // Colored category header (ajisai palette section header)
+                            for t in STEP_TEMPLATES {
+                                if !filter.is_empty()
+                                    && !t.name.to_lowercase().contains(&filter)
+                                    && !t.display_name.to_lowercase().contains(&filter)
+                                    && !t.category.to_lowercase().contains(&filter)
+                                {
+                                    continue;
+                                }
+                                if t.category != last_cat {
+                                    ui.add_space(4.0);
+                                    // Colored category header (ajisai palette section header)
+                                    let col = category_color(t.category);
+                                    ui.colored_label(
+                                        col,
+                                        egui::RichText::new(t.category).strong().size(12.0),
+                                    );
+                                    ui.separator();
+                                    last_cat = t.category;
+                                }
+
                                 let col = category_color(t.category);
-                                ui.colored_label(col, egui::RichText::new(t.category).strong().size(12.0));
-                                ui.separator();
-                                last_cat = t.category;
+                                let label_text = format!("  {} ({})", t.display_name, t.name);
+                                let btn =
+                                    egui::Button::new(egui::RichText::new(label_text).size(12.0))
+                                        .min_size(egui::vec2(250.0, 26.0));
+
+                                // Subtle tint matching category color
+                                let btn = btn.fill(egui::Color32::from_rgba_unmultiplied(
+                                    col.r(),
+                                    col.g(),
+                                    col.b(),
+                                    18,
+                                ));
+
+                                if ui.add(btn).clicked() {
+                                    insert = Some(t.yaml);
+                                    close = true;
+                                }
                             }
-
-                            let col = category_color(t.category);
-                            let label_text = format!("  {} ({})", t.display_name, t.name);
-                            let btn = egui::Button::new(
-                                egui::RichText::new(label_text).size(12.0)
-                            )
-                            .min_size(egui::vec2(250.0, 26.0));
-
-                            // Subtle tint matching category color
-                            let btn = btn.fill(
-                                egui::Color32::from_rgba_unmultiplied(col.r(), col.g(), col.b(), 18)
-                            );
-
-                            if ui.add(btn).clicked() {
-                                insert = Some(t.yaml);
-                                close = true;
-                            }
-                        }
-                    });
+                        });
 
                     ui.separator();
-                    if ui.button("キャンセル").clicked() { close = true; }
+                    if ui.button("キャンセル").clicked() {
+                        close = true;
+                    }
                 });
 
             if let Some(yaml) = insert {
@@ -843,12 +963,19 @@ impl eframe::App for EditorApp {
                     Err(e) => self.log_err(format!("テンプレートエラー: {e}")),
                 }
             }
-            if close { self.add_menu_open = false; }
+            if close {
+                self.add_menu_open = false;
+            }
         }
     }
 }
 
-enum StepAction { Select(usize), MoveUp(usize), MoveDown(usize), Delete(usize) }
+enum StepAction {
+    Select(usize),
+    MoveUp(usize),
+    MoveDown(usize),
+    Delete(usize),
+}
 
 // ---- main -----------------------------------------------------------------
 

@@ -7,25 +7,27 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Schedule {
-    pub id:          String,
-    pub name:        String,
+    pub id: String,
+    pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cron:        Option<String>,
+    pub cron: Option<String>,
     /// RFC 3339 datetime for one-shot execution.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub at:          Option<String>,
-    pub scenario:    PathBuf,
+    pub at: Option<String>,
+    pub scenario: PathBuf,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub extra_args:  Vec<String>,
+    pub extra_args: Vec<String>,
     #[serde(default = "default_true")]
-    pub enabled:     bool,
+    pub enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_run:    Option<String>,
+    pub last_run: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_status: Option<String>,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct ScheduleStore {
@@ -63,7 +65,9 @@ pub fn save_schedules(path: &Path, schedules: &[Schedule]) -> Result<()> {
     if let Some(p) = path.parent() {
         std::fs::create_dir_all(p)?;
     }
-    let store = ScheduleStore { schedules: schedules.to_vec() };
+    let store = ScheduleStore {
+        schedules: schedules.to_vec(),
+    };
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, serde_json::to_string_pretty(&store)?)?;
     std::fs::rename(&tmp, path)?;
@@ -112,14 +116,14 @@ pub fn cmd_add(
     let id = make_id();
     let scenario_abs = scenario.canonicalize().unwrap_or(scenario);
     ss.push(Schedule {
-        id:          id.clone(),
-        name:        name.clone(),
+        id: id.clone(),
+        name: name.clone(),
         cron,
         at,
-        scenario:    scenario_abs,
+        scenario: scenario_abs,
         extra_args,
-        enabled:     true,
-        last_run:    None,
+        enabled: true,
+        last_run: None,
         last_status: None,
     });
     save_schedules(&path, &ss)?;
@@ -133,12 +137,18 @@ pub fn cmd_list() -> Result<()> {
         println!("(no schedules registered)");
         return Ok(());
     }
-    println!("{:<10} {:<20} {:<30} {:<8} LAST STATUS", "ID", "NAME", "SCHEDULE", "ENABLED");
+    println!(
+        "{:<10} {:<20} {:<30} {:<8} LAST STATUS",
+        "ID", "NAME", "SCHEDULE", "ENABLED"
+    );
     println!("{}", "─".repeat(82));
     for s in &ss {
-        let sched  = s.cron.as_deref().or(s.at.as_deref()).unwrap_or("?");
+        let sched = s.cron.as_deref().or(s.at.as_deref()).unwrap_or("?");
         let status = s.last_status.as_deref().unwrap_or("─");
-        println!("{:<10} {:<20} {:<30} {:<8} {}", s.id, s.name, sched, s.enabled, status);
+        println!(
+            "{:<10} {:<20} {:<30} {:<8} {}",
+            s.id, s.name, sched, s.enabled, status
+        );
     }
     Ok(())
 }
@@ -165,7 +175,8 @@ pub fn cmd_remove(id: &str) -> Result<()> {
 pub fn cmd_enable(id: &str, enable: bool) -> Result<()> {
     let path = schedules_path();
     let mut ss = load_schedules(&path)?;
-    let s = ss.iter_mut()
+    let s = ss
+        .iter_mut()
         .find(|s| s.id == id || s.name == id)
         .ok_or_else(|| anyhow::anyhow!("no schedule found: {id}"))?;
     s.enabled = enable;
@@ -181,7 +192,10 @@ pub fn cmd_enable(id: &str, enable: bool) -> Result<()> {
 fn should_fire(s: &Schedule, now: DateTime<Local>) -> bool {
     if let Some(ref expr) = s.cron {
         let Ok(cron) = croner::Cron::new(expr).parse() else {
-            eprintln!("[WARN] schedule '{}' has invalid cron '{}': skipped", s.name, expr);
+            eprintln!(
+                "[WARN] schedule '{}' has invalid cron '{}': skipped",
+                s.name, expr
+            );
             return false;
         };
         // Fire if the next cron occurrence in the past 60-second window is ≤ now.
@@ -210,7 +224,9 @@ async fn sleep_until_next_minute() {
 
 async fn fire_due(path: &Path) {
     let now = Local::now();
-    let Ok(mut ss) = load_schedules(path) else { return };
+    let Ok(mut ss) = load_schedules(path) else {
+        return;
+    };
     let log_base = logs_base(path);
     let rpa = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("rpa"));
 
@@ -220,13 +236,13 @@ async fn fire_due(path: &Path) {
             continue;
         }
 
-        let id       = s.id.clone();
-        let name     = s.name.clone();
+        let id = s.id.clone();
+        let name = s.name.clone();
         let scenario = s.scenario.clone();
-        let args     = s.extra_args.clone();
-        let log_dir  = log_base.join(&id);
-        let rpa2     = rpa.clone();
-        let spath    = path.to_owned();
+        let args = s.extra_args.clone();
+        let log_dir = log_base.join(&id);
+        let rpa2 = rpa.clone();
+        let spath = path.to_owned();
 
         s.last_run = Some(now.to_rfc3339());
         if s.at.is_some() {
@@ -234,12 +250,16 @@ async fn fire_due(path: &Path) {
         }
         changed = true;
 
-        println!("[{}] Firing '{name}' → {}", now.format("%H:%M:%S"), scenario.display());
+        println!(
+            "[{}] Firing '{name}' → {}",
+            now.format("%H:%M:%S"),
+            scenario.display()
+        );
 
         tokio::spawn(async move {
-            let ts   = chrono::Local::now().format("%Y%m%d_%H%M%S");
+            let ts = chrono::Local::now().format("%Y%m%d_%H%M%S");
             let logf = log_dir.join(format!("{ts}.log"));
-            let _    = std::fs::create_dir_all(&log_dir);
+            let _ = std::fs::create_dir_all(&log_dir);
 
             let mut cmd = tokio::process::Command::new(&rpa2);
             cmd.arg("run").arg(&scenario);
@@ -255,7 +275,11 @@ async fn fire_due(path: &Path) {
 
             let result = match cmd.status().await {
                 Ok(st) if st.success() => {
-                    println!("[{}] '{name}' OK → log: {}", chrono::Local::now().format("%H:%M:%S"), logf.display());
+                    println!(
+                        "[{}] '{name}' OK → log: {}",
+                        chrono::Local::now().format("%H:%M:%S"),
+                        logf.display()
+                    );
                     "ok".to_string()
                 }
                 Ok(st) => format!("error: exit {}", st.code().unwrap_or(-1)),

@@ -57,8 +57,8 @@ impl OcrEngine {
 
     /// Extract all text from `image`.
     pub fn extract_text(&self, image: &RgbaImage) -> Result<String> {
-        let mut tess = leptess::LepTess::new(None, &self.lang)
-            .map_err(|e| OcrError::Init(e.to_string()))?;
+        let mut tess =
+            leptess::LepTess::new(None, &self.lang).map_err(|e| OcrError::Init(e.to_string()))?;
 
         let png = encode_png(image)?;
         tess.set_image_from_mem(&png)
@@ -84,10 +84,7 @@ impl OcrEngine {
 fn encode_png(image: &RgbaImage) -> Result<Vec<u8>> {
     let mut buf = Vec::new();
     image::DynamicImage::ImageRgba8(image.clone())
-        .write_to(
-            &mut std::io::Cursor::new(&mut buf),
-            image::ImageFormat::Png,
-        )
+        .write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)
         .map_err(|e| OcrError::ImageEncode(e.to_string()))?;
     Ok(buf)
 }
@@ -122,7 +119,9 @@ mod tests {
         // Place a PNG with visible English text at the path below, or
         // adjust to point at a real fixture image.
         let img_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/eng_sample.png");
-        let img = image::open(img_path).expect("fixture not found").into_rgba8();
+        let img = image::open(img_path)
+            .expect("fixture not found")
+            .into_rgba8();
         let eng = OcrEngine::english();
         let text = eng.extract_text(&img).expect("OCR failed");
         assert!(!text.trim().is_empty(), "expected non-empty OCR output");
@@ -132,7 +131,9 @@ mod tests {
     #[ignore = "requires Tesseract + jpn language pack to be installed"]
     fn ocr_extracts_japanese_text() {
         let img_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/jpn_sample.png");
-        let img = image::open(img_path).expect("fixture not found").into_rgba8();
+        let img = image::open(img_path)
+            .expect("fixture not found")
+            .into_rgba8();
         let eng = OcrEngine::japanese();
         let text = eng.extract_text(&img).expect("OCR failed");
         assert!(!text.trim().is_empty(), "expected non-empty OCR output");

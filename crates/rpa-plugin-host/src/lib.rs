@@ -75,9 +75,8 @@ impl PluginInstance {
     fn compile(path: &Path) -> Result<(Arc<Engine>, Module)> {
         let mut config = wasmtime::Config::new();
         config.epoch_interruption(true);
-        let engine = Arc::new(
-            Engine::new(&config).map_err(|e| HostError::WasmLoad(e.to_string()))?,
-        );
+        let engine =
+            Arc::new(Engine::new(&config).map_err(|e| HostError::WasmLoad(e.to_string()))?);
         let module =
             Module::from_file(&engine, path).map_err(|e| HostError::WasmLoad(e.to_string()))?;
         Ok((engine, module))
@@ -97,9 +96,7 @@ impl PluginInstance {
             .function
             .iter()
             .find(|f| f.name == function)
-            .ok_or_else(|| {
-                PluginError::Other(format!("function not found: {function}"))
-            })?;
+            .ok_or_else(|| PluginError::Other(format!("function not found: {function}")))?;
 
         #[cfg(feature = "wasm")]
         return self.run_wasm(function, inputs);
@@ -114,8 +111,8 @@ impl PluginInstance {
 
     #[cfg(feature = "wasm")]
     fn run_wasm(&self, function: &str, inputs: HashMap<String, Value>) -> PluginResult {
-        use std::sync::atomic::{AtomicBool, Ordering};
         use serde_json::Value as JValue;
+        use std::sync::atomic::{AtomicBool, Ordering};
         use wasmtime::Linker;
         use wasmtime::Store;
         use wasmtime_wasi::p1::{self, WasiP1Ctx};

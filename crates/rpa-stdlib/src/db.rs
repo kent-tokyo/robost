@@ -7,14 +7,10 @@ fn open_sqlite(url: &str) -> Result<rusqlite::Connection, NodeError> {
         .strip_prefix("sqlite://")
         .or_else(|| url.strip_prefix("sqlite:"))
         .unwrap_or(url);
-    rusqlite::Connection::open(path)
-        .map_err(|e| NodeError::Other(format!("db open failed: {e}")))
+    rusqlite::Connection::open(path).map_err(|e| NodeError::Other(format!("db open failed: {e}")))
 }
 
-fn bind_params(
-    stmt: &mut rusqlite::Statement<'_>,
-    params: &[Value],
-) -> Result<(), NodeError> {
+fn bind_params(stmt: &mut rusqlite::Statement<'_>, params: &[Value]) -> Result<(), NodeError> {
     for (i, v) in params.iter().enumerate() {
         let idx = i + 1;
         match v {
@@ -99,11 +95,7 @@ pub fn query(inputs: HashMap<String, Value>) -> NodeResult {
         .prepare(&sql)
         .map_err(|e| NodeError::Other(format!("db prepare failed: {e}")))?;
 
-    let cols: Vec<String> = stmt
-        .column_names()
-        .into_iter()
-        .map(str::to_owned)
-        .collect();
+    let cols: Vec<String> = stmt.column_names().into_iter().map(str::to_owned).collect();
 
     bind_params(&mut stmt, &params)?;
 
@@ -139,11 +131,7 @@ pub fn query_one(inputs: HashMap<String, Value>) -> NodeResult {
         .prepare(&sql)
         .map_err(|e| NodeError::Other(format!("db prepare failed: {e}")))?;
 
-    let cols: Vec<String> = stmt
-        .column_names()
-        .into_iter()
-        .map(str::to_owned)
-        .collect();
+    let cols: Vec<String> = stmt.column_names().into_iter().map(str::to_owned).collect();
 
     bind_params(&mut stmt, &params)?;
 

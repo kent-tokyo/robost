@@ -18,25 +18,38 @@ fn webhook_agent() -> &'static ureq::Agent {
 /// Required: webhook_url, text
 /// Optional: username, icon_emoji, channel
 pub fn slack_send(inputs: HashMap<String, Value>) -> NodeResult {
-    let url  = get_str(&inputs, "webhook_url")?;
+    let url = get_str(&inputs, "webhook_url")?;
     let text = get_str(&inputs, "text")?;
 
     let mut payload = json!({ "text": text });
-    if let Some(u) = opt_str(&inputs, "username")   { payload["username"]   = json!(u); }
-    if let Some(e) = opt_str(&inputs, "icon_emoji") { payload["icon_emoji"] = json!(e); }
-    if let Some(c) = opt_str(&inputs, "channel")    { payload["channel"]    = json!(c); }
+    if let Some(u) = opt_str(&inputs, "username") {
+        payload["username"] = json!(u);
+    }
+    if let Some(e) = opt_str(&inputs, "icon_emoji") {
+        payload["icon_emoji"] = json!(e);
+    }
+    if let Some(c) = opt_str(&inputs, "channel") {
+        payload["channel"] = json!(c);
+    }
 
-    let status = match webhook_agent().post(&url)
+    let status = match webhook_agent()
+        .post(&url)
         .set("Content-Type", "application/json")
         .send_json(payload)
     {
-        Ok(r)                              => r.status(),
-        Err(ureq::Error::Status(s, _))    => s,
-        Err(e)                             => return Err(crate::NodeError::Other(format!("slack webhook failed: {e}"))),
+        Ok(r) => r.status(),
+        Err(ureq::Error::Status(s, _)) => s,
+        Err(e) => {
+            return Err(crate::NodeError::Other(format!(
+                "slack webhook failed: {e}"
+            )))
+        }
     };
 
     if status != 200 {
-        return Err(crate::NodeError::Other(format!("slack webhook returned HTTP {status}")));
+        return Err(crate::NodeError::Other(format!(
+            "slack webhook returned HTTP {status}"
+        )));
     }
 
     tracing::info!(url, "notify.slack_send");
@@ -48,7 +61,7 @@ pub fn slack_send(inputs: HashMap<String, Value>) -> NodeResult {
 /// Required: webhook_url, text
 /// Optional: title, color (hex without #, e.g. "00ff00")
 pub fn teams_send(inputs: HashMap<String, Value>) -> NodeResult {
-    let url  = get_str(&inputs, "webhook_url")?;
+    let url = get_str(&inputs, "webhook_url")?;
     let text = get_str(&inputs, "text")?;
 
     let title = opt_str(&inputs, "title").unwrap_or_default();
@@ -63,17 +76,24 @@ pub fn teams_send(inputs: HashMap<String, Value>) -> NodeResult {
         "text":       text,
     });
 
-    let status = match webhook_agent().post(&url)
+    let status = match webhook_agent()
+        .post(&url)
         .set("Content-Type", "application/json")
         .send_json(payload)
     {
-        Ok(r)                           => r.status(),
+        Ok(r) => r.status(),
         Err(ureq::Error::Status(s, _)) => s,
-        Err(e)                          => return Err(crate::NodeError::Other(format!("teams webhook failed: {e}"))),
+        Err(e) => {
+            return Err(crate::NodeError::Other(format!(
+                "teams webhook failed: {e}"
+            )))
+        }
     };
 
     if status != 200 {
-        return Err(crate::NodeError::Other(format!("teams webhook returned HTTP {status}")));
+        return Err(crate::NodeError::Other(format!(
+            "teams webhook returned HTTP {status}"
+        )));
     }
 
     tracing::info!(url, "notify.teams_send");

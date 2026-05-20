@@ -143,13 +143,21 @@ fn col_to_letters(mut col: u32) -> String {
 
 fn set_cell(cell: &mut umya_spreadsheet::Cell, v: &Value) {
     match v {
-        Value::Null          => {}
-        Value::Bool(b)       => { cell.set_value_bool(*b); }
-        Value::Number(n)     => {
-            if let Some(f) = n.as_f64() { cell.set_value_number(f); }
+        Value::Null => {}
+        Value::Bool(b) => {
+            cell.set_value_bool(*b);
         }
-        Value::String(s)     => { cell.set_value_string(s); }
-        other                => { cell.set_value_string(other.to_string()); }
+        Value::Number(n) => {
+            if let Some(f) = n.as_f64() {
+                cell.set_value_number(f);
+            }
+        }
+        Value::String(s) => {
+            cell.set_value_string(s);
+        }
+        other => {
+            cell.set_value_string(other.to_string());
+        }
     }
 }
 
@@ -157,7 +165,7 @@ fn set_cell(cell: &mut umya_spreadsheet::Cell, v: &Value) {
 ///
 /// Required: file, sheet, start (e.g. "A1"), data ([[row values]])
 pub fn write_range(inputs: HashMap<String, Value>) -> NodeResult {
-    let file  = get_str(&inputs, "file")?;
+    let file = get_str(&inputs, "file")?;
     let sheet = get_str(&inputs, "sheet")?;
     let start = get_str(&inputs, "start")?;
 
@@ -198,9 +206,9 @@ pub fn write_range(inputs: HashMap<String, Value>) -> NodeResult {
 ///
 /// Required: file, sheet, cell (e.g. "C2"), formula (e.g. "=SUM(A1:A10)")
 pub fn set_formula(inputs: HashMap<String, Value>) -> NodeResult {
-    let file    = get_str(&inputs, "file")?;
-    let sheet   = get_str(&inputs, "sheet")?;
-    let cell    = get_str(&inputs, "cell")?;
+    let file = get_str(&inputs, "file")?;
+    let sheet = get_str(&inputs, "sheet")?;
+    let cell = get_str(&inputs, "cell")?;
     let formula = get_str(&inputs, "formula")?;
 
     let (col, row) = parse_cell_ref(&cell)

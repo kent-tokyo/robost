@@ -64,8 +64,8 @@ fn add_dir_to_zip(
     dir: &Path,
     options: zip::write::SimpleFileOptions,
 ) -> Result<(), NodeError> {
-    for entry in std::fs::read_dir(dir)
-        .map_err(|e| NodeError::Other(format!("read_dir failed: {e}")))?
+    for entry in
+        std::fs::read_dir(dir).map_err(|e| NodeError::Other(format!("read_dir failed: {e}")))?
     {
         let entry = entry.map_err(|e| NodeError::Other(format!("dir entry: {e}")))?;
         let path = entry.path();
@@ -98,8 +98,8 @@ pub fn extract(inputs: HashMap<String, Value>) -> NodeResult {
     let src = get_str(&inputs, "src")?;
     let dest = get_str(&inputs, "dest")?;
 
-    let file = std::fs::File::open(&src)
-        .map_err(|e| NodeError::Other(format!("open zip failed: {e}")))?;
+    let file =
+        std::fs::File::open(&src).map_err(|e| NodeError::Other(format!("open zip failed: {e}")))?;
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| NodeError::Other(format!("read zip failed: {e}")))?;
 
@@ -147,13 +147,17 @@ pub fn extract(inputs: HashMap<String, Value>) -> NodeResult {
 pub fn list(inputs: HashMap<String, Value>) -> NodeResult {
     let src = get_str(&inputs, "src")?;
 
-    let file = std::fs::File::open(&src)
-        .map_err(|e| NodeError::Other(format!("open zip failed: {e}")))?;
+    let file =
+        std::fs::File::open(&src).map_err(|e| NodeError::Other(format!("open zip failed: {e}")))?;
     let archive = zip::ZipArchive::new(file)
         .map_err(|e| NodeError::Other(format!("read zip failed: {e}")))?;
 
     let names: Vec<Value> = (0..archive.len())
-        .filter_map(|i| archive.name_for_index(i).map(|n| Value::String(n.to_owned())))
+        .filter_map(|i| {
+            archive
+                .name_for_index(i)
+                .map(|n| Value::String(n.to_owned()))
+        })
         .collect();
 
     tracing::info!(src, count = names.len(), "archive.list");

@@ -4,16 +4,18 @@ use std::collections::HashMap;
 
 fn keyring_err(e: keyring::Error) -> NodeError {
     // Don't include keyring::Error's Display (which may expose service/account names)
-    NodeError::Other(format!("keychain operation failed: {}", e.to_string()
-        .split(':').next().unwrap_or("unknown error")))
+    NodeError::Other(format!(
+        "keychain operation failed: {}",
+        e.to_string().split(':').next().unwrap_or("unknown error")
+    ))
 }
 
 /// Store a password in the OS keychain.
 ///
 /// Required: service, account, password
 pub fn keychain_set(inputs: HashMap<String, Value>) -> NodeResult {
-    let service  = get_str(&inputs, "service")?;
-    let account  = get_str(&inputs, "account")?;
+    let service = get_str(&inputs, "service")?;
+    let account = get_str(&inputs, "account")?;
     let password = get_str(&inputs, "password")?;
 
     let entry = keyring::Entry::new(&service, &account).map_err(keyring_err)?;

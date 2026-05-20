@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use chrono::{DateTime, Local};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StepOutcome {
@@ -70,7 +70,10 @@ impl ExecutionReport {
     pub fn write_csv(&self, path: &Path) -> std::io::Result<()> {
         use std::io::Write;
         let mut f = std::fs::File::create(path)?;
-        writeln!(f, "index,name,outcome,started_at,elapsed_ms,message,screenshot")?;
+        writeln!(
+            f,
+            "index,name,outcome,started_at,elapsed_ms,message,screenshot"
+        )?;
         for s in &self.steps {
             let screenshot = s
                 .screenshot_path
@@ -116,9 +119,10 @@ impl ExecutionReport {
             .num_milliseconds();
         let (summary_class, summary_text) = match &self.outcome {
             Outcome::Success => ("ok", "SUCCESS".to_owned()),
-            Outcome::Failed { step_index, message } => {
-                ("fail", format!("FAILED at step {step_index}: {message}"))
-            }
+            Outcome::Failed {
+                step_index,
+                message,
+            } => ("fail", format!("FAILED at step {step_index}: {message}")),
         };
 
         let mut rows = String::new();

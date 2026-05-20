@@ -41,7 +41,10 @@ pub trait Backend: Send + Sync {
         let origin = match target {
             Target::Window { title_contains } => rpa_capture::window_origin(title_contains)?,
             Target::Process { name } => rpa_capture::window_origin(name)?,
-            Target::Region(rect) => ScreenPoint { x: rect.x, y: rect.y },
+            Target::Region(rect) => ScreenPoint {
+                x: rect.x,
+                y: rect.y,
+            },
             _ => ScreenPoint { x: 0, y: 0 },
         };
         let img = self.capture(target)?;

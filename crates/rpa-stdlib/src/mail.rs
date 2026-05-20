@@ -1,8 +1,7 @@
 use crate::{get_str, NodeError, NodeResult};
 use lettre::{
     message::header::ContentType as LettreContentType,
-    transport::smtp::authentication::Credentials,
-    Message, SmtpTransport, Transport,
+    transport::smtp::authentication::Credentials, Message, SmtpTransport, Transport,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -18,24 +17,35 @@ pub fn smtp_send(inputs: HashMap<String, Value>) -> NodeResult {
     let subject = get_str(&inputs, "subject")?;
     let body = get_str(&inputs, "body")?;
 
-    let port = inputs
-        .get("port")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(587) as u16;
+    let port = inputs.get("port").and_then(|v| v.as_u64()).unwrap_or(587) as u16;
 
     let cc = inputs.get("cc").and_then(|v| v.as_str()).map(str::to_owned);
-    let bcc = inputs.get("bcc").and_then(|v| v.as_str()).map(str::to_owned);
+    let bcc = inputs
+        .get("bcc")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
 
     let mut builder = Message::builder()
-        .from(from.parse().map_err(|e| NodeError::Other(format!("invalid from address: {e}")))?)
-        .to(to.parse().map_err(|e| NodeError::Other(format!("invalid to address: {e}")))?)
+        .from(
+            from.parse()
+                .map_err(|e| NodeError::Other(format!("invalid from address: {e}")))?,
+        )
+        .to(to
+            .parse()
+            .map_err(|e| NodeError::Other(format!("invalid to address: {e}")))?)
         .subject(subject);
 
     if let Some(cc_addr) = cc {
-        builder = builder.cc(cc_addr.parse().map_err(|e| NodeError::Other(format!("invalid cc address: {e}")))?);
+        builder = builder.cc(cc_addr
+            .parse()
+            .map_err(|e| NodeError::Other(format!("invalid cc address: {e}")))?);
     }
     if let Some(bcc_addr) = bcc {
-        builder = builder.bcc(bcc_addr.parse().map_err(|e| NodeError::Other(format!("invalid bcc address: {e}")))?);
+        builder = builder.bcc(
+            bcc_addr
+                .parse()
+                .map_err(|e| NodeError::Other(format!("invalid bcc address: {e}")))?,
+        );
     }
 
     let message = builder
@@ -43,8 +53,14 @@ pub fn smtp_send(inputs: HashMap<String, Value>) -> NodeResult {
         .body(body)
         .map_err(|e| NodeError::Other(format!("message build failed: {e}")))?;
 
-    let user = inputs.get("user").and_then(|v| v.as_str()).map(str::to_owned);
-    let password = inputs.get("password").and_then(|v| v.as_str()).map(str::to_owned);
+    let user = inputs
+        .get("user")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
+    let password = inputs
+        .get("password")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
 
     let transport = if let (Some(u), Some(p)) = (user, password) {
         SmtpTransport::starttls_relay(&host)
@@ -53,9 +69,7 @@ pub fn smtp_send(inputs: HashMap<String, Value>) -> NodeResult {
             .credentials(Credentials::new(u, p))
             .build()
     } else {
-        SmtpTransport::builder_dangerous(&host)
-            .port(port)
-            .build()
+        SmtpTransport::builder_dangerous(&host).port(port).build()
     };
 
     transport
@@ -65,4 +79,3 @@ pub fn smtp_send(inputs: HashMap<String, Value>) -> NodeResult {
     tracing::info!(to, host, "mail.smtp_send: sent");
     Ok(HashMap::new())
 }
-

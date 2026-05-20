@@ -64,7 +64,10 @@ pub fn save_registry(entries: &[PluginEntry]) -> Result<()> {
     Ok(())
 }
 
-pub fn install_plugin(wasm_src: &std::path::Path, manifest: &rpa_plugin_api::PluginManifest) -> Result<PathBuf> {
+pub fn install_plugin(
+    wasm_src: &std::path::Path,
+    manifest: &rpa_plugin_api::PluginManifest,
+) -> Result<PathBuf> {
     let name = &manifest.plugin.name;
     let dest_dir = plugins_dir().join(name);
     std::fs::create_dir_all(&dest_dir)?;

@@ -1,6 +1,6 @@
+use crate::{MaskRegion, Rect, ScreenPoint};
 use image::{GrayImage, RgbaImage};
 use imageproc::template_matching::{find_extremes, match_template, MatchTemplateMethod};
-use crate::{MaskRegion, Rect, ScreenPoint};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -337,7 +337,12 @@ mod tests {
 
         // Masking everything → template becomes all-gray (128) → NCC ≈ 0.707.
         let mask = MaskRegion {
-            rect: Rect { x: 0, y: 0, width: 20, height: 20 },
+            rect: Rect {
+                x: 0,
+                y: 0,
+                width: 20,
+                height: 20,
+            },
             label: None,
         };
         assert!(

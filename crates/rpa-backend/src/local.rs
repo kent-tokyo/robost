@@ -71,7 +71,11 @@ impl Backend for LocalBackend {
         self.with_input(|c| c.press_key(k))
     }
 
-    #[instrument(name = "local_control_window", fields(title_contains, action), skip(self))]
+    #[instrument(
+        name = "local_control_window",
+        fields(title_contains, action),
+        skip(self)
+    )]
     fn control_window(&self, title_contains: &str, action: &str) -> Result<()> {
         rpa_input::control_window(title_contains, action).map_err(BackendError::Input)
     }
@@ -108,8 +112,7 @@ impl Backend for LocalBackend {
         let parsed: Vec<enigo::Key> = keys
             .iter()
             .map(|k| {
-                parse_key(k)
-                    .ok_or_else(|| BackendError::NotSupported(format!("unknown key: {k}")))
+                parse_key(k).ok_or_else(|| BackendError::NotSupported(format!("unknown key: {k}")))
             })
             .collect::<Result<Vec<_>>>()?;
         self.with_input(|c| c.key_combo(&parsed))

@@ -19,10 +19,7 @@ fn get_f64(inputs: &HashMap<String, Value>, key: &str) -> Result<f64, NodeError>
 /// Output: { result: "1,234,567.89" }
 pub fn format(inputs: HashMap<String, Value>) -> NodeResult {
     let value = get_f64(&inputs, "value")?;
-    let decimals = inputs
-        .get("decimals")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as usize;
+    let decimals = inputs.get("decimals").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
     let sep = inputs
         .get("separator")
         .and_then(|v| v.as_str())
@@ -45,10 +42,7 @@ pub fn format(inputs: HashMap<String, Value>) -> NodeResult {
 /// Output: { result: number }
 pub fn round(inputs: HashMap<String, Value>) -> NodeResult {
     let value = get_f64(&inputs, "value")?;
-    let decimals = inputs
-        .get("decimals")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u32;
+    let decimals = inputs.get("decimals").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
     let mode = inputs
         .get("mode")
         .and_then(|v| v.as_str())
@@ -86,16 +80,17 @@ pub fn round(inputs: HashMap<String, Value>) -> NodeResult {
 /// Output: { result: "12.3%" }
 pub fn to_percent(inputs: HashMap<String, Value>) -> NodeResult {
     let value = get_f64(&inputs, "value")?;
-    let decimals = inputs
-        .get("decimals")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(1) as usize;
+    let decimals = inputs.get("decimals").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
     let already_percent = inputs
         .get("percent")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let pct = if already_percent { value } else { value * 100.0 };
+    let pct = if already_percent {
+        value
+    } else {
+        value * 100.0
+    };
     let s = format!("{:.prec$}%", pct, prec = decimals);
 
     let mut out = HashMap::new();

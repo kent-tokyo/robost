@@ -9,8 +9,8 @@ use std::collections::HashMap;
 pub fn extract_text(inputs: HashMap<String, Value>) -> NodeResult {
     let file = get_str(&inputs, "file")?;
 
-    let bytes = std::fs::read(&file)
-        .map_err(|e| NodeError::Other(format!("read pdf failed: {e}")))?;
+    let bytes =
+        std::fs::read(&file).map_err(|e| NodeError::Other(format!("read pdf failed: {e}")))?;
 
     let text = pdf_extract::extract_text_from_mem(&bytes)
         .map_err(|e| NodeError::Other(format!("pdf extract failed: {e}")))?;
@@ -32,8 +32,8 @@ pub fn extract_text(inputs: HashMap<String, Value>) -> NodeResult {
 pub fn page_count(inputs: HashMap<String, Value>) -> NodeResult {
     let file = get_str(&inputs, "file")?;
 
-    let bytes = std::fs::read(&file)
-        .map_err(|e| NodeError::Other(format!("read pdf failed: {e}")))?;
+    let bytes =
+        std::fs::read(&file).map_err(|e| NodeError::Other(format!("read pdf failed: {e}")))?;
 
     let count = count_pages(&bytes);
 

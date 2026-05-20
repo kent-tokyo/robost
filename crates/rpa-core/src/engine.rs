@@ -17,30 +17,28 @@ use tracing::{error, info, instrument, warn};
 
 use crate::scenario::{
     CalcStep, CallScenarioStep, ClickAction, ClickImageStep, ClipboardGetStep, ClipboardSetStep,
-    CopyVarStep, DateAddStep, DateDiffStep, DateFormatStep, DialogInputStep, DialogSelectStep,
-    DialogWaitStep, DiffUnit, DoWhileStep, EnvGetStep, FileCopyStep, FileDeleteStep,
-    FileExistsStep, FileListStep, FileMoveStep, FileRenameStep, FindImageStep, ForeachStep,
-    GetDatetimeStep, GetUsernameStep, GroupStep, IfStep, ImportVarsStep, IncrementStep,
-    JsonParseStep, JsonStringifyStep, LibraryStep, LoadVarsStep, LogLevel, LogWriteStep,
+    CopyVarStep, CsvReadStep, CsvWriteMode, CsvWriteStep, DateAddStep, DateDiffStep,
+    DateFormatStep, DialogInputStep, DialogSelectStep, DialogWaitStep, DiffUnit, DoWhileStep,
+    EnvGetStep, ExcelReadCellStep, ExcelReadRangeStep, ExcelWriteCellStep, FileAppendStep,
+    FileCopyStep, FileDeleteStep, FileExistsStep, FileListStep, FileMoveStep, FileReadStep,
+    FileRenameStep, FileWriteMode, FileWriteStep, FindImageStep, ForeachStep, GetDatetimeStep,
+    GetUsernameStep, GroupStep, IfStep, ImportVarsStep, IncrementStep, JsonParseStep,
+    JsonStringifyStep, KeyComboStep, LibraryStep, LoadVarsStep, LogLevel, LogWriteStep,
     MatchRectStep, MlDetectStep, MouseClickXyStep, MouseDragStep, MouseMoveStep, MouseScrollStep,
-    OcrMatchStep, PathBasenameStep, PathDirnameStep, PathJoinStep, RepeatStep, SaveVarsStep,
-    ScenarioStep, ScriptStep, ShellStep, StringJoinStep,
-    StringRegexStep, StringReplaceStep, StringSplitStep, StringSubstringStep, StringTrimStep,
-    SubScenarioStep, SwitchStep, TrimSide, TryCatchStep, TypeStep, WaitImageStep, WaitWindowStep,
-    WhileStep, WidthStep, WindowControlAction, WindowControlStep, WindowState,
-    ExcelReadCellStep, ExcelReadRangeStep, ExcelWriteCellStep,
-    FileReadStep, FileWriteStep, FileWriteMode, FileAppendStep,
-    ProcessStartStep, ProcessKillStep, ProcessExistsStep,
-    KeyComboStep, CsvReadStep, CsvWriteStep, CsvWriteMode,
-    ScreenshotSaveStep, WaitNoImageStep, UrlOpenStep, NotifyStep,
-    UiaBy, UiaClickStep, UiaFindStep, UiaGetStep, UiaSetStep,
+    NotifyStep, OcrMatchStep, PathBasenameStep, PathDirnameStep, PathJoinStep, ProcessExistsStep,
+    ProcessKillStep, ProcessStartStep, RepeatStep, SaveVarsStep, ScenarioStep, ScreenshotSaveStep,
+    ScriptStep, ShellStep, StringJoinStep, StringRegexStep, StringReplaceStep, StringSplitStep,
+    StringSubstringStep, StringTrimStep, SubScenarioStep, SwitchStep, TrimSide, TryCatchStep,
+    TypeStep, UiaBy, UiaClickStep, UiaFindStep, UiaGetStep, UiaSetStep, UrlOpenStep, WaitImageStep,
+    WaitNoImageStep, WaitWindowStep, WhileStep, WidthStep, WindowControlAction, WindowControlStep,
+    WindowState,
 };
+#[cfg(feature = "http")]
+use crate::scenario::{ContentType, HttpGetStep, HttpPostStep, HttpPutStep};
 #[cfg(feature = "web")]
 use crate::scenario::{
     WebClickStep, WebGetStep, WebOpenStep, WebScreenshotStep, WebTypeStep, WebWaitStep,
 };
-#[cfg(feature = "http")]
-use crate::scenario::{ContentType, HttpGetStep, HttpPostStep, HttpPutStep};
 use crate::variables::Variables;
 use crate::Scenario;
 
@@ -429,41 +427,60 @@ impl ScenarioEngine {
         reconnect_ms: u64,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Flow>> + 'a>> {
         Box::pin(async move {
-        for (i, step) in steps.iter().enumerate() {
-            self.check_cancelled()?;
+            for (i, step) in steps.iter().enumerate() {
+                self.check_cancelled()?;
 
-            let span = tracing::info_span!("step", index = i);
-            let _g = span.enter();
+                let span = tracing::info_span!("step", index = i);
+                let _g = span.enter();
 
-            if self.debug_step || self.break_at == Some(i) {
-                self.debug_pause(i, step, vars).await?;
-            }
+                if self.debug_step || self.break_at == Some(i) {
+                    self.debug_pause(i, step, vars).await?;
+                }
 
-            let step_started = chrono::Local::now();
-            let step_timer = Instant::now();
+                let step_started = chrono::Local::now();
+                let step_timer = Instant::now();
 
-            // Reconnect deadline is initialized lazily on the first WindowNotFound.
-            // Only leaf (non-flow) steps are retried here; flow steps propagate
-            // errors so their inner run_steps handles retries without re-running
-            // already-completed inner steps.
-            let mut reconnect_deadline: Option<Instant> = None;
+                // Reconnect deadline is initialized lazily on the first WindowNotFound.
+                // Only leaf (non-flow) steps are retried here; flow steps propagate
+                // errors so their inner run_steps handles retries without re-running
+                // already-completed inner steps.
+                let mut reconnect_deadline: Option<Instant> = None;
 
-            loop {
-                match self.run_step(step, vars, reconnect_ms).await {
-                    Err(e)
-                        if is_window_not_found(&e)
-                            && reconnect_ms > 0
-                            && !is_flow_step(step) =>
-                    {
-                        let deadline = reconnect_deadline.get_or_insert_with(|| {
-                            warn!(
-                                step = i,
-                                reconnect_ms, "window not found — waiting for RDP/VNC reconnect"
-                            );
-                            Instant::now() + Duration::from_millis(reconnect_ms)
-                        });
-                        if Instant::now() >= *deadline {
-                            error!(error = %e, step = i, "step failed (reconnect timeout)");
+                loop {
+                    match self.run_step(step, vars, reconnect_ms).await {
+                        Err(e)
+                            if is_window_not_found(&e)
+                                && reconnect_ms > 0
+                                && !is_flow_step(step) =>
+                        {
+                            let deadline = reconnect_deadline.get_or_insert_with(|| {
+                                warn!(
+                                    step = i,
+                                    reconnect_ms,
+                                    "window not found — waiting for RDP/VNC reconnect"
+                                );
+                                Instant::now() + Duration::from_millis(reconnect_ms)
+                            });
+                            if Instant::now() >= *deadline {
+                                error!(error = %e, step = i, "step failed (reconnect timeout)");
+                                let screenshot = self.save_failure_screenshot(i).await;
+                                if self.report_path.is_some() {
+                                    self.report_records.lock().await.push(StepRecord {
+                                        index: i,
+                                        name: step.name().to_owned(),
+                                        started_at: step_started,
+                                        elapsed_ms: step_timer.elapsed().as_millis() as u64,
+                                        outcome: StepOutcome::Failed(e.to_string()),
+                                        screenshot_path: screenshot,
+                                    });
+                                }
+                                return Err(e);
+                            }
+                            sleep(Duration::from_millis(1000)).await;
+                            self.check_cancelled()?;
+                        }
+                        Err(e) => {
+                            error!(error = %e, step = i, "step failed");
                             let screenshot = self.save_failure_screenshot(i).await;
                             if self.report_path.is_some() {
                                 self.report_records.lock().await.push(StepRecord {
@@ -477,45 +494,27 @@ impl ScenarioEngine {
                             }
                             return Err(e);
                         }
-                        sleep(Duration::from_millis(1000)).await;
-                        self.check_cancelled()?;
-                    }
-                    Err(e) => {
-                        error!(error = %e, step = i, "step failed");
-                        let screenshot = self.save_failure_screenshot(i).await;
-                        if self.report_path.is_some() {
-                            self.report_records.lock().await.push(StepRecord {
-                                index: i,
-                                name: step.name().to_owned(),
-                                started_at: step_started,
-                                elapsed_ms: step_timer.elapsed().as_millis() as u64,
-                                outcome: StepOutcome::Failed(e.to_string()),
-                                screenshot_path: screenshot,
-                            });
+                        Ok(Flow::Done) => {
+                            if self.dump_vars {
+                                eprintln!("[VARS] step {i}: {}", vars.debug_dump());
+                            }
+                            if self.report_path.is_some() {
+                                self.report_records.lock().await.push(StepRecord {
+                                    index: i,
+                                    name: step.name().to_owned(),
+                                    started_at: step_started,
+                                    elapsed_ms: step_timer.elapsed().as_millis() as u64,
+                                    outcome: StepOutcome::Ok,
+                                    screenshot_path: None,
+                                });
+                            }
+                            break;
                         }
-                        return Err(e);
+                        Ok(flow) => return Ok(flow),
                     }
-                    Ok(Flow::Done) => {
-                        if self.dump_vars {
-                            eprintln!("[VARS] step {i}: {}", vars.debug_dump());
-                        }
-                        if self.report_path.is_some() {
-                            self.report_records.lock().await.push(StepRecord {
-                                index: i,
-                                name: step.name().to_owned(),
-                                started_at: step_started,
-                                elapsed_ms: step_timer.elapsed().as_millis() as u64,
-                                outcome: StepOutcome::Ok,
-                                screenshot_path: None,
-                            });
-                        }
-                        break;
-                    }
-                    Ok(flow) => return Ok(flow),
                 }
             }
-        }
-        Ok(Flow::Done)
+            Ok(Flow::Done)
         }) // Box::pin
     }
 
@@ -1072,7 +1071,12 @@ impl ScenarioEngine {
                             ClickAction::Double => self.backend.double_click(point)?,
                         }
                     } else {
-                        info!(dry_run = true, x = point.x, y = point.y, "click_image skipped");
+                        info!(
+                            dry_run = true,
+                            x = point.x,
+                            y = point.y,
+                            "click_image skipped"
+                        );
                     }
                     if let Some(ms) = step.post_click_ms {
                         sleep(Duration::from_millis(ms)).await;
@@ -1232,12 +1236,7 @@ impl ScenarioEngine {
         self.run_steps(&step.steps, vars, reconnect_ms).await
     }
 
-    async fn run_if(
-        &self,
-        step: &IfStep,
-        vars: &mut Variables,
-        reconnect_ms: u64,
-    ) -> Result<Flow> {
+    async fn run_if(&self, step: &IfStep, vars: &mut Variables, reconnect_ms: u64) -> Result<Flow> {
         if self.eval_cond(&step.cond, vars)? {
             self.run_steps(&step.then, vars, reconnect_ms).await
         } else {
@@ -1689,7 +1688,12 @@ impl ScenarioEngine {
 
             match result {
                 Ok(m) => {
-                    info!(score = m.score, x = m.center.x, y = m.center.y, "match_rect: found");
+                    info!(
+                        score = m.score,
+                        x = m.center.x,
+                        y = m.center.y,
+                        "match_rect: found"
+                    );
                     if let Some(save_as) = &step.save_as {
                         vars.set(
                             save_as.clone(),
@@ -1786,8 +1790,9 @@ impl ScenarioEngine {
 
                 match text_result {
                     Ok(text) => {
-                        let found =
-                            contains.as_ref().map_or(true, |pat| text.contains(pat.as_str()));
+                        let found = contains
+                            .as_ref()
+                            .map_or(true, |pat| text.contains(pat.as_str()));
                         info!(found, text_len = text.len(), "ocr_match");
                         if found {
                             if let Some(save_as) = &step.save_as {
@@ -1806,10 +1811,7 @@ impl ScenarioEngine {
                                 );
                                 return Ok(());
                             }
-                            return Err(EngineError::Timeout(format!(
-                                "ocr_match: {:?}",
-                                contains
-                            )));
+                            return Err(EngineError::Timeout(format!("ocr_match: {:?}", contains)));
                         }
                         self.check_cancelled()?;
                         sleep(Duration::from_millis(step.retry_interval_ms)).await;
@@ -1843,8 +1845,7 @@ impl ScenarioEngine {
 
             let detections = tokio::task::spawn_blocking(move || {
                 let (img, _origin) = backend.capture_with_origin(&target)?;
-                let detector =
-                    MlDetector::new(model_path.to_string_lossy().as_ref(), threshold);
+                let detector = MlDetector::new(model_path.to_string_lossy().as_ref(), threshold);
                 detector
                     .detect(&img)
                     .map_err(|e| EngineError::Other(format!("ml_detect: {e}")))
@@ -2089,7 +2090,8 @@ impl ScenarioEngine {
         let diff = match step.unit {
             DiffUnit::Days => (to - from).num_days(),
             DiffUnit::Months => {
-                let months = (to.year() - from.year()) * 12 + (to.month() as i32 - from.month() as i32);
+                let months =
+                    (to.year() - from.year()) * 12 + (to.month() as i32 - from.month() as i32);
                 months as i64
             }
         };
@@ -2351,9 +2353,9 @@ impl ScenarioEngine {
             .clone()
             .unwrap_or_else(|| wb.sheet_names().first().cloned().unwrap_or_default());
 
-        let range = wb
-            .worksheet_range(&sheet_name)
-            .map_err(|e| EngineError::Other(format!("excel_read_cell sheet '{sheet_name}': {e}")))?;
+        let range = wb.worksheet_range(&sheet_name).map_err(|e| {
+            EngineError::Other(format!("excel_read_cell sheet '{sheet_name}': {e}"))
+        })?;
 
         let (col, row) = parse_cell_ref(&cell_ref)
             .ok_or_else(|| EngineError::Other(format!("invalid cell ref: {cell_ref}")))?;
@@ -2382,9 +2384,9 @@ impl ScenarioEngine {
             .clone()
             .unwrap_or_else(|| wb.sheet_names().first().cloned().unwrap_or_default());
 
-        let sheet = wb
-            .worksheet_range(&sheet_name)
-            .map_err(|e| EngineError::Other(format!("excel_read_range sheet '{sheet_name}': {e}")))?;
+        let sheet = wb.worksheet_range(&sheet_name).map_err(|e| {
+            EngineError::Other(format!("excel_read_range sheet '{sheet_name}': {e}"))
+        })?;
 
         let (start_str, end_str) = range_ref
             .split_once(':')
@@ -2456,7 +2458,9 @@ impl ScenarioEngine {
                 .get_sheet_by_name_mut(&sheet_name)
                 .ok_or_else(|| EngineError::Other(format!("sheet not found: {sheet_name}")))?;
 
-            sheet.get_cell_mut((col1, row1)).set_value_string(value.clone());
+            sheet
+                .get_cell_mut((col1, row1))
+                .set_value_string(value.clone());
 
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(EngineError::Io)?;
@@ -2494,7 +2498,8 @@ impl ScenarioEngine {
             .append(append)
             .open(&path)
             .map_err(EngineError::Io)?;
-        file.write_all(content.as_bytes()).map_err(EngineError::Io)?;
+        file.write_all(content.as_bytes())
+            .map_err(EngineError::Io)?;
         info!(path = %path.display(), mode = ?step.mode, "file_write");
         Ok(())
     }
@@ -2511,7 +2516,8 @@ impl ScenarioEngine {
             .append(true)
             .open(&path)
             .map_err(EngineError::Io)?;
-        file.write_all(content.as_bytes()).map_err(EngineError::Io)?;
+        file.write_all(content.as_bytes())
+            .map_err(EngineError::Io)?;
         info!(path = %path.display(), "file_append");
         Ok(())
     }
@@ -2654,7 +2660,9 @@ impl ScenarioEngine {
             return Ok(());
         }
         let key_refs: Vec<&str> = step.keys.iter().map(|k| k.as_str()).collect();
-        self.backend.key_combo(&key_refs).map_err(EngineError::Backend)
+        self.backend
+            .key_combo(&key_refs)
+            .map_err(EngineError::Backend)
     }
 
     // ── CSV read/write methods ──────────────────────────────────────────────
@@ -2679,8 +2687,7 @@ impl ScenarioEngine {
                 .map_err(|e| EngineError::Other(format!("csv_read: {e}")))?;
             let mut rows: Vec<serde_json::Value> = Vec::new();
             for record in rdr.records() {
-                let record =
-                    record.map_err(|e| EngineError::Other(format!("csv_read: {e}")))?;
+                let record = record.map_err(|e| EngineError::Other(format!("csv_read: {e}")))?;
                 let row: Vec<serde_json::Value> = record
                     .iter()
                     .map(|s| serde_json::Value::String(s.to_owned()))
@@ -2701,7 +2708,10 @@ impl ScenarioEngine {
             std::fs::create_dir_all(parent).map_err(EngineError::Io)?;
         }
 
-        let rows_val = vars.get(&step.rows).cloned().unwrap_or(serde_json::Value::Null);
+        let rows_val = vars
+            .get(&step.rows)
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
         let rows = match &rows_val {
             serde_json::Value::Array(arr) => arr,
             _ => {
@@ -2830,7 +2840,10 @@ impl ScenarioEngine {
 
     fn string_join(&self, step: &StringJoinStep, vars: &mut Variables) -> Result<()> {
         let separator = vars.expand(&step.separator);
-        let arr = vars.get(&step.value).cloned().unwrap_or(serde_json::Value::Null);
+        let arr = vars
+            .get(&step.value)
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
         let result = match &arr {
             serde_json::Value::Array(items) => items
                 .iter()
@@ -2879,7 +2892,10 @@ impl ScenarioEngine {
     }
 
     fn json_stringify(&self, step: &JsonStringifyStep, vars: &mut Variables) -> Result<()> {
-        let val = vars.get(&step.value).cloned().unwrap_or(serde_json::Value::Null);
+        let val = vars
+            .get(&step.value)
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
         let text = serde_json::to_string(&val)
             .map_err(|e| EngineError::Other(format!("json_stringify: {e}")))?;
         vars.set(&step.save_as, serde_json::Value::String(text));
@@ -3005,8 +3021,8 @@ fn is_window_not_found(e: &EngineError) -> bool {
 
 fn uia_selector_from_by(by: &UiaBy, vars: &Variables) -> rpa_uia::UiaSelector {
     match by {
-        UiaBy::Name(s)  => rpa_uia::UiaSelector::from_name(vars.expand(s)),
-        UiaBy::Id(s)    => rpa_uia::UiaSelector::from_id(vars.expand(s)),
+        UiaBy::Name(s) => rpa_uia::UiaSelector::from_name(vars.expand(s)),
+        UiaBy::Id(s) => rpa_uia::UiaSelector::from_id(vars.expand(s)),
         UiaBy::Class(s) => rpa_uia::UiaSelector::from_class(vars.expand(s)),
     }
 }
@@ -3140,7 +3156,9 @@ impl ScenarioEngine {
             std::fs::create_dir_all(parent)?;
         }
         let target = match &step.window {
-            Some(w) => rpa_template::Target::Window { title_contains: w.clone() },
+            Some(w) => rpa_template::Target::Window {
+                title_contains: w.clone(),
+            },
             None => rpa_template::Target::Screen,
         };
         let backend = Arc::clone(&self.backend);
@@ -3167,13 +3185,12 @@ impl ScenarioEngine {
             let tmpl = Arc::clone(&template);
             let tgt = target.clone();
 
-            let result: Result<rpa_vision::MatchResult> =
-                tokio::task::spawn_blocking(move || {
-                    let (img, origin) = backend.capture_with_origin(&tgt)?;
-                    Ok(matcher.find_with_masks(&img, &tmpl, origin, &[])?)
-                })
-                .await
-                .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+            let result: Result<rpa_vision::MatchResult> = tokio::task::spawn_blocking(move || {
+                let (img, origin) = backend.capture_with_origin(&tgt)?;
+                Ok(matcher.find_with_masks(&img, &tmpl, origin, &[])?)
+            })
+            .await
+            .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
 
             match result {
                 Ok(_) => {
@@ -3234,7 +3251,7 @@ impl ScenarioEngine {
                 match finder.find(&selector) {
                     Ok(el) => {
                         let value = match property.as_str() {
-                            "name"  => el.get_name(),
+                            "name" => el.get_name(),
                             "value" => el.get_value(),
                             _ => el.get_value(),
                         };
@@ -3266,7 +3283,8 @@ impl ScenarioEngine {
             loop {
                 match finder.find(&selector) {
                     Ok(el) => {
-                        return el.set_value(&value)
+                        return el
+                            .set_value(&value)
                             .map_err(|e| EngineError::Other(format!("uia_set: {e}")));
                     }
                     Err(_) if std::time::Instant::now() < deadline => {
@@ -3296,7 +3314,8 @@ impl ScenarioEngine {
             loop {
                 match finder.find(&selector) {
                     Ok(el) => {
-                        return el.invoke()
+                        return el
+                            .invoke()
                             .map_err(|e| EngineError::Other(format!("uia_click: {e}")));
                     }
                     Err(_) if std::time::Instant::now() < deadline => {
@@ -3353,7 +3372,8 @@ impl ScenarioEngine {
         let session = rpa_web::WebSession::new(&driver)
             .await
             .map_err(|e| EngineError::Other(format!("web_open: {e}")))?;
-        session.open(&url)
+        session
+            .open(&url)
             .await
             .map_err(|e| EngineError::Other(format!("web_open navigate: {e}")))?;
         *self.web_session.lock().await = Some(session);
@@ -3365,9 +3385,12 @@ impl ScenarioEngine {
     async fn web_click(&self, step: &WebClickStep, vars: &Variables) -> Result<()> {
         let selector = vars.expand(&step.selector);
         let guard = self.web_session.lock().await;
-        let session = guard.as_ref().ok_or_else(|| EngineError::Other("web_click: no active session".to_owned()))?;
+        let session = guard
+            .as_ref()
+            .ok_or_else(|| EngineError::Other("web_click: no active session".to_owned()))?;
         if !self.dry_run {
-            session.click(&selector, step.timeout_ms)
+            session
+                .click(&selector, step.timeout_ms)
                 .await
                 .map_err(|e| EngineError::Other(format!("web_click: {e}")))?;
         } else {
@@ -3381,9 +3404,12 @@ impl ScenarioEngine {
         let selector = vars.expand(&step.selector);
         let text = vars.expand(&step.text);
         let guard = self.web_session.lock().await;
-        let session = guard.as_ref().ok_or_else(|| EngineError::Other("web_type: no active session".to_owned()))?;
+        let session = guard
+            .as_ref()
+            .ok_or_else(|| EngineError::Other("web_type: no active session".to_owned()))?;
         if !self.dry_run {
-            session.type_text(&selector, &text, step.clear, step.timeout_ms)
+            session
+                .type_text(&selector, &text, step.clear, step.timeout_ms)
                 .await
                 .map_err(|e| EngineError::Other(format!("web_type: {e}")))?;
         } else {
@@ -3396,14 +3422,18 @@ impl ScenarioEngine {
     async fn web_get(&self, step: &WebGetStep, vars: &mut Variables) -> Result<()> {
         let selector = vars.expand(&step.selector);
         let guard = self.web_session.lock().await;
-        let session = guard.as_ref().ok_or_else(|| EngineError::Other("web_get: no active session".to_owned()))?;
+        let session = guard
+            .as_ref()
+            .ok_or_else(|| EngineError::Other("web_get: no active session".to_owned()))?;
         let value = if let Some(attr) = &step.attr {
-            session.get_attr(&selector, attr, step.timeout_ms)
+            session
+                .get_attr(&selector, attr, step.timeout_ms)
                 .await
                 .map_err(|e| EngineError::Other(format!("web_get: {e}")))?
                 .unwrap_or_default()
         } else {
-            session.get_text(&selector, step.timeout_ms)
+            session
+                .get_text(&selector, step.timeout_ms)
                 .await
                 .map_err(|e| EngineError::Other(format!("web_get: {e}")))?
         };
@@ -3415,8 +3445,11 @@ impl ScenarioEngine {
     async fn web_wait(&self, step: &WebWaitStep, vars: &Variables) -> Result<()> {
         let selector = vars.expand(&step.selector);
         let guard = self.web_session.lock().await;
-        let session = guard.as_ref().ok_or_else(|| EngineError::Other("web_wait: no active session".to_owned()))?;
-        session.find(&selector, step.timeout_ms)
+        let session = guard
+            .as_ref()
+            .ok_or_else(|| EngineError::Other("web_wait: no active session".to_owned()))?;
+        session
+            .find(&selector, step.timeout_ms)
             .await
             .map_err(|e| EngineError::Other(format!("web_wait: {e}")))?;
         Ok(())
@@ -3429,8 +3462,11 @@ impl ScenarioEngine {
             std::fs::create_dir_all(parent)?;
         }
         let guard = self.web_session.lock().await;
-        let session = guard.as_ref().ok_or_else(|| EngineError::Other("web_screenshot: no active session".to_owned()))?;
-        session.screenshot(&path)
+        let session = guard
+            .as_ref()
+            .ok_or_else(|| EngineError::Other("web_screenshot: no active session".to_owned()))?;
+        session
+            .screenshot(&path)
             .await
             .map_err(|e| EngineError::Other(format!("web_screenshot: {e}")))?;
         info!(path, "web_screenshot saved");
@@ -3441,7 +3477,8 @@ impl ScenarioEngine {
     async fn web_close(&self) -> Result<()> {
         let mut guard = self.web_session.lock().await;
         if let Some(session) = guard.take() {
-            session.close()
+            session
+                .close()
                 .await
                 .map_err(|e| EngineError::Other(format!("web_close: {e}")))?;
             info!("web_close: browser session closed");
@@ -3561,7 +3598,7 @@ steps:
 
     // ── csv_read / csv_write hermetic tests ─────────────────────────────────
 
-    use crate::scenario::{CsvReadStep, CsvWriteStep, CsvWriteMode};
+    use crate::scenario::{CsvReadStep, CsvWriteMode, CsvWriteStep};
     use crate::variables::Variables;
 
     fn make_engine_for_dir(dir: &std::path::Path) -> ScenarioEngine {
@@ -3676,14 +3713,28 @@ steps:
         vars.set("r1", serde_json::json!([{"x": "1"}]));
         vars.set("r2", serde_json::json!([{"x": "2"}]));
 
-        engine.csv_write(
-            &CsvWriteStep { path: "a.csv".into(), rows: "r1".into(), headers: vec![], mode: CsvWriteMode::Overwrite },
-            &mut vars,
-        ).unwrap();
-        engine.csv_write(
-            &CsvWriteStep { path: "a.csv".into(), rows: "r2".into(), headers: vec![], mode: CsvWriteMode::Append },
-            &mut vars,
-        ).unwrap();
+        engine
+            .csv_write(
+                &CsvWriteStep {
+                    path: "a.csv".into(),
+                    rows: "r1".into(),
+                    headers: vec![],
+                    mode: CsvWriteMode::Overwrite,
+                },
+                &mut vars,
+            )
+            .unwrap();
+        engine
+            .csv_write(
+                &CsvWriteStep {
+                    path: "a.csv".into(),
+                    rows: "r2".into(),
+                    headers: vec![],
+                    mode: CsvWriteMode::Append,
+                },
+                &mut vars,
+            )
+            .unwrap();
 
         let content = std::fs::read_to_string(dir.path().join("a.csv")).unwrap();
         // Should have header line + 2 data lines

@@ -21,7 +21,10 @@ pub fn sort(inputs: HashMap<String, Value>) -> NodeResult {
         .get("order")
         .and_then(|v| v.as_str())
         .unwrap_or("asc");
-    let key = inputs.get("key").and_then(|v| v.as_str()).map(str::to_owned);
+    let key = inputs
+        .get("key")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
 
     list.sort_by(|a, b| {
         let va = key.as_deref().and_then(|k| a.get(k)).unwrap_or(a);
@@ -45,7 +48,10 @@ pub fn sort(inputs: HashMap<String, Value>) -> NodeResult {
 /// Output: { result: [...] }
 pub fn unique(inputs: HashMap<String, Value>) -> NodeResult {
     let list = get_list(&inputs, "list")?;
-    let key = inputs.get("key").and_then(|v| v.as_str()).map(str::to_owned);
+    let key = inputs
+        .get("key")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
 
     let mut seen = std::collections::HashSet::new();
     let mut result = Vec::new();
@@ -105,10 +111,9 @@ pub fn get(inputs: HashMap<String, Value>) -> NodeResult {
         idx
     };
 
-    let item = list
-        .get(real_idx as usize)
-        .cloned()
-        .ok_or_else(|| NodeError::Other(format!("index {idx} out of range (len={})", list.len())))?;
+    let item = list.get(real_idx as usize).cloned().ok_or_else(|| {
+        NodeError::Other(format!("index {idx} out of range (len={})", list.len()))
+    })?;
 
     let mut out = HashMap::new();
     out.insert("result".to_owned(), item);

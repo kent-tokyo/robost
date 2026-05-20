@@ -115,7 +115,8 @@ impl SnipApp {
         let help_id = help_item.id().clone();
         let quit_item = MenuItem::new("rpa-snip を終了", true, None);
         let quit_id = quit_item.id().clone();
-        menu.append_items(&[&capture_item, &help_item, &quit_item]).expect("menu append");
+        menu.append_items(&[&capture_item, &help_item, &quit_item])
+            .expect("menu append");
 
         let tray = TrayIconBuilder::new()
             .with_icon(make_icon())
@@ -125,10 +126,11 @@ impl SnipApp {
             .expect("tray build");
 
         let hotkey_manager = GlobalHotKeyManager::new().expect("hotkey manager");
-        let capture_hotkey =
-            HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyC);
+        let capture_hotkey = HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyC);
         let capture_hotkey_id = capture_hotkey.id();
-        hotkey_manager.register(capture_hotkey).expect("register hotkey");
+        hotkey_manager
+            .register(capture_hotkey)
+            .expect("register hotkey");
 
         tracing::info!("tray icon created; Ctrl+Shift+C registered");
         Self {
@@ -149,8 +151,7 @@ impl SnipApp {
         match rpa_capture::capture_screen() {
             Ok(img) => {
                 let size = [img.width() as usize, img.height() as usize];
-                let color_image =
-                    egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw());
+                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw());
                 let texture = ctx.load_texture(
                     "screen_capture",
                     color_image,
@@ -207,19 +208,19 @@ impl SnipApp {
 
         let x = ((sel.min.x / screen.width()) * screen_image.width() as f32) as u32;
         let y = ((sel.min.y / screen.height()) * screen_image.height() as f32) as u32;
-        let w =
-            ((sel.width() / screen.width()) * screen_image.width() as f32).max(1.0) as u32;
-        let h =
-            ((sel.height() / screen.height()) * screen_image.height() as f32).max(1.0) as u32;
+        let w = ((sel.width() / screen.width()) * screen_image.width() as f32).max(1.0) as u32;
+        let h = ((sel.height() / screen.height()) * screen_image.height() as f32).max(1.0) as u32;
         let x = x.min(screen_image.width().saturating_sub(1));
         let y = y.min(screen_image.height().saturating_sub(1));
         let w = w.min(screen_image.width() - x).max(1);
         let h = h.min(screen_image.height() - y).max(1);
         let template_img = imageops::crop_imm(&screen_image, x, y, w, h).to_image();
 
-        let size = [template_img.width() as usize, template_img.height() as usize];
-        let color_img =
-            egui::ColorImage::from_rgba_unmultiplied(size, template_img.as_raw());
+        let size = [
+            template_img.width() as usize,
+            template_img.height() as usize,
+        ];
+        let color_img = egui::ColorImage::from_rgba_unmultiplied(size, template_img.as_raw());
         let template_texture = ctx.load_texture(
             "template_preview",
             color_img,
@@ -304,8 +305,14 @@ impl SnipApp {
 
         if let Some(r) = sel_rect {
             let uv = egui::Rect::from_min_max(
-                egui::pos2(r.min.x / screen_rect.width(), r.min.y / screen_rect.height()),
-                egui::pos2(r.max.x / screen_rect.width(), r.max.y / screen_rect.height()),
+                egui::pos2(
+                    r.min.x / screen_rect.width(),
+                    r.min.y / screen_rect.height(),
+                ),
+                egui::pos2(
+                    r.max.x / screen_rect.width(),
+                    r.max.y / screen_rect.height(),
+                ),
             );
             painter.image(texture_id, r, uv, egui::Color32::WHITE);
             painter.rect_stroke(
@@ -686,7 +693,12 @@ impl SnipApp {
                 let mask_regions: Vec<MaskRegion> = masks
                     .iter()
                     .map(|m| MaskRegion {
-                        rect: Rect { x: m.x, y: m.y, width: m.w, height: m.h },
+                        rect: Rect {
+                            x: m.x,
+                            y: m.y,
+                            width: m.w,
+                            height: m.h,
+                        },
                         label: None,
                     })
                     .collect();
@@ -703,7 +715,11 @@ impl SnipApp {
         );
 
         let live = match result {
-            Ok(m) => LiveResult::Matched { score: m.score, x: m.location.x, y: m.location.y },
+            Ok(m) => LiveResult::Matched {
+                score: m.score,
+                x: m.location.x,
+                y: m.location.y,
+            },
             Err(_) => LiveResult::NotFound,
         };
 
@@ -715,9 +731,18 @@ impl SnipApp {
     /// Save the template while keeping the editing state alive on failure.
     fn save_template(&mut self, ctx: &egui::Context) {
         let (tmpl_img, anchors_c, masks_c, multi_scale) = match &self.state {
-            OverlayState::Editing { template_img, anchors, masks, multi_scale, .. } => {
-                (template_img.clone(), anchors.clone(), masks.clone(), *multi_scale)
-            }
+            OverlayState::Editing {
+                template_img,
+                anchors,
+                masks,
+                multi_scale,
+                ..
+            } => (
+                template_img.clone(),
+                anchors.clone(),
+                masks.clone(),
+                *multi_scale,
+            ),
             _ => return,
         };
 
@@ -731,10 +756,7 @@ impl SnipApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
                 self.popup_msg = Some(PopupMsg {
                     title: "保存完了",
-                    message: format!(
-                        "テンプレートを保存しました:\n{}",
-                        png_path.display()
-                    ),
+                    message: format!("テンプレートを保存しました:\n{}", png_path.display()),
                     is_error: false,
                     then_hide: true,
                 });
@@ -767,7 +789,9 @@ fn do_save(
 
     let png_name = format!("{stem}.png");
     let png_path = dir.join(&png_name);
-    tmpl_img.save(&png_path).map_err(|e| format!("PNG保存: {e}"))?;
+    tmpl_img
+        .save(&png_path)
+        .map_err(|e| format!("PNG保存: {e}"))?;
 
     if multi_scale {
         for (pct, factor) in [(125u32, 1.25f32), (150, 1.5)] {
@@ -787,14 +811,22 @@ fn do_save(
         anchors: anchors
             .iter()
             .map(|a| Anchor {
-                offset: WindowPoint { x: a.px_x, y: a.px_y },
+                offset: WindowPoint {
+                    x: a.px_x,
+                    y: a.px_y,
+                },
                 label: a.label.clone(),
             })
             .collect(),
         masks: masks
             .iter()
             .map(|m| MaskRegion {
-                rect: Rect { x: m.x, y: m.y, width: m.w, height: m.h },
+                rect: Rect {
+                    x: m.x,
+                    y: m.y,
+                    width: m.w,
+                    height: m.h,
+                },
                 label: None,
             })
             .collect(),
@@ -827,9 +859,7 @@ impl eframe::App for SnipApp {
         }
 
         // Global hotkey — only active in Hidden state with no popup
-        if matches!(self.state, OverlayState::Hidden)
-            && self.popup_msg.is_none()
-            && !self.show_help
+        if matches!(self.state, OverlayState::Hidden) && self.popup_msg.is_none() && !self.show_help
         {
             if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
                 if event.id == self.capture_hotkey_id && event.state == HotKeyState::Pressed {

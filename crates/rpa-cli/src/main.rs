@@ -243,18 +243,22 @@ fn main() -> Result<()> {
             })
         }
         Commands::Schedule { action } => match action {
-            ScheduleCommands::Add { name, cron, at, scenario, extra_args } => {
-                scheduler::cmd_add(name, cron, at, scenario, extra_args)
-            }
-            ScheduleCommands::List             => scheduler::cmd_list(),
-            ScheduleCommands::Remove { id }    => scheduler::cmd_remove(&id),
-            ScheduleCommands::Enable  { id }   => scheduler::cmd_enable(&id, true),
-            ScheduleCommands::Disable { id }   => scheduler::cmd_enable(&id, false),
+            ScheduleCommands::Add {
+                name,
+                cron,
+                at,
+                scenario,
+                extra_args,
+            } => scheduler::cmd_add(name, cron, at, scenario, extra_args),
+            ScheduleCommands::List => scheduler::cmd_list(),
+            ScheduleCommands::Remove { id } => scheduler::cmd_remove(&id),
+            ScheduleCommands::Enable { id } => scheduler::cmd_enable(&id, true),
+            ScheduleCommands::Disable { id } => scheduler::cmd_enable(&id, false),
         },
         Commands::Daemon => {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(scheduler::run_daemon())
-        },
+        }
         Commands::Plugin { action } => match action {
             PluginCommands::Install { path, yes } => {
                 let plugin = rpa_plugin_host::PluginInstance::load(&path)?;
@@ -265,7 +269,14 @@ fn main() -> Result<()> {
                     if let Some(desc) = &m.plugin.description {
                         println!("Description: {desc}");
                     }
-                    println!("Functions: {}", m.function.iter().map(|f| f.name.as_str()).collect::<Vec<_>>().join(", "));
+                    println!(
+                        "Functions: {}",
+                        m.function
+                            .iter()
+                            .map(|f| f.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
                     println!("Permissions:");
                     if m.permissions.filesystem.is_empty() {
                         println!("  filesystem : (none)");
@@ -286,7 +297,12 @@ fn main() -> Result<()> {
                 }
 
                 let dest = config::install_plugin(&path, m)?;
-                println!("installed: {} v{} → {}", m.plugin.name, m.plugin.version, dest.display());
+                println!(
+                    "installed: {} v{} → {}",
+                    m.plugin.name,
+                    m.plugin.version,
+                    dest.display()
+                );
                 Ok(())
             }
             PluginCommands::List => {

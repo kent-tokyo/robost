@@ -209,20 +209,26 @@ fn windows_focus(title: &str) -> Result<()> {
 
 #[cfg(windows)]
 fn windows_control(title: &str, action: &str) -> Result<()> {
+    use windows::core::PCWSTR;
     use windows::Win32::Foundation::{LPARAM, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, PostMessageW, SetForegroundWindow, ShowWindow,
-        SW_MAXIMIZE, SW_MINIMIZE, WM_CLOSE,
+        FindWindowW, PostMessageW, SetForegroundWindow, ShowWindow, SW_MAXIMIZE, SW_MINIMIZE,
+        WM_CLOSE,
     };
-    use windows::core::PCWSTR;
 
     let wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
     let hwnd = unsafe { FindWindowW(PCWSTR::null(), PCWSTR(wide.as_ptr())) }
         .map_err(|_| InputError::Focus(format!("window not found: {title}")))?;
     match action {
-        "focus" => { let _ = unsafe { SetForegroundWindow(hwnd) }; }
-        "maximize" => { let _ = unsafe { ShowWindow(hwnd, SW_MAXIMIZE) }; }
-        "minimize" => { let _ = unsafe { ShowWindow(hwnd, SW_MINIMIZE) }; }
+        "focus" => {
+            let _ = unsafe { SetForegroundWindow(hwnd) };
+        }
+        "maximize" => {
+            let _ = unsafe { ShowWindow(hwnd, SW_MAXIMIZE) };
+        }
+        "minimize" => {
+            let _ = unsafe { ShowWindow(hwnd, SW_MINIMIZE) };
+        }
         "close" => {
             unsafe { PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0)) }
                 .map_err(|e| InputError::Focus(e.to_string()))?;

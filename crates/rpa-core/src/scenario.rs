@@ -1609,16 +1609,16 @@ impl<'de> serde::de::Visitor<'de> for ScenarioStepVisitor {
             "url_open" => ScenarioStep::UrlOpen(map.next_value()?),
             "notify" => ScenarioStep::Notify(map.next_value()?),
             // --- UI Automation ---
-            "uia_get"    => ScenarioStep::UiaGet(map.next_value()?),
-            "uia_set"    => ScenarioStep::UiaSet(map.next_value()?),
-            "uia_click"  => ScenarioStep::UiaClick(map.next_value()?),
-            "uia_find"   => ScenarioStep::UiaFind(map.next_value()?),
+            "uia_get" => ScenarioStep::UiaGet(map.next_value()?),
+            "uia_set" => ScenarioStep::UiaSet(map.next_value()?),
+            "uia_click" => ScenarioStep::UiaClick(map.next_value()?),
+            "uia_find" => ScenarioStep::UiaFind(map.next_value()?),
             // --- Web automation ---
-            "web_open"       => ScenarioStep::WebOpen(map.next_value()?),
-            "web_click"      => ScenarioStep::WebClick(map.next_value()?),
-            "web_type"       => ScenarioStep::WebType(map.next_value()?),
-            "web_get"        => ScenarioStep::WebGet(map.next_value()?),
-            "web_wait"       => ScenarioStep::WebWait(map.next_value()?),
+            "web_open" => ScenarioStep::WebOpen(map.next_value()?),
+            "web_click" => ScenarioStep::WebClick(map.next_value()?),
+            "web_type" => ScenarioStep::WebType(map.next_value()?),
+            "web_get" => ScenarioStep::WebGet(map.next_value()?),
+            "web_wait" => ScenarioStep::WebWait(map.next_value()?),
             "web_screenshot" => ScenarioStep::WebScreenshot(map.next_value()?),
             "web_close" => {
                 let _: serde::de::IgnoredAny = map.next_value()?;
@@ -1653,111 +1653,111 @@ impl ScenarioStep {
     /// Short name for debug display.
     pub fn name(&self) -> &'static str {
         match self {
-            Self::WaitImage(_)       => "wait_image",
-            Self::ClickImage(_)      => "click_image",
-            Self::Type(_)            => "type",
-            Self::Press(_)           => "press",
-            Self::Library(_)         => "library",
-            Self::Script(_)          => "script",
-            Self::Foreach(_)         => "foreach",
-            Self::SubScenario(_)     => "sub_scenario",
-            Self::Set(_)             => "set",
-            Self::WaitMs(_)          => "wait_ms",
-            Self::Group(_)           => "group",
-            Self::If(_)              => "if",
-            Self::Switch(_)          => "switch",
-            Self::Repeat(_)          => "repeat",
-            Self::While(_)           => "while",
-            Self::DoWhile(_)         => "do_while",
-            Self::TryCatch(_)        => "try_catch",
-            Self::Break              => "break",
-            Self::Continue           => "continue",
-            Self::CallScenario(_)    => "call_scenario",
-            Self::Exit               => "exit",
-            Self::FindImage(_)       => "find_image",
-            Self::Shell(_)           => "shell",
-            Self::ClipboardSet(_)    => "clipboard_set",
-            Self::ClipboardGet(_)    => "clipboard_get",
-            Self::CopyVar(_)         => "copy_var",
-            Self::GetDatetime(_)     => "get_datetime",
-            Self::GetUsername(_)     => "get_username",
-            Self::Calc(_)            => "calc",
-            Self::Increment(_)       => "increment",
-            Self::ToFullwidth(_)     => "to_fullwidth",
-            Self::ToHalfwidth(_)     => "to_halfwidth",
-            Self::DialogWait(_)      => "dialog_wait",
-            Self::DialogInput(_)     => "dialog_input",
-            Self::DialogSelect(_)    => "dialog_select",
-            Self::WaitWindow(_)      => "wait_window",
-            Self::MatchRect(_)       => "match_rect",
-            Self::WindowControl(_)   => "window_control",
-            Self::OcrMatch(_)        => "ocr_match",
-            Self::MlDetect(_)        => "ml_detect",
-            Self::ImportVars(_)      => "import_vars",
-            Self::SaveVars(_)        => "save_vars",
-            Self::LoadVars(_)        => "load_vars",
-            Self::FileExists(_)      => "file_exists",
-            Self::FileCopy(_)        => "file_copy",
-            Self::FileMove(_)        => "file_move",
-            Self::FileDelete(_)      => "file_delete",
-            Self::FileRename(_)      => "file_rename",
-            Self::LogWrite(_)        => "log_write",
-            Self::DateFormat(_)      => "date_format",
-            Self::DateAdd(_)         => "date_add",
-            Self::DateDiff(_)        => "date_diff",
-            Self::StringReplace(_)   => "string_replace",
-            Self::StringTrim(_)      => "string_trim",
-            Self::StringUpper(_)     => "string_upper",
-            Self::StringLower(_)     => "string_lower",
+            Self::WaitImage(_) => "wait_image",
+            Self::ClickImage(_) => "click_image",
+            Self::Type(_) => "type",
+            Self::Press(_) => "press",
+            Self::Library(_) => "library",
+            Self::Script(_) => "script",
+            Self::Foreach(_) => "foreach",
+            Self::SubScenario(_) => "sub_scenario",
+            Self::Set(_) => "set",
+            Self::WaitMs(_) => "wait_ms",
+            Self::Group(_) => "group",
+            Self::If(_) => "if",
+            Self::Switch(_) => "switch",
+            Self::Repeat(_) => "repeat",
+            Self::While(_) => "while",
+            Self::DoWhile(_) => "do_while",
+            Self::TryCatch(_) => "try_catch",
+            Self::Break => "break",
+            Self::Continue => "continue",
+            Self::CallScenario(_) => "call_scenario",
+            Self::Exit => "exit",
+            Self::FindImage(_) => "find_image",
+            Self::Shell(_) => "shell",
+            Self::ClipboardSet(_) => "clipboard_set",
+            Self::ClipboardGet(_) => "clipboard_get",
+            Self::CopyVar(_) => "copy_var",
+            Self::GetDatetime(_) => "get_datetime",
+            Self::GetUsername(_) => "get_username",
+            Self::Calc(_) => "calc",
+            Self::Increment(_) => "increment",
+            Self::ToFullwidth(_) => "to_fullwidth",
+            Self::ToHalfwidth(_) => "to_halfwidth",
+            Self::DialogWait(_) => "dialog_wait",
+            Self::DialogInput(_) => "dialog_input",
+            Self::DialogSelect(_) => "dialog_select",
+            Self::WaitWindow(_) => "wait_window",
+            Self::MatchRect(_) => "match_rect",
+            Self::WindowControl(_) => "window_control",
+            Self::OcrMatch(_) => "ocr_match",
+            Self::MlDetect(_) => "ml_detect",
+            Self::ImportVars(_) => "import_vars",
+            Self::SaveVars(_) => "save_vars",
+            Self::LoadVars(_) => "load_vars",
+            Self::FileExists(_) => "file_exists",
+            Self::FileCopy(_) => "file_copy",
+            Self::FileMove(_) => "file_move",
+            Self::FileDelete(_) => "file_delete",
+            Self::FileRename(_) => "file_rename",
+            Self::LogWrite(_) => "log_write",
+            Self::DateFormat(_) => "date_format",
+            Self::DateAdd(_) => "date_add",
+            Self::DateDiff(_) => "date_diff",
+            Self::StringReplace(_) => "string_replace",
+            Self::StringTrim(_) => "string_trim",
+            Self::StringUpper(_) => "string_upper",
+            Self::StringLower(_) => "string_lower",
             Self::StringSubstring(_) => "string_substring",
-            Self::StringLength(_)    => "string_length",
-            Self::StringSplit(_)     => "string_split",
-            Self::StringJoin(_)      => "string_join",
-            Self::StringRegex(_)     => "string_regex",
-            Self::JsonParse(_)       => "json_parse",
-            Self::JsonStringify(_)   => "json_stringify",
-            Self::PathJoin(_)        => "path_join",
-            Self::PathBasename(_)    => "path_basename",
-            Self::PathDirname(_)     => "path_dirname",
-            Self::EnvGet(_)          => "env_get",
-            Self::FileList(_)        => "file_list",
-            Self::MouseMove(_)       => "mouse_move",
-            Self::MouseClickXy(_)    => "mouse_click_xy",
-            Self::MouseDrag(_)       => "mouse_drag",
-            Self::MouseScroll(_)     => "mouse_scroll",
+            Self::StringLength(_) => "string_length",
+            Self::StringSplit(_) => "string_split",
+            Self::StringJoin(_) => "string_join",
+            Self::StringRegex(_) => "string_regex",
+            Self::JsonParse(_) => "json_parse",
+            Self::JsonStringify(_) => "json_stringify",
+            Self::PathJoin(_) => "path_join",
+            Self::PathBasename(_) => "path_basename",
+            Self::PathDirname(_) => "path_dirname",
+            Self::EnvGet(_) => "env_get",
+            Self::FileList(_) => "file_list",
+            Self::MouseMove(_) => "mouse_move",
+            Self::MouseClickXy(_) => "mouse_click_xy",
+            Self::MouseDrag(_) => "mouse_drag",
+            Self::MouseScroll(_) => "mouse_scroll",
             #[cfg(feature = "http")]
-            Self::HttpGet(_)         => "http_get",
+            Self::HttpGet(_) => "http_get",
             #[cfg(feature = "http")]
-            Self::HttpPost(_)        => "http_post",
+            Self::HttpPost(_) => "http_post",
             #[cfg(feature = "http")]
-            Self::HttpPut(_)         => "http_put",
-            Self::ExcelReadCell(_)   => "excel_read_cell",
-            Self::ExcelReadRange(_)  => "excel_read_range",
-            Self::ExcelWriteCell(_)  => "excel_write_cell",
-            Self::FileRead(_)        => "file_read",
-            Self::FileWrite(_)       => "file_write",
-            Self::FileAppend(_)      => "file_append",
-            Self::ProcessStart(_)    => "process_start",
-            Self::ProcessKill(_)     => "process_kill",
-            Self::ProcessExists(_)   => "process_exists",
-            Self::KeyCombo(_)        => "key_combo",
-            Self::CsvRead(_)         => "csv_read",
-            Self::CsvWrite(_)        => "csv_write",
-            Self::ScreenshotSave(_)  => "screenshot_save",
-            Self::WaitNoImage(_)     => "wait_no_image",
-            Self::UrlOpen(_)         => "url_open",
-            Self::Notify(_)          => "notify",
-            Self::UiaGet(_)          => "uia_get",
-            Self::UiaSet(_)          => "uia_set",
-            Self::UiaClick(_)        => "uia_click",
-            Self::UiaFind(_)         => "uia_find",
-            Self::WebOpen(_)         => "web_open",
-            Self::WebClick(_)        => "web_click",
-            Self::WebType(_)         => "web_type",
-            Self::WebGet(_)          => "web_get",
-            Self::WebWait(_)         => "web_wait",
-            Self::WebScreenshot(_)   => "web_screenshot",
-            Self::WebClose           => "web_close",
+            Self::HttpPut(_) => "http_put",
+            Self::ExcelReadCell(_) => "excel_read_cell",
+            Self::ExcelReadRange(_) => "excel_read_range",
+            Self::ExcelWriteCell(_) => "excel_write_cell",
+            Self::FileRead(_) => "file_read",
+            Self::FileWrite(_) => "file_write",
+            Self::FileAppend(_) => "file_append",
+            Self::ProcessStart(_) => "process_start",
+            Self::ProcessKill(_) => "process_kill",
+            Self::ProcessExists(_) => "process_exists",
+            Self::KeyCombo(_) => "key_combo",
+            Self::CsvRead(_) => "csv_read",
+            Self::CsvWrite(_) => "csv_write",
+            Self::ScreenshotSave(_) => "screenshot_save",
+            Self::WaitNoImage(_) => "wait_no_image",
+            Self::UrlOpen(_) => "url_open",
+            Self::Notify(_) => "notify",
+            Self::UiaGet(_) => "uia_get",
+            Self::UiaSet(_) => "uia_set",
+            Self::UiaClick(_) => "uia_click",
+            Self::UiaFind(_) => "uia_find",
+            Self::WebOpen(_) => "web_open",
+            Self::WebClick(_) => "web_click",
+            Self::WebType(_) => "web_type",
+            Self::WebGet(_) => "web_get",
+            Self::WebWait(_) => "web_wait",
+            Self::WebScreenshot(_) => "web_screenshot",
+            Self::WebClose => "web_close",
         }
     }
 }
@@ -1871,12 +1871,18 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 5);
-        let ScenarioStep::FileExists(fe) = &s.steps[0] else { panic!() };
+        let ScenarioStep::FileExists(fe) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(fe.path, "out/report.xlsx");
         assert_eq!(fe.save_as, "found");
-        let ScenarioStep::FileCopy(fc) = &s.steps[1] else { panic!() };
+        let ScenarioStep::FileCopy(fc) = &s.steps[1] else {
+            panic!()
+        };
         assert!(fc.overwrite);
-        let ScenarioStep::FileDelete(fd) = &s.steps[3] else { panic!() };
+        let ScenarioStep::FileDelete(fd) = &s.steps[3] else {
+            panic!()
+        };
         assert!(!fd.ignore_missing);
     }
 
@@ -1889,7 +1895,9 @@ steps:
       path: "x.tmp"
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
-        let ScenarioStep::FileDelete(fd) = &s.steps[0] else { panic!() };
+        let ScenarioStep::FileDelete(fd) = &s.steps[0] else {
+            panic!()
+        };
         assert!(fd.ignore_missing);
     }
 
@@ -1904,7 +1912,9 @@ steps:
       level: warn
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
-        let ScenarioStep::LogWrite(lw) = &s.steps[0] else { panic!() };
+        let ScenarioStep::LogWrite(lw) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(lw.file, "logs/run.log");
         assert_eq!(lw.level, LogLevel::Warn);
     }
@@ -1934,13 +1944,19 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 3);
-        let ScenarioStep::DateFormat(df) = &s.steps[0] else { panic!() };
+        let ScenarioStep::DateFormat(df) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(df.to_format, "%Y/%m/%d");
         assert_eq!(df.save_as, "formatted");
-        let ScenarioStep::DateAdd(da) = &s.steps[1] else { panic!() };
+        let ScenarioStep::DateAdd(da) = &s.steps[1] else {
+            panic!()
+        };
         assert_eq!(da.days, 30);
         assert_eq!(da.months, -1);
-        let ScenarioStep::DateDiff(dd) = &s.steps[2] else { panic!() };
+        let ScenarioStep::DateDiff(dd) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(dd.unit, DiffUnit::Days);
         assert_eq!(dd.save_as, "elapsed");
     }
@@ -1989,15 +2005,23 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 9);
-        let ScenarioStep::StringReplace(sr) = &s.steps[0] else { panic!() };
+        let ScenarioStep::StringReplace(sr) = &s.steps[0] else {
+            panic!()
+        };
         assert!(sr.all);
         assert_eq!(sr.save_as, "normalized");
-        let ScenarioStep::StringTrim(st) = &s.steps[1] else { panic!() };
+        let ScenarioStep::StringTrim(st) = &s.steps[1] else {
+            panic!()
+        };
         assert_eq!(st.side, TrimSide::Left);
-        let ScenarioStep::StringSubstring(ss) = &s.steps[4] else { panic!() };
+        let ScenarioStep::StringSubstring(ss) = &s.steps[4] else {
+            panic!()
+        };
         assert_eq!(ss.start, 2);
         assert_eq!(ss.length, Some(3));
-        let ScenarioStep::StringRegex(rx) = &s.steps[8] else { panic!() };
+        let ScenarioStep::StringRegex(rx) = &s.steps[8] else {
+            panic!()
+        };
         assert_eq!(rx.save_as, "match");
     }
 
@@ -2013,7 +2037,9 @@ steps:
       save_as: out
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
-        let ScenarioStep::StringReplace(sr) = &s.steps[0] else { panic!() };
+        let ScenarioStep::StringReplace(sr) = &s.steps[0] else {
+            panic!()
+        };
         assert!(sr.all);
     }
 
@@ -2048,11 +2074,17 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 7);
-        let ScenarioStep::PathJoin(pj) = &s.steps[2] else { panic!() };
+        let ScenarioStep::PathJoin(pj) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(pj.parts.len(), 3);
-        let ScenarioStep::EnvGet(eg) = &s.steps[5] else { panic!() };
+        let ScenarioStep::EnvGet(eg) = &s.steps[5] else {
+            panic!()
+        };
         assert_eq!(eg.default.as_deref(), Some("/home/user"));
-        let ScenarioStep::FileList(fl) = &s.steps[6] else { panic!() };
+        let ScenarioStep::FileList(fl) = &s.steps[6] else {
+            panic!()
+        };
         assert_eq!(fl.pattern, "*.xlsx");
     }
 
@@ -2080,14 +2112,22 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 4);
-        let ScenarioStep::MouseMove(mm) = &s.steps[0] else { panic!() };
+        let ScenarioStep::MouseMove(mm) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(mm.x, "640");
-        let ScenarioStep::MouseClickXy(mc) = &s.steps[1] else { panic!() };
+        let ScenarioStep::MouseClickXy(mc) = &s.steps[1] else {
+            panic!()
+        };
         assert_eq!(mc.x, "{{ btn_x }}");
         assert_eq!(mc.action, ClickAction::Right);
-        let ScenarioStep::MouseDrag(md) = &s.steps[2] else { panic!() };
+        let ScenarioStep::MouseDrag(md) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(md.hold_ms, 100);
-        let ScenarioStep::MouseScroll(ms) = &s.steps[3] else { panic!() };
+        let ScenarioStep::MouseScroll(ms) = &s.steps[3] else {
+            panic!()
+        };
         assert_eq!(ms.direction, "up");
         assert_eq!(ms.amount, 5);
     }
@@ -2100,7 +2140,9 @@ steps:
   - mouse_scroll: {}
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
-        let ScenarioStep::MouseScroll(ms) = &s.steps[0] else { panic!() };
+        let ScenarioStep::MouseScroll(ms) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(ms.direction, "down");
         assert_eq!(ms.amount, 3);
     }
@@ -2131,15 +2173,21 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 3);
-        let ScenarioStep::HttpGet(g) = &s.steps[0] else { panic!() };
+        let ScenarioStep::HttpGet(g) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(g.url, "https://example.com/api");
         assert_eq!(g.save_as, "resp");
         assert_eq!(g.headers.get("Authorization").unwrap(), "Bearer token123");
         assert_eq!(g.timeout_ms, 10000);
-        let ScenarioStep::HttpPost(p) = &s.steps[1] else { panic!() };
+        let ScenarioStep::HttpPost(p) = &s.steps[1] else {
+            panic!()
+        };
         assert_eq!(p.url, "https://example.com/api/data");
         assert_eq!(p.content_type, ContentType::Json);
-        let ScenarioStep::HttpPut(u) = &s.steps[2] else { panic!() };
+        let ScenarioStep::HttpPut(u) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(u.content_type, ContentType::Text);
     }
 
@@ -2154,7 +2202,9 @@ steps:
       save_as: result
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
-        let ScenarioStep::HttpGet(g) = &s.steps[0] else { panic!() };
+        let ScenarioStep::HttpGet(g) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(g.timeout_ms, 30_000);
         assert!(g.headers.is_empty());
     }
@@ -2173,11 +2223,17 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 3);
-        let ScenarioStep::KeyCombo(kc) = &s.steps[0] else { panic!() };
+        let ScenarioStep::KeyCombo(kc) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(kc.keys, vec!["ctrl", "c"]);
-        let ScenarioStep::KeyCombo(kc2) = &s.steps[1] else { panic!() };
+        let ScenarioStep::KeyCombo(kc2) = &s.steps[1] else {
+            panic!()
+        };
         assert_eq!(kc2.keys, vec!["alt", "F4"]);
-        let ScenarioStep::KeyCombo(kc3) = &s.steps[2] else { panic!() };
+        let ScenarioStep::KeyCombo(kc3) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(kc3.keys.len(), 3);
     }
 
@@ -2206,15 +2262,23 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 4);
-        let ScenarioStep::CsvRead(cr) = &s.steps[0] else { panic!() };
+        let ScenarioStep::CsvRead(cr) = &s.steps[0] else {
+            panic!()
+        };
         assert!(cr.has_header);
         assert_eq!(cr.save_as, "rows");
-        let ScenarioStep::CsvRead(cr2) = &s.steps[1] else { panic!() };
+        let ScenarioStep::CsvRead(cr2) = &s.steps[1] else {
+            panic!()
+        };
         assert!(!cr2.has_header);
-        let ScenarioStep::CsvWrite(cw) = &s.steps[2] else { panic!() };
+        let ScenarioStep::CsvWrite(cw) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(cw.mode, CsvWriteMode::Overwrite);
         assert!(cw.headers.is_empty());
-        let ScenarioStep::CsvWrite(cw2) = &s.steps[3] else { panic!() };
+        let ScenarioStep::CsvWrite(cw2) = &s.steps[3] else {
+            panic!()
+        };
         assert_eq!(cw2.mode, CsvWriteMode::Append);
         assert_eq!(cw2.headers, vec!["name", "value"]);
     }
@@ -2229,7 +2293,9 @@ steps:
       save_as: rows
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
-        let ScenarioStep::CsvRead(cr) = &s.steps[0] else { panic!() };
+        let ScenarioStep::CsvRead(cr) = &s.steps[0] else {
+            panic!()
+        };
         assert!(cr.has_header);
     }
 
@@ -2243,7 +2309,9 @@ steps:
       rows: data
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
-        let ScenarioStep::CsvWrite(cw) = &s.steps[0] else { panic!() };
+        let ScenarioStep::CsvWrite(cw) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(cw.mode, CsvWriteMode::Overwrite);
     }
 
@@ -2269,14 +2337,22 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 4);
-        let ScenarioStep::FileRead(fr) = &s.steps[0] else { panic!() };
+        let ScenarioStep::FileRead(fr) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(fr.path, "config.txt");
         assert_eq!(fr.save_as, "content");
-        let ScenarioStep::FileWrite(fw) = &s.steps[1] else { panic!() };
+        let ScenarioStep::FileWrite(fw) = &s.steps[1] else {
+            panic!()
+        };
         assert_eq!(fw.mode, FileWriteMode::Overwrite);
-        let ScenarioStep::FileWrite(fw2) = &s.steps[2] else { panic!() };
+        let ScenarioStep::FileWrite(fw2) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(fw2.mode, FileWriteMode::Append);
-        let ScenarioStep::FileAppend(fa) = &s.steps[3] else { panic!() };
+        let ScenarioStep::FileAppend(fa) = &s.steps[3] else {
+            panic!()
+        };
         assert_eq!(fa.path, "log.txt");
     }
 
@@ -2290,7 +2366,9 @@ steps:
       content: "hello"
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
-        let ScenarioStep::FileWrite(fw) = &s.steps[0] else { panic!() };
+        let ScenarioStep::FileWrite(fw) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(fw.mode, FileWriteMode::Overwrite);
     }
 
@@ -2314,18 +2392,26 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 4);
-        let ScenarioStep::ProcessStart(ps) = &s.steps[0] else { panic!() };
+        let ScenarioStep::ProcessStart(ps) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(ps.command, "sleep");
         assert_eq!(ps.args, vec!["5"]);
         assert_eq!(ps.wait_ms, 100);
         assert_eq!(ps.save_pid_as.as_deref(), Some("my_pid"));
-        let ScenarioStep::ProcessExists(pe) = &s.steps[1] else { panic!() };
+        let ScenarioStep::ProcessExists(pe) = &s.steps[1] else {
+            panic!()
+        };
         assert_eq!(pe.name, "sleep");
         assert_eq!(pe.save_as, "running");
-        let ScenarioStep::ProcessKill(pk1) = &s.steps[2] else { panic!() };
+        let ScenarioStep::ProcessKill(pk1) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(pk1.pid.as_deref(), Some("{{ my_pid }}"));
         assert!(pk1.name.is_none());
-        let ScenarioStep::ProcessKill(pk2) = &s.steps[3] else { panic!() };
+        let ScenarioStep::ProcessKill(pk2) = &s.steps[3] else {
+            panic!()
+        };
         assert!(pk2.pid.is_none());
         assert_eq!(pk2.name.as_deref(), Some("notepad.exe"));
     }
@@ -2339,7 +2425,9 @@ steps:
       command: "notepad.exe"
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
-        let ScenarioStep::ProcessStart(ps) = &s.steps[0] else { panic!() };
+        let ScenarioStep::ProcessStart(ps) = &s.steps[0] else {
+            panic!()
+        };
         assert!(ps.args.is_empty());
         assert_eq!(ps.wait_ms, 0);
         assert!(ps.save_pid_as.is_none());
@@ -2367,13 +2455,19 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 3);
-        let ScenarioStep::ExcelReadCell(rc) = &s.steps[0] else { panic!() };
+        let ScenarioStep::ExcelReadCell(rc) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(rc.cell, "B5");
         assert_eq!(rc.sheet.as_deref(), Some("Sheet1"));
-        let ScenarioStep::ExcelReadRange(rr) = &s.steps[1] else { panic!() };
+        let ScenarioStep::ExcelReadRange(rr) = &s.steps[1] else {
+            panic!()
+        };
         assert_eq!(rr.range, "A1:D10");
         assert!(rr.sheet.is_none());
-        let ScenarioStep::ExcelWriteCell(wc) = &s.steps[2] else { panic!() };
+        let ScenarioStep::ExcelWriteCell(wc) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(wc.cell, "C{{ row }}");
     }
 
@@ -2399,18 +2493,28 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 5);
-        let ScenarioStep::ScreenshotSave(ss) = &s.steps[0] else { panic!() };
+        let ScenarioStep::ScreenshotSave(ss) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(ss.path, "caps/shot.png");
         assert_eq!(ss.window.as_deref(), Some("MyApp"));
-        let ScenarioStep::ScreenshotSave(ss2) = &s.steps[1] else { panic!() };
+        let ScenarioStep::ScreenshotSave(ss2) = &s.steps[1] else {
+            panic!()
+        };
         assert!(ss2.window.is_none());
-        let ScenarioStep::WaitNoImage(wn) = &s.steps[2] else { panic!() };
+        let ScenarioStep::WaitNoImage(wn) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(wn.template, "spinner.png");
         assert_eq!(wn.timeout_ms, 15000);
         assert_eq!(wn.interval_ms, 300);
-        let ScenarioStep::UrlOpen(uo) = &s.steps[3] else { panic!() };
+        let ScenarioStep::UrlOpen(uo) = &s.steps[3] else {
+            panic!()
+        };
         assert_eq!(uo.url, "https://example.com");
-        let ScenarioStep::Notify(n) = &s.steps[4] else { panic!() };
+        let ScenarioStep::Notify(n) = &s.steps[4] else {
+            panic!()
+        };
         assert_eq!(n.title, "Done");
         assert_eq!(n.message, "{{ count }} rows");
     }
@@ -2424,7 +2528,9 @@ steps:
       template: "loading.png"
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
-        let ScenarioStep::WaitNoImage(step) = &s.steps[0] else { panic!() };
+        let ScenarioStep::WaitNoImage(step) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(step.timeout_ms, 30_000);
         assert_eq!(step.interval_ms, 500);
         assert!(step.window.is_none());
