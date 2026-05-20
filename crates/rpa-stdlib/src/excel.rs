@@ -232,3 +232,26 @@ pub fn set_formula(inputs: HashMap<String, Value>) -> NodeResult {
     tracing::info!(file, sheet, cell = cell_label, "excel.set_formula");
     Ok(HashMap::new())
 }
+
+/// Rename a sheet in an XLSX file.
+///
+/// Required inputs: file, from_name, to_name
+pub fn rename_sheet(inputs: HashMap<String, Value>) -> NodeResult {
+    let file = get_str(&inputs, "file")?;
+    let from_name = get_str(&inputs, "from_name")?;
+    let to_name = get_str(&inputs, "to_name")?;
+
+    let mut book = umya_spreadsheet::reader::xlsx::read(&file)
+        .map_err(|e| NodeError::Other(format!("excel open failed: {e}")))?;
+
+    let sheet = book
+        .get_sheet_by_name_mut(&from_name)
+        .ok_or_else(|| NodeError::Other(format!("sheet not found: {from_name}")))?;
+    sheet.set_name(to_name.clone());
+
+    umya_spreadsheet::writer::xlsx::write(&book, &file)
+        .map_err(|e| NodeError::Other(format!("excel save failed: {e}")))?;
+
+    tracing::info!(file, from = from_name, to = to_name, "excel.rename_sheet");
+    Ok(HashMap::new())
+}

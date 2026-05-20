@@ -45,10 +45,12 @@ pub fn dispatch(name: &str, inputs: HashMap<String, Value>) -> NodeResult {
     match name {
         // --- mail ---
         "mail.smtp_send" => mail::smtp_send(inputs),
+        "mail.imap_receive" => mail::imap_receive(inputs),
 
         // --- excel ---
         "excel.add_sheet" => excel::add_sheet(inputs),
         "excel.delete_sheet" => excel::delete_sheet(inputs),
+        "excel.rename_sheet" => excel::rename_sheet(inputs),
         "excel.copy_sheet" => excel::copy_sheet(inputs),
         "excel.save_as" => excel::save_as(inputs),
         "excel.list_sheets" => excel::list_sheets(inputs),
