@@ -162,15 +162,17 @@ impl UiaElement {
 mod windows_impl {
     use super::{UiaError, UiaSelector};
     use windows::{
-        core::BSTR,
+        core::{BSTR, Interface},
         Win32::{
-            System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED},
+            System::{
+                Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED},
+                Variant::VARIANT,
+            },
             UI::Accessibility::{
                 CUIAutomation, IUIAutomation, IUIAutomationCondition, IUIAutomationElement,
                 IUIAutomationValuePattern, TreeScope_Descendants, UIA_AutomationIdPropertyId,
                 UIA_ClassNamePropertyId, UIA_NamePropertyId, UIA_ValuePatternId,
             },
-            Foundation::VARIANT,
         },
     };
 
@@ -187,6 +189,7 @@ mod windows_impl {
         pub fn new() -> super::Result<Self> {
             unsafe {
                 CoInitializeEx(None, COINIT_MULTITHREADED)
+                    .ok()
                     .map_err(|e| UiaError::Com(e.to_string()))?;
                 let automation: IUIAutomation =
                     CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
@@ -213,8 +216,7 @@ mod windows_impl {
 
                 let el = root
                     .FindFirst(TreeScope_Descendants, &condition)
-                    .map_err(|e| UiaError::Com(e.to_string()))?
-                    .ok_or_else(|| UiaError::NotFound(format!("{selector:?}")))?;
+                    .map_err(|e| UiaError::Com(e.to_string()))?;
 
                 Ok(Element { el, automation: self.automation.clone() })
             }

@@ -24,7 +24,7 @@ use crate::scenario::{
     JsonParseStep, JsonStringifyStep, LibraryStep, LoadVarsStep, LogLevel, LogWriteStep,
     MatchRectStep, MlDetectStep, MouseClickXyStep, MouseDragStep, MouseMoveStep, MouseScrollStep,
     OcrMatchStep, PathBasenameStep, PathDirnameStep, PathJoinStep, RepeatStep, SaveVarsStep,
-    ScenarioStep, ScriptStep, ShellStep, StringCaseStep, StringJoinStep, StringLengthStep,
+    ScenarioStep, ScriptStep, ShellStep, StringJoinStep,
     StringRegexStep, StringReplaceStep, StringSplitStep, StringSubstringStep, StringTrimStep,
     SubScenarioStep, SwitchStep, TrimSide, TryCatchStep, TypeStep, WaitImageStep, WaitWindowStep,
     WhileStep, WidthStep, WindowControlAction, WindowControlStep, WindowState,
@@ -1745,10 +1745,10 @@ impl ScenarioEngine {
         {
             let _ = step;
             let _ = vars;
-            return Err(EngineError::Other(
+            Err(EngineError::Other(
                 "ocr_match requires the 'ocr' feature; rebuild with: cargo build --features ocr"
                     .to_owned(),
-            ));
+            ))
         }
 
         #[cfg(feature = "ocr")]
@@ -1827,10 +1827,10 @@ impl ScenarioEngine {
         {
             let _ = step;
             let _ = vars;
-            return Err(EngineError::Other(
+            Err(EngineError::Other(
                 "ml_detect requires the 'ml' feature; rebuild with: cargo build --features ml"
                     .to_owned(),
-            ));
+            ))
         }
 
         #[cfg(feature = "ml")]
@@ -2418,10 +2418,10 @@ impl ScenarioEngine {
         {
             let _ = step;
             let _ = vars;
-            return Err(EngineError::Other(
+            Err(EngineError::Other(
                 "excel_write_cell requires the 'excel-write' feature; rebuild with: cargo build --features excel-write"
                     .to_owned(),
-            ));
+            ))
         }
 
         #[cfg(feature = "excel-write")]
@@ -2696,8 +2696,6 @@ impl ScenarioEngine {
     }
 
     fn csv_write(&self, step: &CsvWriteStep, vars: &mut Variables) -> Result<()> {
-        use std::io::Write;
-
         let path = self.base_dir.join(vars.expand(&step.path));
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(EngineError::Io)?;
@@ -2788,9 +2786,9 @@ impl ScenarioEngine {
         let from = vars.expand(&step.from);
         let to = vars.expand(&step.to);
         let result = if step.all {
-            value.replace(&*from, &*to)
+            value.replace(&*from, &to)
         } else {
-            value.replacen(&*from, &*to, 1)
+            value.replacen(&*from, &to, 1)
         };
         vars.set(&step.save_as, serde_json::Value::String(result));
         Ok(())
@@ -3455,7 +3453,7 @@ impl ScenarioEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scenario::{OcrMatchStep, ScenarioStep, ScreenshotSaveStep};
+    use crate::scenario::{ScenarioStep, ScreenshotSaveStep};
 
     #[test]
     fn ocr_match_step_yaml_roundtrip() {
@@ -3565,7 +3563,6 @@ steps:
 
     use crate::scenario::{CsvReadStep, CsvWriteStep, CsvWriteMode};
     use crate::variables::Variables;
-    use std::io::Write as _;
 
     fn make_engine_for_dir(dir: &std::path::Path) -> ScenarioEngine {
         use rpa_backend::LocalBackend;

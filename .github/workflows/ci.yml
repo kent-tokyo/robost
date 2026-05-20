@@ -56,13 +56,20 @@ jobs:
             libfontconfig1-dev \
             libpipewire-0.3-dev \
             libspa-0.2-dev \
-            libgbm-dev
+            libgbm-dev \
+            xvfb
 
       - name: Build workspace
         run: cargo build --workspace
 
       - name: Run tests
-        run: cargo test --workspace
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a cargo test --workspace
+          else
+            cargo test --workspace
+          fi
+        shell: bash
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
