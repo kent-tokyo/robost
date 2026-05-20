@@ -67,25 +67,25 @@ pub trait Backend: Send + Sync {
     ///
     /// `action` is one of `"focus"`, `"maximize"`, `"minimize"`, `"close"`.
     /// The default impl returns `NotSupported`; override in concrete backends.
-    fn control_window(&self, title_contains: &str, action: &str) -> Result<()> {
+    fn control_window(&self, _title_contains: &str, _action: &str) -> Result<()> {
         Err(BackendError::NotSupported(format!(
-            "control_window({action})"
+            "control_window({_action})"
         )))
     }
 
     /// Move the mouse cursor to the given screen-global point without clicking.
-    fn move_mouse(&self, point: ScreenPoint) -> Result<()> {
+    fn move_mouse(&self, _point: ScreenPoint) -> Result<()> {
         Err(BackendError::NotSupported("move_mouse".into()))
     }
 
     /// Click and drag from `from` to `to`, holding the button for `hold_ms` milliseconds.
-    fn drag(&self, from: ScreenPoint, to: ScreenPoint, hold_ms: u64) -> Result<()> {
+    fn drag(&self, _from: ScreenPoint, _to: ScreenPoint, _hold_ms: u64) -> Result<()> {
         Err(BackendError::NotSupported("drag".into()))
     }
 
     /// Scroll in the given direction by `amount` units.
     /// `direction` is one of `"up"`, `"down"`, `"left"`, `"right"`.
-    fn scroll(&self, direction: &str, amount: i32) -> Result<()> {
+    fn scroll(&self, _direction: &str, _amount: i32) -> Result<()> {
         Err(BackendError::NotSupported("scroll".into()))
     }
 
@@ -93,7 +93,7 @@ pub trait Backend: Send + Sync {
     /// Key names are case-insensitive: `"ctrl"`, `"alt"`, `"shift"`, `"meta"`,
     /// `"tab"`, `"enter"`, `"f1"`–`"f12"`, arrow keys (`"up"`, `"down"`, etc.),
     /// `"home"`, `"end"`, `"pageup"`, `"pagedown"`, or a single character.
-    fn key_combo(&self, keys: &[&str]) -> Result<()> {
+    fn key_combo(&self, _keys: &[&str]) -> Result<()> {
         Err(BackendError::NotSupported("key_combo".into()))
     }
 }

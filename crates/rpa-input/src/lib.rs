@@ -209,17 +209,16 @@ fn windows_focus(title: &str) -> Result<()> {
 
 #[cfg(windows)]
 fn windows_control(title: &str, action: &str) -> Result<()> {
+    use windows::Win32::Foundation::{LPARAM, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{
         FindWindowW, PostMessageW, SetForegroundWindow, ShowWindow,
-        LPARAM, SW_MAXIMIZE, SW_MINIMIZE, WPARAM, WM_CLOSE,
+        SW_MAXIMIZE, SW_MINIMIZE, WM_CLOSE,
     };
     use windows::core::PCWSTR;
 
     let wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
-    let hwnd = unsafe { FindWindowW(PCWSTR::null(), PCWSTR(wide.as_ptr())) };
-    if hwnd.0 == 0 {
-        return Err(InputError::Focus(format!("window not found: {title}")));
-    }
+    let hwnd = unsafe { FindWindowW(PCWSTR::null(), PCWSTR(wide.as_ptr())) }
+        .map_err(|_| InputError::Focus(format!("window not found: {title}")))?;
     match action {
         "focus" => { unsafe { SetForegroundWindow(hwnd) }; }
         "maximize" => { unsafe { ShowWindow(hwnd, SW_MAXIMIZE) }; }
