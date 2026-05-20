@@ -8,3 +8,5 @@ memo.txt
 
 # Scheduler runtime files
 ~/.rpa/
+
+.env

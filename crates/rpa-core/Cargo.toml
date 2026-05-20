@@ -24,7 +24,6 @@ rpa-uia.workspace = true
 rpa-web = { workspace = true, optional = true }
 image.workspace = true
 xcap.workspace = true
-async-recursion.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 tracing.workspace = true

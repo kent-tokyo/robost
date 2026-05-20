@@ -98,9 +98,6 @@ rfd = "0.15"
 # Clipboard
 arboard = "3"
 
-# Async utilities
-async-recursion = "1"
-
 # HTTP client
 ureq = { version = "2", features = ["json"] }
 

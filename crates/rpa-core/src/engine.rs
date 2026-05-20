@@ -8,7 +8,6 @@ use crate::report::{ExecutionReport, Outcome, StepOutcome, StepRecord};
 
 use xcap;
 
-use async_recursion::async_recursion;
 use chrono::Local;
 use rpa_backend::Backend;
 use rpa_vision::TemplateMatcher;
@@ -423,13 +422,13 @@ impl ScenarioEngine {
 
     // ── Step execution ──────────────────────────────────────────────────────
 
-    #[async_recursion(?Send)]
-    async fn run_steps(
-        &self,
-        steps: &[ScenarioStep],
-        vars: &mut Variables,
+    fn run_steps<'a>(
+        &'a self,
+        steps: &'a [ScenarioStep],
+        vars: &'a mut Variables,
         reconnect_ms: u64,
-    ) -> Result<Flow> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Flow>> + 'a>> {
+        Box::pin(async move {
         for (i, step) in steps.iter().enumerate() {
             self.check_cancelled()?;
 
@@ -517,6 +516,7 @@ impl ScenarioEngine {
             }
         }
         Ok(Flow::Done)
+        }) // Box::pin
     }
 
     async fn run_step(
