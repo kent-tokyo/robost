@@ -955,6 +955,10 @@ struct EditorApp {
     settings_test_rx: Option<std::sync::mpsc::Receiver<(bool, String)>>,
     scenario_vars: serde_yml::Mapping,
     bottom_tab: BottomTab,
+    /// Steps currently highlighted in multi-select (always contains `selected` when set).
+    multi_selected: HashSet<usize>,
+    /// Internal clipboard for copy/cut/paste of steps.
+    step_clipboard: Vec<serde_yml::Value>,
 }
 
 impl Default for EditorApp {
@@ -1005,6 +1009,8 @@ impl Default for EditorApp {
             settings_test_rx: None,
             scenario_vars: serde_yml::Mapping::new(),
             bottom_tab: BottomTab::default(),
+            multi_selected: HashSet::new(),
+            step_clipboard: Vec::new(),
         }
     }
 }
@@ -1147,12 +1153,83 @@ impl EditorApp {
         self.push_undo();
         self.flush_edit();
         self.selected = Some(idx);
+        self.multi_selected.clear();
+        self.multi_selected.insert(idx);
         self.selected_child = None;
         self.child_edit_buf.clear();
         if let Some(step) = self.steps.get(idx) {
             self.edit_buf = serde_yml::to_string(step).unwrap_or_default();
             self.parse_error = None;
         }
+    }
+
+    fn copy_selected_steps(&mut self) {
+        let mut indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
+        indices.sort_unstable();
+        self.step_clipboard = indices
+            .into_iter()
+            .filter_map(|i| self.steps.get(i).cloned())
+            .collect();
+    }
+
+    fn paste_steps(&mut self) {
+        if self.step_clipboard.is_empty() {
+            return;
+        }
+        self.push_undo();
+        let at = self
+            .multi_selected
+            .iter()
+            .max()
+            .map(|i| i + 1)
+            .unwrap_or(self.steps.len());
+        for (j, step) in self.step_clipboard.iter().enumerate() {
+            self.steps.insert(at + j, step.clone());
+        }
+        // Select the newly pasted range.
+        let end = at + self.step_clipboard.len() - 1;
+        self.selected = Some(end);
+        self.multi_selected = (at..=end).collect();
+        if let Some(step) = self.steps.get(end) {
+            self.edit_buf = serde_yml::to_string(step).unwrap_or_default();
+        }
+        self.dirty = true;
+    }
+
+    fn delete_selected_steps(&mut self) {
+        if self.multi_selected.is_empty() {
+            return;
+        }
+        self.push_undo();
+        let mut indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
+        indices.sort_unstable_by(|a, b| b.cmp(a)); // delete from highest to keep indices valid
+        for i in &indices {
+            if *i < self.steps.len() {
+                self.steps.remove(*i);
+            }
+        }
+        self.multi_selected.clear();
+        let new_sel = indices.last().and_then(|i| {
+            let i = i.saturating_sub(1);
+            if i < self.steps.len() {
+                Some(i)
+            } else {
+                self.steps.len().checked_sub(1)
+            }
+        });
+        self.selected = new_sel;
+        if let Some(idx) = new_sel {
+            self.multi_selected.insert(idx);
+            self.edit_buf = self
+                .steps
+                .get(idx)
+                .map(|s| serde_yml::to_string(s).unwrap_or_default())
+                .unwrap_or_default();
+        } else {
+            self.edit_buf.clear();
+        }
+        self.form_edit_buffers.clear();
+        self.dirty = true;
     }
 
     fn stop_run(&mut self) {
@@ -2692,11 +2769,39 @@ impl eframe::App for EditorApp {
             && self.prop_view != PropView::Yaml
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete))
         {
-            if let Some(idx) = self.selected {
+            if self.multi_selected.len() > 1 {
+                self.delete_selected_steps();
+            } else if let Some(idx) = self.selected {
                 if idx < self.steps.len() {
                     self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
                 }
             }
+        }
+        if !self.add_menu_open
+            && self.confirm_dialog.is_none()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::C))
+        {
+            self.copy_selected_steps();
+        }
+        if !self.add_menu_open
+            && self.confirm_dialog.is_none()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::X))
+        {
+            self.copy_selected_steps();
+            self.delete_selected_steps();
+        }
+        if !self.add_menu_open
+            && self.confirm_dialog.is_none()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::V))
+        {
+            self.paste_steps();
+        }
+        if !self.add_menu_open
+            && self.confirm_dialog.is_none()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::D))
+        {
+            self.copy_selected_steps();
+            self.paste_steps();
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.add_menu_open = false;
@@ -2922,10 +3027,42 @@ impl eframe::App for EditorApp {
                         self.add_menu_just_opened = true;
                         self.add_filter.clear();
                     }
-                    ui.add_enabled_ui(self.selected.is_some(), |ui| {
+                    ui.separator();
+                    let has_sel = !self.multi_selected.is_empty();
+                    let has_clip = !self.step_clipboard.is_empty();
+                    ui.add_enabled_ui(has_sel, |ui| {
+                        if ui.button("コピー        Cmd+C").clicked() {
+                            ui.close();
+                            self.copy_selected_steps();
+                        }
+                    });
+                    ui.add_enabled_ui(has_sel, |ui| {
+                        if ui.button("カット        Cmd+X").clicked() {
+                            ui.close();
+                            self.copy_selected_steps();
+                            self.delete_selected_steps();
+                        }
+                    });
+                    ui.add_enabled_ui(has_clip, |ui| {
+                        if ui.button("ペースト      Cmd+V").clicked() {
+                            ui.close();
+                            self.paste_steps();
+                        }
+                    });
+                    ui.add_enabled_ui(has_sel, |ui| {
+                        if ui.button("複製          Cmd+D").clicked() {
+                            ui.close();
+                            self.copy_selected_steps();
+                            self.paste_steps();
+                        }
+                    });
+                    ui.separator();
+                    ui.add_enabled_ui(has_sel, |ui| {
                         if ui.button("ステップ削除  Delete").clicked() {
                             ui.close();
-                            if let Some(idx) = self.selected {
+                            if self.multi_selected.len() > 1 {
+                                self.delete_selected_steps();
+                            } else if let Some(idx) = self.selected {
                                 self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
                             }
                         }
@@ -3212,7 +3349,8 @@ impl eframe::App for EditorApp {
                             let cat = step_key_category(key);
                             let color = category_color(cat);
                             let summary = step_summary(&self.steps[i]);
-                            let selected = self.selected == Some(i);
+                            let is_multi = self.multi_selected.contains(&i);
+                            let is_primary = self.selected == Some(i);
                             let is_running = self.current_run_step == Some(i);
 
                             ui.horizontal(|ui| {
@@ -3227,8 +3365,19 @@ impl eframe::App for EditorApp {
                                 } else {
                                     format!("{i}: {summary}")
                                 };
-                                if ui.selectable_label(selected, label).clicked() {
-                                    action = Some(StepAction::Select(i));
+                                // Highlight primary in full, multi-only in dimmed tint.
+                                let highlight = is_primary || is_multi;
+                                let resp = ui.selectable_label(highlight, label);
+                                if resp.clicked() {
+                                    let (ctrl, shift) = ui
+                                        .input(|inp| (inp.modifiers.command, inp.modifiers.shift));
+                                    if ctrl {
+                                        action = Some(StepAction::ToggleMulti(i));
+                                    } else if shift {
+                                        action = Some(StepAction::ShiftSelect(i));
+                                    } else {
+                                        action = Some(StepAction::Select(i));
+                                    }
                                 }
                                 ui.add_enabled_ui(i > 0, |ui| {
                                     if ui.small_button("↑").clicked() {
@@ -3257,12 +3406,53 @@ impl eframe::App for EditorApp {
                 if let Some(act) = action {
                     match act {
                         StepAction::Select(i) => self.select_step(i),
+                        StepAction::ToggleMulti(i) => {
+                            if self.multi_selected.contains(&i) {
+                                self.multi_selected.remove(&i);
+                                if self.selected == Some(i) {
+                                    self.selected = self.multi_selected.iter().next().cloned();
+                                }
+                            } else {
+                                self.multi_selected.insert(i);
+                                self.flush_edit();
+                                self.selected = Some(i);
+                                if let Some(step) = self.steps.get(i) {
+                                    self.edit_buf = serde_yml::to_string(step).unwrap_or_default();
+                                }
+                            }
+                        }
+                        StepAction::ShiftSelect(i) => {
+                            let anchor = self.selected.unwrap_or(i);
+                            let (lo, hi) = if anchor <= i {
+                                (anchor, i)
+                            } else {
+                                (i, anchor)
+                            };
+                            self.multi_selected = (lo..=hi).collect();
+                            self.selected = Some(i);
+                            if let Some(step) = self.steps.get(i) {
+                                self.edit_buf = serde_yml::to_string(step).unwrap_or_default();
+                            }
+                        }
                         StepAction::MoveUp(i) => {
                             self.push_undo();
                             self.steps.swap(i - 1, i);
                             if self.selected == Some(i) {
                                 self.selected = Some(i - 1);
                             }
+                            self.multi_selected = self
+                                .multi_selected
+                                .iter()
+                                .map(|&x| {
+                                    if x == i {
+                                        i - 1
+                                    } else if x == i - 1 {
+                                        i
+                                    } else {
+                                        x
+                                    }
+                                })
+                                .collect();
                             self.form_edit_buffers.clear();
                         }
                         StepAction::MoveDown(i) => {
@@ -3271,10 +3461,27 @@ impl eframe::App for EditorApp {
                             if self.selected == Some(i) {
                                 self.selected = Some(i + 1);
                             }
+                            self.multi_selected = self
+                                .multi_selected
+                                .iter()
+                                .map(|&x| {
+                                    if x == i {
+                                        i + 1
+                                    } else if x == i + 1 {
+                                        i
+                                    } else {
+                                        x
+                                    }
+                                })
+                                .collect();
                             self.form_edit_buffers.clear();
                         }
                         StepAction::Delete(i) => {
-                            self.confirm_dialog = Some(ConfirmAction::DeleteStep(i));
+                            if self.multi_selected.len() > 1 {
+                                self.delete_selected_steps();
+                            } else {
+                                self.confirm_dialog = Some(ConfirmAction::DeleteStep(i));
+                            }
                         }
                     }
                 }
@@ -3577,6 +3784,8 @@ impl eframe::App for EditorApp {
 
 enum StepAction {
     Select(usize),
+    ToggleMulti(usize),
+    ShiftSelect(usize),
     MoveUp(usize),
     MoveDown(usize),
     Delete(usize),
