@@ -342,7 +342,10 @@ fn resolve_plugin_source(source: &str) -> Result<(Option<tempfile::TempDir>, Pat
             let (dir, path) = download_github_release(repo, tag)?;
             Ok((Some(dir), path))
         } else {
-            bail!("invalid source '{}': expected a file path, https:// URL, or owner/repo@tag", source)
+            bail!(
+                "invalid source '{}': expected a file path, https:// URL, or owner/repo@tag",
+                source
+            )
         }
     } else {
         Ok((None, PathBuf::from(source)))
@@ -352,13 +355,13 @@ fn resolve_plugin_source(source: &str) -> Result<(Option<tempfile::TempDir>, Pat
 /// Download a .wasm file (and adjacent plugin.toml) from an HTTPS URL into a temp dir.
 fn download_wasm_url(wasm_url: &str) -> Result<(tempfile::TempDir, PathBuf)> {
     let dir = tempfile::tempdir()?;
-    let filename = wasm_url
-        .rsplit('/')
-        .next()
-        .unwrap_or("plugin.wasm");
+    let filename = wasm_url.rsplit('/').next().unwrap_or("plugin.wasm");
     let wasm_dest = dir.path().join(filename);
 
-    let toml_base = wasm_url.rsplit_once('/').map(|(base, _)| base).unwrap_or(wasm_url);
+    let toml_base = wasm_url
+        .rsplit_once('/')
+        .map(|(base, _)| base)
+        .unwrap_or(wasm_url);
     let toml_url = format!("{toml_base}/plugin.toml");
 
     eprintln!("Downloading {wasm_url}");
@@ -388,7 +391,12 @@ fn download_github_release(repo: &str, tag: &str) -> Result<(tempfile::TempDir, 
 
     let wasm_url = assets
         .iter()
-        .find(|a| a["name"].as_str().map(|n| n.ends_with(".wasm")).unwrap_or(false))
+        .find(|a| {
+            a["name"]
+                .as_str()
+                .map(|n| n.ends_with(".wasm"))
+                .unwrap_or(false)
+        })
         .and_then(|a| a["browser_download_url"].as_str())
         .context("no .wasm asset found in GitHub release")?;
 

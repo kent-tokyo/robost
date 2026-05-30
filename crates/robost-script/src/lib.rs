@@ -83,11 +83,17 @@ fn register_date_fns(engine: &mut Engine) {
     /// Returns `Some((next_year, next_month))` for the first day of the following month,
     /// or `None` if any value is out of range.
     fn next_month(year: i64, month: i64) -> Option<(i32, u32)> {
-        if !(1..=12).contains(&month) { return None; }
-        if year < i32::MIN as i64 || year > i32::MAX as i64 { return None; }
+        if !(1..=12).contains(&month) {
+            return None;
+        }
+        if year < i32::MIN as i64 || year > i32::MAX as i64 {
+            return None;
+        }
         if month == 12 {
             let y2 = year.checked_add(1)?;
-            if y2 > i32::MAX as i64 { return None; }
+            if y2 > i32::MAX as i64 {
+                return None;
+            }
             Some((y2 as i32, 1))
         } else {
             Some((year as i32, (month + 1) as u32))
@@ -95,8 +101,12 @@ fn register_date_fns(engine: &mut Engine) {
     }
 
     fn valid_ym(year: i64, month: i64) -> Option<(i32, u32)> {
-        if !(1..=12).contains(&month) { return None; }
-        if year < i32::MIN as i64 || year > i32::MAX as i64 { return None; }
+        if !(1..=12).contains(&month) {
+            return None;
+        }
+        if year < i32::MIN as i64 || year > i32::MAX as i64 {
+            return None;
+        }
         Some((year as i32, month as u32))
     }
 

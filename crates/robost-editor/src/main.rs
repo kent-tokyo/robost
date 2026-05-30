@@ -173,23 +173,35 @@ fn step_key_category(key: &str) -> &str {
         "excel_read_sheet" | "excel_read_range" | "excel_read_cell" | "excel_write_cell"
         | "excel_write_range" | "excel_get_dims" | "excel_find_row" | "excel_add_sheet"
         | "excel_delete_sheet" | "excel_rename_sheet" => "Excel",
-        "string_replace" | "string_trim" | "string_upper" | "string_lower"
-        | "string_substring" | "string_length" | "string_split" | "string_join"
-        | "string_regex" | "string_format" | "string_contains" | "string_starts_with"
-        | "string_ends_with" | "string_index_of" | "string_count" => "文字列",
+        "string_replace" | "string_trim" | "string_upper" | "string_lower" | "string_substring"
+        | "string_length" | "string_split" | "string_join" | "string_regex" | "string_format"
+        | "string_contains" | "string_starts_with" | "string_ends_with" | "string_index_of"
+        | "string_count" => "文字列",
         "date_format" | "date_add" | "date_diff" => "日付",
         "json_parse" | "json_stringify" => "JSON",
         "path_join" | "path_basename" | "path_dirname" | "env_get" => "パス",
-        "mouse_move" | "mouse_click_xy" | "mouse_drag" | "mouse_scroll" | "mouse_hover" => {
-            "マウス"
-        }
+        "mouse_move" | "mouse_click_xy" | "mouse_drag" | "mouse_scroll" | "mouse_hover" => "マウス",
         "process_start" | "process_kill" | "process_exists" => "プロセス",
         "http_get" | "http_post" | "http_put" | "http_patch" | "http_delete" => "HTTP",
         "mail_send" | "mail_receive" => "メール",
-        "web_open" | "web_click" | "web_type" | "web_get" | "web_wait" | "web_screenshot"
-        | "web_close" | "web_navigate_back" | "web_navigate_forward" | "web_wait_text"
-        | "web_select" | "web_execute_js" | "web_switch_frame" | "web_scroll" | "web_alert"
-        | "web_get_url" | "web_get_title" | "web_get_all" => "Web",
+        "web_open"
+        | "web_click"
+        | "web_type"
+        | "web_get"
+        | "web_wait"
+        | "web_screenshot"
+        | "web_close"
+        | "web_navigate_back"
+        | "web_navigate_forward"
+        | "web_wait_text"
+        | "web_select"
+        | "web_execute_js"
+        | "web_switch_frame"
+        | "web_scroll"
+        | "web_alert"
+        | "web_get_url"
+        | "web_get_title"
+        | "web_get_all" => "Web",
         "uia_get" | "uia_set" | "uia_click" | "uia_find" | "uia_wait" | "uia_select"
         | "uia_get_children" | "uia_check" => "UIA",
         "csv_read" | "csv_write" => "CSV",
@@ -1134,8 +1146,8 @@ impl EditorApp {
             self.log_err("実行するにはまず保存してください");
             return;
         };
-        let progress_file = std::env::temp_dir()
-            .join(format!("robost_progress_{}.json", std::process::id()));
+        let progress_file =
+            std::env::temp_dir().join(format!("robost_progress_{}.json", std::process::id()));
         let _ = std::fs::remove_file(&progress_file);
         self.run_progress_file = Some(progress_file.clone());
         self.current_run_step = None;
@@ -1231,7 +1243,11 @@ impl EditorApp {
         }
     }
 
-    fn get_branch_steps(&self, parent_idx: usize, branch_name: &str) -> Option<Vec<serde_yml::Value>> {
+    fn get_branch_steps(
+        &self,
+        parent_idx: usize,
+        branch_name: &str,
+    ) -> Option<Vec<serde_yml::Value>> {
         let step = self.steps.get(parent_idx)?;
         let outer_map = step.as_mapping()?;
         let outer_key = outer_map.iter().next()?.0.as_str()?;
@@ -1250,9 +1266,15 @@ impl EditorApp {
     where
         F: FnOnce(&mut Vec<serde_yml::Value>),
     {
-        let Some(step) = self.steps.get(parent_idx) else { return };
-        let Some(outer_map) = step.as_mapping() else { return };
-        let Some(outer_key) = outer_map.iter().next().and_then(|(k, _)| k.as_str()) else { return };
+        let Some(step) = self.steps.get(parent_idx) else {
+            return;
+        };
+        let Some(outer_map) = step.as_mapping() else {
+            return;
+        };
+        let Some(outer_key) = outer_map.iter().next().and_then(|(k, _)| k.as_str()) else {
+            return;
+        };
         let outer_key = outer_key.to_owned();
         let mut new_outer = outer_map.clone();
 
@@ -1285,7 +1307,13 @@ impl EditorApp {
         }
     }
 
-    fn set_branch_step(&mut self, parent_idx: usize, branch_name: &str, child_idx: usize, new_val: serde_yml::Value) {
+    fn set_branch_step(
+        &mut self,
+        parent_idx: usize,
+        branch_name: &str,
+        child_idx: usize,
+        new_val: serde_yml::Value,
+    ) {
         self.mutate_branch(parent_idx, branch_name, move |seq| {
             if child_idx < seq.len() {
                 seq[child_idx] = new_val;
@@ -1309,20 +1337,50 @@ impl EditorApp {
         });
     }
 
-    fn add_branch_step(&mut self, parent_idx: usize, branch_name: &str, new_step: serde_yml::Value) {
+    fn add_branch_step(
+        &mut self,
+        parent_idx: usize,
+        branch_name: &str,
+        new_step: serde_yml::Value,
+    ) {
         self.mutate_branch(parent_idx, branch_name, move |seq| {
             seq.push(new_step);
         });
     }
 
     fn show_property_form(&mut self, ui: &mut egui::Ui, idx: usize) {
-        const FILE_KEYS: &[&str] = &["template", "file", "path", "src", "dest", "local", "remote", "sub"];
+        const FILE_KEYS: &[&str] = &[
+            "template", "file", "path", "src", "dest", "local", "remote", "sub",
+        ];
         const SECRET_KEYS: &[&str] = &["password", "pass", "secret", "token"];
         const MULTILINE_KEYS: &[&str] = &["script", "sql", "cmd", "body", "message", "query"];
         const PRESS_KEYS: &[&str] = &[
-            "Enter", "Tab", "Escape", "Space", "Backspace", "Delete",
-            "Up", "Down", "Left", "Right", "Home", "End", "PageUp", "PageDown",
-            "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+            "Enter",
+            "Tab",
+            "Escape",
+            "Space",
+            "Backspace",
+            "Delete",
+            "Up",
+            "Down",
+            "Left",
+            "Right",
+            "Home",
+            "End",
+            "PageUp",
+            "PageDown",
+            "F1",
+            "F2",
+            "F3",
+            "F4",
+            "F5",
+            "F6",
+            "F7",
+            "F8",
+            "F9",
+            "F10",
+            "F11",
+            "F12",
             "Insert",
         ];
         const WINDOW_STATES: &[&str] = &["exists", "visible", "focused", "closed"];
@@ -1355,7 +1413,9 @@ impl EditorApp {
             .iter()
             .filter_map(|(k, v)| {
                 let ks = k.as_str()?;
-                if ks == outer_key { return None; }
+                if ks == outer_key {
+                    return None;
+                }
                 let seq = v.as_sequence()?;
                 if seq.is_empty() || seq.iter().all(|s| s.is_mapping()) {
                     Some((ks.to_owned(), seq.clone()))
@@ -1861,10 +1921,8 @@ impl EditorApp {
                 if let Some(step) = self.steps.get(idx) {
                     let step = step.clone();
                     let ok = get_step_key(&step);
-                    if let Some(serde_yml::Value::Mapping(mut inner)) = step
-                        .as_mapping()
-                        .and_then(|m| m.get(ok))
-                        .cloned()
+                    if let Some(serde_yml::Value::Mapping(mut inner)) =
+                        step.as_mapping().and_then(|m| m.get(ok)).cloned()
                     {
                         inner.insert(
                             serde_yml::Value::String(fkey),
@@ -1887,7 +1945,8 @@ impl EditorApp {
                 ChildAction::Select(branch, ci) => {
                     if let Some(steps) = self.get_branch_steps(idx, &branch) {
                         if ci < steps.len() {
-                            self.child_edit_buf = serde_yml::to_string(&steps[ci]).unwrap_or_default();
+                            self.child_edit_buf =
+                                serde_yml::to_string(&steps[ci]).unwrap_or_default();
                             self.selected_child = Some((branch, ci));
                         }
                     }
@@ -2030,10 +2089,8 @@ impl EditorApp {
         };
 
         for (ni, (node, &(nx, ny, node_h))) in nodes.iter().zip(positions.iter()).enumerate() {
-            let node_rect = egui::Rect::from_min_size(
-                origin + egui::vec2(nx, ny),
-                egui::vec2(nw, node_h),
-            );
+            let node_rect =
+                egui::Rect::from_min_size(origin + egui::vec2(nx, ny), egui::vec2(nw, node_h));
 
             // ── connector from previous node ──────────────────────────
             if ni > 0 {
@@ -2048,10 +2105,8 @@ impl EditorApp {
                 } else {
                     let mid_y = from.y + gap / 2.0;
                     painter.line_segment([from, egui::pos2(from.x, mid_y)], stroke);
-                    painter.line_segment(
-                        [egui::pos2(from.x, mid_y), egui::pos2(to.x, mid_y)],
-                        stroke,
-                    );
+                    painter
+                        .line_segment([egui::pos2(from.x, mid_y), egui::pos2(to.x, mid_y)], stroke);
                     painter.line_segment([egui::pos2(to.x, mid_y), to], stroke);
                 }
 
@@ -2386,7 +2441,13 @@ impl EditorApp {
                         self.settings_open = false;
                     }
                     let testing = self.settings_test_rx.is_some();
-                    if ui.add_enabled(!testing && !self.settings.api_key.is_empty(), egui::Button::new("接続テスト")).clicked() {
+                    if ui
+                        .add_enabled(
+                            !testing && !self.settings.api_key.is_empty(),
+                            egui::Button::new("接続テスト"),
+                        )
+                        .clicked()
+                    {
                         self.settings_test_result = None;
                         let (tx, rx) = std::sync::mpsc::channel::<(bool, String)>();
                         self.settings_test_rx = Some(rx);
@@ -2401,9 +2462,15 @@ impl EditorApp {
                         ui.weak("テスト中…");
                     } else if let Some((ok, ref msg)) = self.settings_test_result {
                         if ok {
-                            ui.colored_label(egui::Color32::from_rgb(80, 200, 80), format!("✓ {msg}"));
+                            ui.colored_label(
+                                egui::Color32::from_rgb(80, 200, 80),
+                                format!("✓ {msg}"),
+                            );
                         } else {
-                            ui.colored_label(egui::Color32::from_rgb(220, 60, 60), format!("✗ {msg}"));
+                            ui.colored_label(
+                                egui::Color32::from_rgb(220, 60, 60),
+                                format!("✗ {msg}"),
+                            );
                         }
                     }
                 });
@@ -2439,16 +2506,14 @@ impl EditorApp {
                             let col = category_color(t.category);
                             if ui
                                 .add(
-                                    egui::Button::new(
-                                        egui::RichText::new(t.category).size(10.0),
-                                    )
-                                    .fill(egui::Color32::from_rgba_unmultiplied(
-                                        col.r(),
-                                        col.g(),
-                                        col.b(),
-                                        35,
-                                    ))
-                                    .min_size(egui::vec2(0.0, 18.0)),
+                                    egui::Button::new(egui::RichText::new(t.category).size(10.0))
+                                        .fill(egui::Color32::from_rgba_unmultiplied(
+                                            col.r(),
+                                            col.g(),
+                                            col.b(),
+                                            35,
+                                        ))
+                                        .min_size(egui::vec2(0.0, 18.0)),
                                 )
                                 .clicked()
                             {
@@ -2492,9 +2557,7 @@ impl EditorApp {
                                         "{}\n\n```yaml\n{}\n```",
                                         t.name, t.yaml
                                     ));
-                                ui.weak(
-                                    egui::RichText::new(format!("({})", t.name)).size(10.0),
-                                );
+                                ui.weak(egui::RichText::new(format!("({})", t.name)).size(10.0));
                                 if ui.small_button("挿入").clicked() {
                                     insert_yaml = Some(t.yaml);
                                 }
@@ -2513,21 +2576,30 @@ impl EditorApp {
 impl eframe::App for EditorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // ── OS window close button ────────────────────────────────────────────
-        if ctx.input(|i| i.viewport().close_requested()) && self.dirty && self.confirm_dialog.is_none() {
+        if ctx.input(|i| i.viewport().close_requested())
+            && self.dirty
+            && self.confirm_dialog.is_none()
+        {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.confirm_dialog = Some(ConfirmAction::Quit);
         }
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
         if ctx.input_mut(|i| {
-            i.consume_key(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::Z)
+            i.consume_key(
+                egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+                egui::Key::Z,
+            )
         }) {
             self.redo();
         } else if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Z)) {
             self.undo();
         }
         if ctx.input_mut(|i| {
-            i.consume_key(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::S)
+            i.consume_key(
+                egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+                egui::Key::S,
+            )
         }) {
             self.save_file_as();
         } else if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)) {
@@ -2557,7 +2629,10 @@ impl eframe::App for EditorApp {
         if !self.add_menu_open
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| {
-                i.consume_key(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::A)
+                i.consume_key(
+                    egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+                    egui::Key::A,
+                )
             })
         {
             self.add_menu_open = true;
@@ -2571,11 +2646,7 @@ impl eframe::App for EditorApp {
             let desc = match &action {
                 ConfirmAction::OpenFile => "変更が保存されていません。破棄して開きますか？",
                 ConfirmAction::DeleteStep(idx) => {
-                    let child_count = self
-                        .steps
-                        .get(*idx)
-                        .map(count_child_steps)
-                        .unwrap_or(0);
+                    let child_count = self.steps.get(*idx).map(count_child_steps).unwrap_or(0);
                     if child_count > 0 {
                         delete_msg_buf = format!(
                             "選択中のステップを削除しますか？\n（内部に {} ステップが含まれています）",
@@ -2620,8 +2691,7 @@ impl eframe::App for EditorApp {
                             self.edit_buf.clear();
                             self.parse_error = None;
                             let suffix = format!("@{idx}");
-                            self.form_edit_buffers
-                                .retain(|k, _| !k.ends_with(&suffix));
+                            self.form_edit_buffers.retain(|k, _| !k.ends_with(&suffix));
                         }
                     }
                     ConfirmAction::Quit => {
@@ -2725,7 +2795,11 @@ impl eframe::App for EditorApp {
                     }
                 });
                 ui.add_enabled_ui(!self.redo_stack.is_empty(), |ui| {
-                    if ui.button("↷").on_hover_text("リドゥ (Cmd+Shift+Z)").clicked() {
+                    if ui
+                        .button("↷")
+                        .on_hover_text("リドゥ (Cmd+Shift+Z)")
+                        .clicked()
+                    {
                         self.redo();
                     }
                 });
@@ -2736,24 +2810,36 @@ impl eframe::App for EditorApp {
                 }
                 ui.separator();
                 if self.run_child.is_some() {
-                    if ui.button("⏹ 停止").on_hover_text("実行を停止 (F5)").clicked() {
+                    if ui
+                        .button("⏹ 停止")
+                        .on_hover_text("実行を停止 (F5)")
+                        .clicked()
+                    {
                         self.stop_run();
                     }
                 } else if ui.button("▶ 実行").on_hover_text("実行 (F5)").clicked() {
                     self.run_scenario();
                 }
                 ui.separator();
-                if ui.selectable_value(&mut self.view_mode, ViewMode::List, "リスト").clicked() {
+                if ui
+                    .selectable_value(&mut self.view_mode, ViewMode::List, "リスト")
+                    .clicked()
+                {
                     // nothing extra
                 }
-                if ui.selectable_value(&mut self.view_mode, ViewMode::Flow, "フロー").clicked() {
+                if ui
+                    .selectable_value(&mut self.view_mode, ViewMode::Flow, "フロー")
+                    .clicked()
+                {
                     self.scroll_to_selected = true;
                 }
                 if self.view_mode == ViewMode::Flow {
                     ui.separator();
                     if ui
                         .button("⌂ リセット")
-                        .on_hover_text("ズーム・パンをリセット (Ctrl+ドラッグでパン、Ctrl+スクロールでズーム)")
+                        .on_hover_text(
+                            "ズーム・パンをリセット (Ctrl+ドラッグでパン、Ctrl+スクロールでズーム)",
+                        )
                         .clicked()
                     {
                         self.flow_zoom = 1.0;
@@ -2971,16 +3057,17 @@ impl eframe::App for EditorApp {
                 if self.prop_view == PropView::Form {
                     self.show_property_form(ui, idx);
                 } else {
-                    let response = egui::ScrollArea::vertical()
-                        .id_salt("yaml_editor")
-                        .show(ui, |ui| {
-                            ui.add(
-                                egui::TextEdit::multiline(&mut self.edit_buf)
-                                    .code_editor()
-                                    .desired_rows(20)
-                                    .desired_width(f32::INFINITY),
-                            )
-                        });
+                    let response =
+                        egui::ScrollArea::vertical()
+                            .id_salt("yaml_editor")
+                            .show(ui, |ui| {
+                                ui.add(
+                                    egui::TextEdit::multiline(&mut self.edit_buf)
+                                        .code_editor()
+                                        .desired_rows(20)
+                                        .desired_width(f32::INFINITY),
+                                )
+                            });
                     if response.inner.gained_focus() {
                         // Snapshot before the user starts typing so Cmd+Z can revert the edit
                         let snap = self.snapshot();

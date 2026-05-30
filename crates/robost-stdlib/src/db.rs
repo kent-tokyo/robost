@@ -9,8 +9,8 @@ fn open_sqlite(url: &str) -> Result<rusqlite::Connection, NodeError> {
         .unwrap_or(url);
     let conn = rusqlite::Connection::open(path)
         .map_err(|e| NodeError::Other(format!("db open failed: {e}")))?;
-    conn.authorizer(Some(
-        |ctx: rusqlite::hooks::AuthContext<'_>| match ctx.action {
+    conn.authorizer(Some(|ctx: rusqlite::hooks::AuthContext<'_>| {
+        match ctx.action {
             rusqlite::hooks::AuthAction::Attach { .. } => rusqlite::hooks::Authorization::Deny,
             rusqlite::hooks::AuthAction::Function { function_name }
                 if function_name.eq_ignore_ascii_case("load_extension") =>
@@ -18,8 +18,8 @@ fn open_sqlite(url: &str) -> Result<rusqlite::Connection, NodeError> {
                 rusqlite::hooks::Authorization::Deny
             }
             _ => rusqlite::hooks::Authorization::Allow,
-        },
-    ));
+        }
+    }));
     Ok(conn)
 }
 

@@ -15,46 +15,45 @@ use thiserror::Error;
 use tokio::time::sleep;
 use tracing::{error, info, instrument, warn};
 
-use crate::scenario::{
-    CalcStep, CallScenarioStep, ClickAction, ClickImageStep, ClipboardGetStep, ClipboardSetStep,
-    CopyVarStep, CsvReadStep, CsvWriteMode, CsvWriteStep, DateAddStep, DateDiffStep,
-    DateFormatStep, DialogInputStep, DialogSelectStep, DialogWaitStep, DiffUnit, DoWhileStep,
-    EnvGetStep, ExcelAddSheetStep, ExcelDeleteSheetStep, ExcelFindRowStep, ExcelReadCellStep,
-    ExcelReadRangeStep, ExcelRenameSheetStep, ExcelWriteCellStep, FileAppendStep, FileCopyStep,
-    FileDeleteStep, FileExistsStep, FileListStep, FileModifiedAtStep, FileMoveStep, FileReadStep,
-    FileRenameStep, FileSizeStep, FileWriteMode, FileWriteStep, FindImageStep, ForeachStep,
-    GetDatetimeStep, GetUsernameStep, GroupStep, IfStep, ImportVarsStep, IncrementStep,
-    JsonParseStep, JsonStringifyStep, KeyComboStep, LibraryStep, LoadVarsStep, LogLevel,
-    LogWriteStep, MailReceiveStep, MailSendStep, MatchRectStep, MlDetectStep, MouseClickXyStep,
-    MouseDragStep, MouseMoveStep, MouseScrollStep, NotifyStep, OcrMatchStep, PathBasenameStep,
-    PathDirnameStep, PathJoinStep, ProcessExistsStep, ProcessKillStep, ProcessStartStep,
-    RepeatStep, SaveVarsStep, ScenarioStep, ScreenshotSaveStep, ScriptStep, ShellStep,
-    StringCountStep, StringJoinStep, StringRegexStep, StringReplaceStep, StringSplitStep,
-    StringSubstringStep, StringTrimStep, SubScenarioStep, SwitchStep, TrimSide, TryCatchStep,
-    Base64DecodeStep, Base64EncodeStep, ClickInWindowStep, DirCreateStep, DirDeleteStep,
-    DirExistsStep, ExcelGetDimsStep, ExcelReadSheetStep, ExcelWriteRangeStep, GetPixelColorStep,
-    ListContainsStep, ListGetStep, ListLengthStep, ListPushStep, ListRemoveStep,
-    MouseHoverStep, NumberRandomStep, ProcessWaitState, StringContainsStep, StringEndsWithStep,
-    StringFormatStep, StringIndexOfStep, StringStartsWithStep, ToNumberStep, ToStringStep,
-    PdfExtractTextStep, PdfPageCountStep, TypeStep, UiaBy, VarTypeStep,
-    UiaCheckStep, UiaClickStep, UiaFindStep, UiaGetChildrenStep, UiaGetStep, UiaSelectStep,
-    UiaSetStep, UiaWaitStep, UrlOpenStep, WaitColorStep, WaitImageStep, WaitNoImageStep,
-    WaitChangeStep, WaitProcessStep, WaitUntilStep, WaitWindowStep, WhileStep, WidthStep,
-    WindowControlAction, WindowControlStep, WindowState, ZipCompressStep, ZipExtractStep,
-    ZipListStep,
-};
-#[cfg(feature = "db")]
-use crate::scenario::{DbExecuteStep, DbQueryOneStep, DbQueryStep};
-#[cfg(feature = "http")]
-use crate::scenario::{
-    ContentType, HttpAuth, HttpDeleteStep, HttpGetStep, HttpPatchStep, HttpPostStep, HttpPutStep,
-};
 #[cfg(feature = "web")]
 use crate::scenario::{
     AlertAction, WebAlertStep, WebClickStep, WebExecuteJsStep, WebGetAllStep, WebGetStep,
     WebGetTitleStep, WebGetUrlStep, WebOpenStep, WebScreenshotStep, WebScrollStep, WebSelectStep,
     WebSwitchFrameStep, WebTypeStep, WebWaitStep, WebWaitTextStep,
 };
+use crate::scenario::{
+    Base64DecodeStep, Base64EncodeStep, CalcStep, CallScenarioStep, ClickAction, ClickImageStep,
+    ClickInWindowStep, ClipboardGetStep, ClipboardSetStep, CopyVarStep, CsvReadStep, CsvWriteMode,
+    CsvWriteStep, DateAddStep, DateDiffStep, DateFormatStep, DialogInputStep, DialogSelectStep,
+    DialogWaitStep, DiffUnit, DirCreateStep, DirDeleteStep, DirExistsStep, DoWhileStep, EnvGetStep,
+    ExcelAddSheetStep, ExcelDeleteSheetStep, ExcelFindRowStep, ExcelGetDimsStep, ExcelReadCellStep,
+    ExcelReadRangeStep, ExcelReadSheetStep, ExcelRenameSheetStep, ExcelWriteCellStep,
+    ExcelWriteRangeStep, FileAppendStep, FileCopyStep, FileDeleteStep, FileExistsStep,
+    FileListStep, FileModifiedAtStep, FileMoveStep, FileReadStep, FileRenameStep, FileSizeStep,
+    FileWriteMode, FileWriteStep, FindImageStep, ForeachStep, GetDatetimeStep, GetPixelColorStep,
+    GetUsernameStep, GroupStep, IfStep, ImportVarsStep, IncrementStep, JsonParseStep,
+    JsonStringifyStep, KeyComboStep, LibraryStep, ListContainsStep, ListGetStep, ListLengthStep,
+    ListPushStep, ListRemoveStep, LoadVarsStep, LogLevel, LogWriteStep, MailReceiveStep,
+    MailSendStep, MatchRectStep, MlDetectStep, MouseClickXyStep, MouseDragStep, MouseHoverStep,
+    MouseMoveStep, MouseScrollStep, NotifyStep, NumberRandomStep, OcrMatchStep, PathBasenameStep,
+    PathDirnameStep, PathJoinStep, PdfExtractTextStep, PdfPageCountStep, ProcessExistsStep,
+    ProcessKillStep, ProcessStartStep, ProcessWaitState, RepeatStep, SaveVarsStep, ScenarioStep,
+    ScreenshotSaveStep, ScriptStep, ShellStep, StringContainsStep, StringCountStep,
+    StringEndsWithStep, StringFormatStep, StringIndexOfStep, StringJoinStep, StringRegexStep,
+    StringReplaceStep, StringSplitStep, StringStartsWithStep, StringSubstringStep, StringTrimStep,
+    SubScenarioStep, SwitchStep, ToNumberStep, ToStringStep, TrimSide, TryCatchStep, TypeStep,
+    UiaBy, UiaCheckStep, UiaClickStep, UiaFindStep, UiaGetChildrenStep, UiaGetStep, UiaSelectStep,
+    UiaSetStep, UiaWaitStep, UrlOpenStep, VarTypeStep, WaitChangeStep, WaitColorStep,
+    WaitImageStep, WaitNoImageStep, WaitProcessStep, WaitUntilStep, WaitWindowStep, WhileStep,
+    WidthStep, WindowControlAction, WindowControlStep, WindowState, ZipCompressStep,
+    ZipExtractStep, ZipListStep,
+};
+#[cfg(feature = "http")]
+use crate::scenario::{
+    ContentType, HttpAuth, HttpDeleteStep, HttpGetStep, HttpPatchStep, HttpPostStep, HttpPutStep,
+};
+#[cfg(feature = "db")]
+use crate::scenario::{DbExecuteStep, DbQueryOneStep, DbQueryStep};
 use crate::variables::Variables;
 use crate::Scenario;
 
@@ -253,7 +252,8 @@ impl ScenarioEngine {
 
     /// Like `safe_join` but returns an owned `String` (lossy UTF-8 conversion).
     fn safe_join_str(&self, raw: &str) -> Result<String> {
-        self.safe_join(raw).map(|p| p.to_string_lossy().into_owned())
+        self.safe_join(raw)
+            .map(|p| p.to_string_lossy().into_owned())
     }
 
     fn check_cancelled(&self) -> Result<()> {
@@ -335,7 +335,9 @@ impl ScenarioEngine {
             .unwrap_or(self.reconnect_timeout_ms);
         let reconnect_retry_ms = scenario.reconnect_retry_ms;
 
-        let run_result = self.run_steps(steps, vars, reconnect_ms, reconnect_retry_ms).await;
+        let run_result = self
+            .run_steps(steps, vars, reconnect_ms, reconnect_retry_ms)
+            .await;
         let run_finished = chrono::Local::now();
 
         if let Some(report_path) = &self.report_path {
@@ -531,11 +533,12 @@ impl ScenarioEngine {
                 let mut reconnect_deadline: Option<Instant> = None;
 
                 loop {
-                    match self.run_step(step, vars, reconnect_ms, reconnect_retry_ms).await {
+                    match self
+                        .run_step(step, vars, reconnect_ms, reconnect_retry_ms)
+                        .await
+                    {
                         Err(e)
-                            if is_window_not_found(&e)
-                                && reconnect_ms > 0
-                                && !step.is_flow() =>
+                            if is_window_not_found(&e) && reconnect_ms > 0 && !step.is_flow() =>
                         {
                             let deadline = reconnect_deadline.get_or_insert_with(|| {
                                 warn!(
@@ -549,11 +552,17 @@ impl ScenarioEngine {
                                 error!(error = %e, step = i, "step failed (reconnect timeout)");
                                 let screenshot = self.save_failure_screenshot(i).await;
                                 if self.report_path.is_some() {
-                                    self.report_records.lock().await.push(Self::make_step_record(
-                                        i, step, step_started,
-                                        step_timer.elapsed().as_millis() as u64,
-                                        StepOutcome::Failed(e.to_string()), screenshot,
-                                    ));
+                                    self.report_records
+                                        .lock()
+                                        .await
+                                        .push(Self::make_step_record(
+                                            i,
+                                            step,
+                                            step_started,
+                                            step_timer.elapsed().as_millis() as u64,
+                                            StepOutcome::Failed(e.to_string()),
+                                            screenshot,
+                                        ));
                                 }
                                 return Err(e);
                             }
@@ -564,11 +573,17 @@ impl ScenarioEngine {
                             error!(error = %e, step = i, "step failed");
                             let screenshot = self.save_failure_screenshot(i).await;
                             if self.report_path.is_some() {
-                                self.report_records.lock().await.push(Self::make_step_record(
-                                    i, step, step_started,
-                                    step_timer.elapsed().as_millis() as u64,
-                                    StepOutcome::Failed(e.to_string()), screenshot,
-                                ));
+                                self.report_records
+                                    .lock()
+                                    .await
+                                    .push(Self::make_step_record(
+                                        i,
+                                        step,
+                                        step_started,
+                                        step_timer.elapsed().as_millis() as u64,
+                                        StepOutcome::Failed(e.to_string()),
+                                        screenshot,
+                                    ));
                             }
                             return Err(e);
                         }
@@ -577,11 +592,17 @@ impl ScenarioEngine {
                                 eprintln!("[VARS] step {i}: {}", vars.debug_dump());
                             }
                             if self.report_path.is_some() {
-                                self.report_records.lock().await.push(Self::make_step_record(
-                                    i, step, step_started,
-                                    step_timer.elapsed().as_millis() as u64,
-                                    StepOutcome::Ok, None,
-                                ));
+                                self.report_records
+                                    .lock()
+                                    .await
+                                    .push(Self::make_step_record(
+                                        i,
+                                        step,
+                                        step_started,
+                                        step_timer.elapsed().as_millis() as u64,
+                                        StepOutcome::Ok,
+                                        None,
+                                    ));
                             }
                             break;
                         }
@@ -630,7 +651,10 @@ impl ScenarioEngine {
                 self.run_script(s, vars)?;
                 Ok(Flow::Done)
             }
-            ScenarioStep::Foreach(s) => self.run_foreach(s, vars, reconnect_ms, reconnect_retry_ms).await,
+            ScenarioStep::Foreach(s) => {
+                self.run_foreach(s, vars, reconnect_ms, reconnect_retry_ms)
+                    .await
+            }
             ScenarioStep::SubScenario(s) => {
                 self.run_sub_scenario(s, vars).await?;
                 Ok(Flow::Done)
@@ -651,13 +675,31 @@ impl ScenarioEngine {
             }
 
             // flow control
-            ScenarioStep::Group(s) => self.run_group(s, vars, reconnect_ms, reconnect_retry_ms).await,
+            ScenarioStep::Group(s) => {
+                self.run_group(s, vars, reconnect_ms, reconnect_retry_ms)
+                    .await
+            }
             ScenarioStep::If(s) => self.run_if(s, vars, reconnect_ms, reconnect_retry_ms).await,
-            ScenarioStep::Switch(s) => self.run_switch(s, vars, reconnect_ms, reconnect_retry_ms).await,
-            ScenarioStep::Repeat(s) => self.run_repeat(s, vars, reconnect_ms, reconnect_retry_ms).await,
-            ScenarioStep::While(s) => self.run_while(s, vars, reconnect_ms, reconnect_retry_ms).await,
-            ScenarioStep::DoWhile(s) => self.run_do_while(s, vars, reconnect_ms, reconnect_retry_ms).await,
-            ScenarioStep::TryCatch(s) => self.run_try_catch(s, vars, reconnect_ms, reconnect_retry_ms).await,
+            ScenarioStep::Switch(s) => {
+                self.run_switch(s, vars, reconnect_ms, reconnect_retry_ms)
+                    .await
+            }
+            ScenarioStep::Repeat(s) => {
+                self.run_repeat(s, vars, reconnect_ms, reconnect_retry_ms)
+                    .await
+            }
+            ScenarioStep::While(s) => {
+                self.run_while(s, vars, reconnect_ms, reconnect_retry_ms)
+                    .await
+            }
+            ScenarioStep::DoWhile(s) => {
+                self.run_do_while(s, vars, reconnect_ms, reconnect_retry_ms)
+                    .await
+            }
+            ScenarioStep::TryCatch(s) => {
+                self.run_try_catch(s, vars, reconnect_ms, reconnect_retry_ms)
+                    .await
+            }
             ScenarioStep::Break => Ok(Flow::Break),
             ScenarioStep::Continue => Ok(Flow::Continue),
             ScenarioStep::CallScenario(s) => {
@@ -1383,47 +1425,82 @@ impl ScenarioEngine {
             ScenarioStep::FtpUpload(s) => {
                 let local = self.safe_join_str(&vars.expand(&s.local))?;
                 self.ftp_call(
-                    "ftp.upload", s.host.clone(), s.port, s.user.clone(), s.password.clone(), s.tls,
+                    "ftp.upload",
+                    s.host.clone(),
+                    s.port,
+                    s.user.clone(),
+                    s.password.clone(),
+                    s.tls,
                     stdlib_inputs!("local" => local, "remote" => vars.expand(&s.remote)),
-                    None, vars,
-                ).await?;
+                    None,
+                    vars,
+                )
+                .await?;
                 Ok(Flow::Done)
             }
             #[cfg(feature = "ftp")]
             ScenarioStep::FtpDownload(s) => {
                 let local = self.safe_join_str(&vars.expand(&s.local))?;
                 self.ftp_call(
-                    "ftp.download", s.host.clone(), s.port, s.user.clone(), s.password.clone(), s.tls,
+                    "ftp.download",
+                    s.host.clone(),
+                    s.port,
+                    s.user.clone(),
+                    s.password.clone(),
+                    s.tls,
                     stdlib_inputs!("remote" => vars.expand(&s.remote), "local" => local),
-                    None, vars,
-                ).await?;
+                    None,
+                    vars,
+                )
+                .await?;
                 Ok(Flow::Done)
             }
             #[cfg(feature = "ftp")]
             ScenarioStep::FtpList(s) => {
                 self.ftp_call(
-                    "ftp.list", s.host.clone(), s.port, s.user.clone(), s.password.clone(), s.tls,
+                    "ftp.list",
+                    s.host.clone(),
+                    s.port,
+                    s.user.clone(),
+                    s.password.clone(),
+                    s.tls,
                     stdlib_inputs!("remote" => vars.expand(&s.remote)),
-                    Some(&s.save_as), vars,
-                ).await?;
+                    Some(&s.save_as),
+                    vars,
+                )
+                .await?;
                 Ok(Flow::Done)
             }
             #[cfg(feature = "ftp")]
             ScenarioStep::FtpDelete(s) => {
                 self.ftp_call(
-                    "ftp.delete", s.host.clone(), s.port, s.user.clone(), s.password.clone(), s.tls,
+                    "ftp.delete",
+                    s.host.clone(),
+                    s.port,
+                    s.user.clone(),
+                    s.password.clone(),
+                    s.tls,
                     stdlib_inputs!("remote" => vars.expand(&s.remote)),
-                    None, vars,
-                ).await?;
+                    None,
+                    vars,
+                )
+                .await?;
                 Ok(Flow::Done)
             }
             #[cfg(feature = "ftp")]
             ScenarioStep::FtpMkdir(s) => {
                 self.ftp_call(
-                    "ftp.mkdir", s.host.clone(), s.port, s.user.clone(), s.password.clone(), s.tls,
+                    "ftp.mkdir",
+                    s.host.clone(),
+                    s.port,
+                    s.user.clone(),
+                    s.password.clone(),
+                    s.tls,
                     stdlib_inputs!("remote" => vars.expand(&s.remote)),
-                    None, vars,
-                ).await?;
+                    None,
+                    vars,
+                )
+                .await?;
                 Ok(Flow::Done)
             }
 
@@ -1473,12 +1550,13 @@ impl ScenarioEngine {
             let tgt = target.clone();
             let m_list = masks.clone();
 
-            let result: Result<robost_vision::MatchResult> = tokio::task::spawn_blocking(move || {
-                let (img, origin) = backend.capture_with_origin(&tgt)?;
-                Ok(matcher.find_with_masks(&img, &tmpl, origin, &m_list)?)
-            })
-            .await
-            .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+            let result: Result<robost_vision::MatchResult> =
+                tokio::task::spawn_blocking(move || {
+                    let (img, origin) = backend.capture_with_origin(&tgt)?;
+                    Ok(matcher.find_with_masks(&img, &tmpl, origin, &m_list)?)
+                })
+                .await
+                .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
 
             match result {
                 Ok(m) => {
@@ -1531,12 +1609,13 @@ impl ScenarioEngine {
             let tgt = target.clone();
             let m_list = masks.clone();
 
-            let result: Result<robost_vision::MatchResult> = tokio::task::spawn_blocking(move || {
-                let (img, origin) = backend.capture_with_origin(&tgt)?;
-                Ok(matcher.find_with_masks(&img, &tmpl, origin, &m_list)?)
-            })
-            .await
-            .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+            let result: Result<robost_vision::MatchResult> =
+                tokio::task::spawn_blocking(move || {
+                    let (img, origin) = backend.capture_with_origin(&tgt)?;
+                    Ok(matcher.find_with_masks(&img, &tmpl, origin, &m_list)?)
+                })
+                .await
+                .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
 
             match result {
                 Ok(_) => {
@@ -1609,7 +1688,12 @@ impl ScenarioEngine {
                     ClickAction::Double => self.backend.double_click(point)?,
                 }
             } else {
-                info!(dry_run = true, x = point.x, y = point.y, "click_image skipped");
+                info!(
+                    dry_run = true,
+                    x = point.x,
+                    y = point.y,
+                    "click_image skipped"
+                );
             }
             if let Some(ms) = step.post_click_ms {
                 sleep(Duration::from_millis(ms)).await;
@@ -1668,7 +1752,12 @@ impl ScenarioEngine {
             .await?
         {
             Some(m) => {
-                info!(score = m.score, x = m.center.x, y = m.center.y, "template found");
+                info!(
+                    score = m.score,
+                    x = m.center.x,
+                    y = m.center.y,
+                    "template found"
+                );
                 if let Some(save_as) = &step.save_as {
                     vars.set(
                         save_as.clone(),
@@ -1775,7 +1864,8 @@ impl ScenarioEngine {
         let name = step.name.as_deref().unwrap_or("<group>");
         let span = tracing::info_span!("group", name = name);
         let _g = span.enter();
-        self.run_steps(&step.steps, vars, reconnect_ms, reconnect_retry_ms).await
+        self.run_steps(&step.steps, vars, reconnect_ms, reconnect_retry_ms)
+            .await
     }
 
     async fn run_if(
@@ -1786,9 +1876,11 @@ impl ScenarioEngine {
         reconnect_retry_ms: u64,
     ) -> Result<Flow> {
         if self.eval_cond(&step.cond, vars)? {
-            self.run_steps(&step.then, vars, reconnect_ms, reconnect_retry_ms).await
+            self.run_steps(&step.then, vars, reconnect_ms, reconnect_retry_ms)
+                .await
         } else {
-            self.run_steps(&step.else_steps, vars, reconnect_ms, reconnect_retry_ms).await
+            self.run_steps(&step.else_steps, vars, reconnect_ms, reconnect_retry_ms)
+                .await
         }
     }
 
@@ -1805,10 +1897,13 @@ impl ScenarioEngine {
             .unwrap_or(serde_json::Value::Null);
         for case in &step.cases {
             if val == case.when {
-                return self.run_steps(&case.steps, vars, reconnect_ms, reconnect_retry_ms).await;
+                return self
+                    .run_steps(&case.steps, vars, reconnect_ms, reconnect_retry_ms)
+                    .await;
             }
         }
-        self.run_steps(&step.default, vars, reconnect_ms, reconnect_retry_ms).await
+        self.run_steps(&step.default, vars, reconnect_ms, reconnect_retry_ms)
+            .await
     }
 
     async fn run_repeat(
@@ -1820,7 +1915,10 @@ impl ScenarioEngine {
     ) -> Result<Flow> {
         for i in 0..step.count {
             vars.set("_index".to_owned(), serde_json::Value::Number(i.into()));
-            match self.run_steps(&step.steps, vars, reconnect_ms, reconnect_retry_ms).await? {
+            match self
+                .run_steps(&step.steps, vars, reconnect_ms, reconnect_retry_ms)
+                .await?
+            {
                 Flow::Done | Flow::Continue => {}
                 Flow::Break => break,
                 Flow::Exit => return Ok(Flow::Exit),
@@ -1840,7 +1938,10 @@ impl ScenarioEngine {
             if !self.eval_cond(&step.cond, vars)? {
                 break;
             }
-            match self.run_steps(&step.steps, vars, reconnect_ms, reconnect_retry_ms).await? {
+            match self
+                .run_steps(&step.steps, vars, reconnect_ms, reconnect_retry_ms)
+                .await?
+            {
                 Flow::Done | Flow::Continue => {}
                 Flow::Break => break,
                 Flow::Exit => return Ok(Flow::Exit),
@@ -1857,7 +1958,10 @@ impl ScenarioEngine {
         reconnect_retry_ms: u64,
     ) -> Result<Flow> {
         loop {
-            match self.run_steps(&step.steps, vars, reconnect_ms, reconnect_retry_ms).await? {
+            match self
+                .run_steps(&step.steps, vars, reconnect_ms, reconnect_retry_ms)
+                .await?
+            {
                 Flow::Done | Flow::Continue => {}
                 Flow::Break => break,
                 Flow::Exit => return Ok(Flow::Exit),
@@ -1886,11 +1990,13 @@ impl ScenarioEngine {
                     "_error".to_owned(),
                     serde_json::Value::String(e.to_string()),
                 );
-                self.run_steps(&step.catch, vars, reconnect_ms, reconnect_retry_ms).await
+                self.run_steps(&step.catch, vars, reconnect_ms, reconnect_retry_ms)
+                    .await
             }
         };
         if !step.finally.is_empty() {
-            self.run_steps(&step.finally, vars, reconnect_ms, reconnect_retry_ms).await?;
+            self.run_steps(&step.finally, vars, reconnect_ms, reconnect_retry_ms)
+                .await?;
         }
         result
     }
@@ -1941,8 +2047,7 @@ impl ScenarioEngine {
         save_as: Option<&str>,
         vars: &mut Variables,
     ) -> Result<()> {
-        let sub = Scenario::from_file(path)
-            .map_err(|e| EngineError::SubScenario(e.to_string()))?;
+        let sub = Scenario::from_file(path).map_err(|e| EngineError::SubScenario(e.to_string()))?;
 
         let mut sub_vars = Variables::new();
         for (k, v) in inputs {
@@ -1961,9 +2066,9 @@ impl ScenarioEngine {
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| self.base_dir.clone());
         let sub_engine = ScenarioEngine::new(Arc::clone(&self.backend), sub_base)
-        .with_silent(self.silent)
-        .with_reconnect_timeout(self.reconnect_timeout_ms)
-        .with_cancel(Arc::clone(&self.cancelled));
+            .with_silent(self.silent)
+            .with_reconnect_timeout(self.reconnect_timeout_ms)
+            .with_cancel(Arc::clone(&self.cancelled));
         sub_engine.run(&sub, &mut sub_vars).await?;
 
         if let Some(key) = save_as {
@@ -1979,12 +2084,14 @@ impl ScenarioEngine {
 
     async fn run_sub_scenario(&self, step: &SubScenarioStep, vars: &mut Variables) -> Result<()> {
         let path = self.safe_join(&step.path)?;
-        self.run_scenario_at_path(&path, &step.inputs, step.save_as.as_deref(), vars).await
+        self.run_scenario_at_path(&path, &step.inputs, step.save_as.as_deref(), vars)
+            .await
     }
 
     async fn run_call_scenario(&self, step: &CallScenarioStep, vars: &mut Variables) -> Result<()> {
         let path = self.safe_join(&vars.expand(&step.path))?;
-        self.run_scenario_at_path(&path, &step.inputs, step.save_as.as_deref(), vars).await
+        self.run_scenario_at_path(&path, &step.inputs, step.save_as.as_deref(), vars)
+            .await
     }
 
     // ── Shell ───────────────────────────────────────────────────────────────
@@ -2166,7 +2273,11 @@ impl ScenarioEngine {
         let mut buf = String::new();
         std::io::BufReader::new(std::io::stdin()).read_line(&mut buf)?;
         let parsed = buf.trim().parse::<usize>().unwrap_or(1);
-        let clamped = if parsed == 0 || parsed > step.options.len() { 1 } else { parsed };
+        let clamped = if parsed == 0 || parsed > step.options.len() {
+            1
+        } else {
+            parsed
+        };
         let idx = clamped - 1;
         vars.set(
             step.save_as.clone(),
@@ -2188,11 +2299,7 @@ impl ScenarioEngine {
                 let windows = xcap::Window::all().unwrap_or_default();
                 let matching: Vec<_> = windows
                     .iter()
-                    .filter(|w| {
-                        w.title()
-                            .map(|t| t.contains(&title_clone))
-                            .unwrap_or(false)
-                    })
+                    .filter(|w| w.title().map(|t| t.contains(&title_clone)).unwrap_or(false))
                     .collect();
                 match state {
                     WindowState::Exists => !matching.is_empty(),
@@ -2204,20 +2311,19 @@ impl ScenarioEngine {
                         // On Windows: verify the window is not hung via IsHungAppWindow.
                         #[cfg(target_os = "windows")]
                         {
+                            use windows::core::PCWSTR;
                             use windows::Win32::UI::WindowsAndMessaging::{
                                 FindWindowW, IsHungAppWindow,
                             };
-                            use windows::core::PCWSTR;
                             let title_wide: Vec<u16> = title_clone
                                 .encode_utf16()
                                 .chain(std::iter::once(0))
                                 .collect();
-                            let hwnd = unsafe {
+                            let Ok(hwnd) = (unsafe {
                                 FindWindowW(PCWSTR::null(), PCWSTR(title_wide.as_ptr()))
-                            };
-                            if hwnd.0.is_null() {
+                            }) else {
                                 return false;
-                            }
+                            };
                             let hung = unsafe { IsHungAppWindow(hwnd) };
                             !hung.as_bool()
                         }
@@ -2269,7 +2375,12 @@ impl ScenarioEngine {
             .await?
         {
             Some(m) => {
-                info!(score = m.score, x = m.center.x, y = m.center.y, "match_rect: found");
+                info!(
+                    score = m.score,
+                    x = m.center.x,
+                    y = m.center.y,
+                    "match_rect: found"
+                );
                 if let Some(save_as) = &step.save_as {
                     vars.set(
                         save_as.clone(),
@@ -2829,7 +2940,13 @@ impl ScenarioEngine {
         let x = self.resolve_coord(&step.x, vars);
         let y = self.resolve_coord(&step.y, vars);
         if self.dry_run {
-            info!(dry_run = true, x, y, hover_ms = step.hover_ms, "mouse_hover skipped");
+            info!(
+                dry_run = true,
+                x,
+                y,
+                hover_ms = step.hover_ms,
+                "mouse_hover skipped"
+            );
             return Ok(());
         }
         self.backend
@@ -2914,9 +3031,12 @@ impl ScenarioEngine {
         let auth = step.auth.clone();
         let result = Self::http_spawn("http_get", move || {
             let mut req = ureq::get(&url).timeout(timeout);
-            for (k, v) in &headers { req = req.set(k, v); }
+            for (k, v) in &headers {
+                req = req.set(k, v);
+            }
             Self::http_call(Self::apply_auth(req, auth.as_ref()))
-        }).await?;
+        })
+        .await?;
         let status = result["status"].as_u64().unwrap_or(0);
         info!(url = %vars.expand(&step.url), status, "http_get");
         vars.set(&step.save_as, result);
@@ -2933,9 +3053,16 @@ impl ScenarioEngine {
         let auth = step.auth.clone();
         let result = Self::http_spawn("http_post", move || {
             let mut req = ureq::post(&url).timeout(timeout);
-            for (k, v) in &headers { req = req.set(k, v); }
-            Self::http_send_body(Self::apply_auth(req, auth.as_ref()), &content_type, body.as_ref())
-        }).await?;
+            for (k, v) in &headers {
+                req = req.set(k, v);
+            }
+            Self::http_send_body(
+                Self::apply_auth(req, auth.as_ref()),
+                &content_type,
+                body.as_ref(),
+            )
+        })
+        .await?;
         let status = result["status"].as_u64().unwrap_or(0);
         info!(url = %vars.expand(&step.url), status, "http_post");
         vars.set(&step.save_as, result);
@@ -2952,9 +3079,16 @@ impl ScenarioEngine {
         let auth = step.auth.clone();
         let result = Self::http_spawn("http_put", move || {
             let mut req = ureq::put(&url).timeout(timeout);
-            for (k, v) in &headers { req = req.set(k, v); }
-            Self::http_send_body(Self::apply_auth(req, auth.as_ref()), &content_type, body.as_ref())
-        }).await?;
+            for (k, v) in &headers {
+                req = req.set(k, v);
+            }
+            Self::http_send_body(
+                Self::apply_auth(req, auth.as_ref()),
+                &content_type,
+                body.as_ref(),
+            )
+        })
+        .await?;
         let status = result["status"].as_u64().unwrap_or(0);
         info!(url = %vars.expand(&step.url), status, "http_put");
         vars.set(&step.save_as, result);
@@ -2969,9 +3103,12 @@ impl ScenarioEngine {
         let auth = step.auth.clone();
         let result = Self::http_spawn("http_delete", move || {
             let mut req = ureq::delete(&url).timeout(timeout);
-            for (k, v) in &headers { req = req.set(k, v); }
+            for (k, v) in &headers {
+                req = req.set(k, v);
+            }
             Self::http_call(Self::apply_auth(req, auth.as_ref()))
-        }).await?;
+        })
+        .await?;
         let status = result["status"].as_u64().unwrap_or(0);
         info!(url = %vars.expand(&step.url), status, "http_delete");
         vars.set(&step.save_as, result);
@@ -2988,9 +3125,16 @@ impl ScenarioEngine {
         let auth = step.auth.clone();
         let result = Self::http_spawn("http_patch", move || {
             let mut req = ureq::patch(&url).timeout(timeout);
-            for (k, v) in &headers { req = req.set(k, v); }
-            Self::http_send_body(Self::apply_auth(req, auth.as_ref()), &content_type, body.as_ref())
-        }).await?;
+            for (k, v) in &headers {
+                req = req.set(k, v);
+            }
+            Self::http_send_body(
+                Self::apply_auth(req, auth.as_ref()),
+                &content_type,
+                body.as_ref(),
+            )
+        })
+        .await?;
         let status = result["status"].as_u64().unwrap_or(0);
         info!(url = %vars.expand(&step.url), status, "http_patch");
         vars.set(&step.save_as, result);
@@ -3098,11 +3242,10 @@ impl ScenarioEngine {
         op: &str,
     ) -> Result<(calamine::Range<calamine::Data>, String)> {
         use calamine::{open_workbook_auto, Reader};
-        let mut wb = open_workbook_auto(path)
-            .map_err(|e| EngineError::Other(format!("{op} open: {e}")))?;
-        let sheet_name = sheet.unwrap_or_else(|| {
-            wb.sheet_names().first().cloned().unwrap_or_default()
-        });
+        let mut wb =
+            open_workbook_auto(path).map_err(|e| EngineError::Other(format!("{op} open: {e}")))?;
+        let sheet_name =
+            sheet.unwrap_or_else(|| wb.sheet_names().first().cloned().unwrap_or_default());
         let range = wb
             .worksheet_range(&sheet_name)
             .map_err(|e| EngineError::Other(format!("{op} sheet '{sheet_name}': {e}")))?;
@@ -3161,7 +3304,8 @@ impl ScenarioEngine {
 
     fn excel_read_sheet(&self, step: &ExcelReadSheetStep, vars: &mut Variables) -> Result<()> {
         let path = self.safe_join(&vars.expand(&step.file))?;
-        let (sheet, sheet_name) = Self::open_calamine_sheet(&path, step.sheet.clone(), "excel_read_sheet")?;
+        let (sheet, sheet_name) =
+            Self::open_calamine_sheet(&path, step.sheet.clone(), "excel_read_sheet")?;
 
         let value = if step.has_header {
             let mut iter = sheet.rows();
@@ -3199,7 +3343,8 @@ impl ScenarioEngine {
 
     fn excel_get_dims(&self, step: &ExcelGetDimsStep, vars: &mut Variables) -> Result<()> {
         let path = self.safe_join(&vars.expand(&step.file))?;
-        let (sheet, sheet_name) = Self::open_calamine_sheet(&path, step.sheet.clone(), "excel_get_dims")?;
+        let (sheet, sheet_name) =
+            Self::open_calamine_sheet(&path, step.sheet.clone(), "excel_get_dims")?;
         let (rows, cols) = sheet.get_size();
         vars.set(
             &step.save_as,
@@ -3274,7 +3419,9 @@ impl ScenarioEngine {
                 for (c, val) in cols.iter().enumerate() {
                     let col1 = start_col + c as u32 + 1;
                     let row1 = start_row + r as u32 + 1;
-                    sheet.get_cell_mut((col1, row1)).set_value_string(val.clone());
+                    sheet
+                        .get_cell_mut((col1, row1))
+                        .set_value_string(val.clone());
                 }
             }
 
@@ -3344,7 +3491,9 @@ impl ScenarioEngine {
             let row1 = row + 1;
             let mut wb = Self::open_or_create_wb(&path, "excel_write_cell")?;
             let sheet = Self::get_or_create_sheet(&mut wb, &sheet_name, "excel_write_cell")?;
-            sheet.get_cell_mut((col1, row1)).set_value_string(value.clone());
+            sheet
+                .get_cell_mut((col1, row1))
+                .set_value_string(value.clone());
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(EngineError::Io)?;
             }
@@ -3359,13 +3508,34 @@ impl ScenarioEngine {
 
     async fn mail_receive(&self, step: &MailReceiveStep, vars: &mut Variables) -> Result<()> {
         let mut inputs = std::collections::HashMap::new();
-        inputs.insert("host".to_owned(), serde_json::Value::String(vars.expand(&step.host)));
-        inputs.insert("user".to_owned(), serde_json::Value::String(vars.expand(&step.user)));
-        inputs.insert("password".to_owned(), serde_json::Value::String(vars.expand(&step.password)));
-        inputs.insert("folder".to_owned(), serde_json::Value::String(vars.expand(&step.folder)));
-        inputs.insert("port".to_owned(), serde_json::Value::Number(step.port.into()));
-        inputs.insert("count".to_owned(), serde_json::Value::Number(step.count.into()));
-        inputs.insert("only_unseen".to_owned(), serde_json::Value::Bool(step.only_unseen));
+        inputs.insert(
+            "host".to_owned(),
+            serde_json::Value::String(vars.expand(&step.host)),
+        );
+        inputs.insert(
+            "user".to_owned(),
+            serde_json::Value::String(vars.expand(&step.user)),
+        );
+        inputs.insert(
+            "password".to_owned(),
+            serde_json::Value::String(vars.expand(&step.password)),
+        );
+        inputs.insert(
+            "folder".to_owned(),
+            serde_json::Value::String(vars.expand(&step.folder)),
+        );
+        inputs.insert(
+            "port".to_owned(),
+            serde_json::Value::Number(step.port.into()),
+        );
+        inputs.insert(
+            "count".to_owned(),
+            serde_json::Value::Number(step.count.into()),
+        );
+        inputs.insert(
+            "only_unseen".to_owned(),
+            serde_json::Value::Bool(step.only_unseen),
+        );
         let result = Self::call_stdlib("mail.imap_receive", inputs).await?;
         let messages = result
             .get("messages")
@@ -3454,7 +3624,8 @@ impl ScenarioEngine {
             .append(append)
             .open(path)
             .map_err(EngineError::Io)?;
-        file.write_all(content.as_bytes()).map_err(EngineError::Io)?;
+        file.write_all(content.as_bytes())
+            .map_err(EngineError::Io)?;
         Ok(())
     }
 
@@ -4062,10 +4233,9 @@ where
     F: FnOnce(robost_uia::UiaElement) -> std::result::Result<T, E>,
     E: std::fmt::Display,
 {
-    let finder = robost_uia::UiaFinder::new()
-        .map_err(|e| EngineError::Other(format!("{op}: {e}")))?;
-    let deadline =
-        std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+    let finder =
+        robost_uia::UiaFinder::new().map_err(|e| EngineError::Other(format!("{op}: {e}")))?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
     loop {
         match finder.find(&selector) {
             Ok(el) => {
@@ -4103,8 +4273,7 @@ fn parse_cell_ref(s: &str) -> Option<(u32, u32)> {
         return None;
     }
     let col = col_part.chars().try_fold(0u32, |acc, c| {
-        acc.checked_mul(26)?
-            .checked_add(c as u32 - 'A' as u32 + 1)
+        acc.checked_mul(26)?.checked_add(c as u32 - 'A' as u32 + 1)
     })?;
     if col == 0 {
         return None;
@@ -4243,12 +4412,13 @@ impl ScenarioEngine {
             let tmpl = Arc::clone(&template);
             let tgt = target.clone();
 
-            let result: Result<robost_vision::MatchResult> = tokio::task::spawn_blocking(move || {
-                let (img, origin) = backend.capture_with_origin(&tgt)?;
-                Ok(matcher.find_with_masks(&img, &tmpl, origin, &[])?)
-            })
-            .await
-            .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+            let result: Result<robost_vision::MatchResult> =
+                tokio::task::spawn_blocking(move || {
+                    let (img, origin) = backend.capture_with_origin(&tgt)?;
+                    Ok(matcher.find_with_masks(&img, &tmpl, origin, &[])?)
+                })
+                .await
+                .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
 
             match result {
                 Ok(_) => {
@@ -4274,9 +4444,8 @@ impl ScenarioEngine {
 
     fn url_open(&self, step: &UrlOpenStep, vars: &Variables) -> Result<()> {
         let url = vars.expand(&step.url);
-        let scheme_ok = url.starts_with("http://")
-            || url.starts_with("https://")
-            || url.starts_with("mailto:");
+        let scheme_ok =
+            url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:");
         if !scheme_ok {
             return Err(EngineError::Other(format!(
                 "url_open: rejected non-http/mailto URL: {url}"
@@ -4320,11 +4489,14 @@ impl ScenarioEngine {
         let timeout_ms = step.timeout_ms;
         let save_as = step.save_as.clone();
         let result = Self::spawn_uia(move || {
-            uia_poll(selector, timeout_ms, "uia_get", |el| match property.as_str() {
-                "name" => el.get_name(),
-                _ => el.get_value(),
+            uia_poll(selector, timeout_ms, "uia_get", |el| {
+                match property.as_str() {
+                    "name" => el.get_name(),
+                    _ => el.get_value(),
+                }
             })
-        }).await?;
+        })
+        .await?;
         vars.set(save_as, serde_json::Value::String(result));
         Ok(())
     }
@@ -4335,7 +4507,8 @@ impl ScenarioEngine {
         let timeout_ms = step.timeout_ms;
         Self::spawn_uia(move || {
             uia_poll(selector, timeout_ms, "uia_set", |el| el.set_value(&value))
-        }).await
+        })
+        .await
     }
 
     async fn uia_click(&self, step: &UiaClickStep, vars: &Variables) -> Result<()> {
@@ -4345,9 +4518,7 @@ impl ScenarioEngine {
             info!(dry_run = true, "uia_click skipped");
             return Ok(());
         }
-        Self::spawn_uia(move || {
-            uia_poll(selector, timeout_ms, "uia_click", |el| el.invoke())
-        }).await
+        Self::spawn_uia(move || uia_poll(selector, timeout_ms, "uia_click", |el| el.invoke())).await
     }
 
     async fn uia_find(&self, step: &UiaFindStep, vars: &mut Variables) -> Result<()> {
@@ -4363,7 +4534,10 @@ impl ScenarioEngine {
         })
         .await
         .map_err(|e| EngineError::TaskPanic(e.to_string()))??;
-        vars.set(save_as, serde_json::json!({ "name": name, "x": x, "y": y, "width": w, "height": h }));
+        vars.set(
+            save_as,
+            serde_json::json!({ "name": name, "x": x, "y": y, "width": w, "height": h }),
+        );
         Ok(())
     }
 
@@ -4404,11 +4578,18 @@ impl ScenarioEngine {
         let item = vars.expand(&step.item);
         let timeout_ms = step.timeout_ms;
         Self::spawn_uia(move || {
-            uia_poll(selector, timeout_ms, "uia_select", |el| el.select_item(&item))
-        }).await
+            uia_poll(selector, timeout_ms, "uia_select", |el| {
+                el.select_item(&item)
+            })
+        })
+        .await
     }
 
-    async fn uia_get_children(&self, step: &UiaGetChildrenStep, vars: &mut Variables) -> Result<()> {
+    async fn uia_get_children(
+        &self,
+        step: &UiaGetChildrenStep,
+        vars: &mut Variables,
+    ) -> Result<()> {
         let selector = uia_selector_from_by(&step.by, vars);
         let timeout_ms = step.timeout_ms;
         let save_as = step.save_as.clone();
@@ -4418,15 +4599,18 @@ impl ScenarioEngine {
                 Ok::<_, robost_uia::UiaError>(
                     children
                         .into_iter()
-                        .map(|c| serde_json::json!({
-                            "name":  c.get_name().unwrap_or_default(),
-                            "value": c.get_value().unwrap_or_default(),
-                            "class": c.get_class_name().unwrap_or_default(),
-                        }))
+                        .map(|c| {
+                            serde_json::json!({
+                                "name":  c.get_name().unwrap_or_default(),
+                                "value": c.get_value().unwrap_or_default(),
+                                "class": c.get_class_name().unwrap_or_default(),
+                            })
+                        })
                         .collect::<Vec<_>>(),
                 )
             })
-        }).await?;
+        })
+        .await?;
         vars.set(save_as, serde_json::Value::Array(result));
         Ok(())
     }
@@ -4436,8 +4620,11 @@ impl ScenarioEngine {
         let checked = step.checked;
         let timeout_ms = step.timeout_ms;
         Self::spawn_uia(move || {
-            uia_poll(selector, timeout_ms, "uia_check", |el| el.set_checked(checked))
-        }).await
+            uia_poll(selector, timeout_ms, "uia_check", |el| {
+                el.set_checked(checked)
+            })
+        })
+        .await
     }
 
     // ── Pixel / colour methods ──────────────────────────────────────────────
@@ -4450,8 +4637,9 @@ impl ScenarioEngine {
             .map_err(|e| EngineError::Other(format!("get_pixel_color: {e}")))?;
         let px = (step.x - origin.x).max(0) as u32;
         let py = (step.y - origin.y).max(0) as u32;
-        let (r, g, b) = robost_capture::pixel_at(&img, px, py)
-            .ok_or_else(|| EngineError::Other("get_pixel_color: coordinates out of bounds".into()))?;
+        let (r, g, b) = robost_capture::pixel_at(&img, px, py).ok_or_else(|| {
+            EngineError::Other("get_pixel_color: coordinates out of bounds".into())
+        })?;
         let hex = format!("#{r:02X}{g:02X}{b:02X}");
         vars.set(
             step.save_as.clone(),
@@ -4664,11 +4852,7 @@ impl ScenarioEngine {
     }
 
     #[cfg(feature = "web")]
-    async fn web_execute_js(
-        &self,
-        step: &WebExecuteJsStep,
-        vars: &mut Variables,
-    ) -> Result<()> {
+    async fn web_execute_js(&self, step: &WebExecuteJsStep, vars: &mut Variables) -> Result<()> {
         let script = vars.expand(&step.script);
         let args: Vec<serde_json::Value> = step
             .args
@@ -4688,11 +4872,7 @@ impl ScenarioEngine {
     }
 
     #[cfg(feature = "web")]
-    async fn web_switch_frame(
-        &self,
-        step: &WebSwitchFrameStep,
-        vars: &Variables,
-    ) -> Result<()> {
+    async fn web_switch_frame(&self, step: &WebSwitchFrameStep, vars: &Variables) -> Result<()> {
         let guard = self.require_web_session("web_switch_frame").await?;
         let session = guard.as_ref().unwrap();
         if let Some(ref sel) = step.selector {
@@ -4804,19 +4984,21 @@ impl ScenarioEngine {
         let value = vars.expand(&step.value);
         let search = vars.expand(&step.search);
         let (v, s) = Self::with_case_pair(&value, &search, step.ignore_case);
-        vars.set(&step.save_as, serde_json::Value::Bool(v.contains(s.as_str())));
+        vars.set(
+            &step.save_as,
+            serde_json::Value::Bool(v.contains(s.as_str())),
+        );
         Ok(())
     }
 
-    fn string_starts_with(
-        &self,
-        step: &StringStartsWithStep,
-        vars: &mut Variables,
-    ) -> Result<()> {
+    fn string_starts_with(&self, step: &StringStartsWithStep, vars: &mut Variables) -> Result<()> {
         let value = vars.expand(&step.value);
         let search = vars.expand(&step.search);
         let (v, s) = Self::with_case_pair(&value, &search, step.ignore_case);
-        vars.set(&step.save_as, serde_json::Value::Bool(v.starts_with(s.as_str())));
+        vars.set(
+            &step.save_as,
+            serde_json::Value::Bool(v.starts_with(s.as_str())),
+        );
         Ok(())
     }
 
@@ -4824,7 +5006,10 @@ impl ScenarioEngine {
         let value = vars.expand(&step.value);
         let search = vars.expand(&step.search);
         let (v, s) = Self::with_case_pair(&value, &search, step.ignore_case);
-        vars.set(&step.save_as, serde_json::Value::Bool(v.ends_with(s.as_str())));
+        vars.set(
+            &step.save_as,
+            serde_json::Value::Bool(v.ends_with(s.as_str())),
+        );
         Ok(())
     }
 
@@ -4904,9 +5089,10 @@ impl ScenarioEngine {
 
     fn list_get(&self, step: &ListGetStep, vars: &mut Variables) -> Result<()> {
         let idx_str = vars.expand(&step.index);
-        let idx: usize = idx_str.trim().parse().map_err(|_| {
-            EngineError::Other(format!("list_get: invalid index '{idx_str}'"))
-        })?;
+        let idx: usize = idx_str
+            .trim()
+            .parse()
+            .map_err(|_| EngineError::Other(format!("list_get: invalid index '{idx_str}'")))?;
         let val = vars
             .get(&step.list)
             .and_then(|v| v.as_array())
@@ -4930,9 +5116,10 @@ impl ScenarioEngine {
 
     fn list_remove(&self, step: &ListRemoveStep, vars: &mut Variables) -> Result<()> {
         let idx_str = vars.expand(&step.index);
-        let idx: usize = idx_str.trim().parse().map_err(|_| {
-            EngineError::Other(format!("list_remove: invalid index '{idx_str}'"))
-        })?;
+        let idx: usize = idx_str
+            .trim()
+            .parse()
+            .map_err(|_| EngineError::Other(format!("list_remove: invalid index '{idx_str}'")))?;
         let mut arr = vars
             .get(&step.list)
             .and_then(|v| v.as_array().cloned())
@@ -4952,11 +5139,7 @@ impl ScenarioEngine {
             .and_then(|v| v.as_array())
             .map(|a| {
                 a.iter().any(|el| {
-                    el == &needle_val
-                        || el
-                            .as_str()
-                            .map(|s| s == needle.as_str())
-                            .unwrap_or(false)
+                    el == &needle_val || el.as_str().map(|s| s == needle.as_str()).unwrap_or(false)
                 })
             })
             .unwrap_or(false);
@@ -4988,14 +5171,38 @@ impl ScenarioEngine {
 
     async fn mail_send(&self, step: &MailSendStep, vars: &Variables) -> Result<()> {
         let mut inputs = std::collections::HashMap::new();
-        inputs.insert("host".to_owned(), serde_json::Value::String(vars.expand(&step.host)));
-        inputs.insert("from".to_owned(), serde_json::Value::String(vars.expand(&step.from)));
-        inputs.insert("to".to_owned(), serde_json::Value::String(vars.expand(&step.to)));
-        inputs.insert("subject".to_owned(), serde_json::Value::String(vars.expand(&step.subject)));
-        inputs.insert("body".to_owned(), serde_json::Value::String(vars.expand(&step.body)));
-        inputs.insert("user".to_owned(), serde_json::Value::String(vars.expand(&step.user)));
-        inputs.insert("password".to_owned(), serde_json::Value::String(vars.expand(&step.password)));
-        inputs.insert("port".to_owned(), serde_json::Value::Number(step.port.into()));
+        inputs.insert(
+            "host".to_owned(),
+            serde_json::Value::String(vars.expand(&step.host)),
+        );
+        inputs.insert(
+            "from".to_owned(),
+            serde_json::Value::String(vars.expand(&step.from)),
+        );
+        inputs.insert(
+            "to".to_owned(),
+            serde_json::Value::String(vars.expand(&step.to)),
+        );
+        inputs.insert(
+            "subject".to_owned(),
+            serde_json::Value::String(vars.expand(&step.subject)),
+        );
+        inputs.insert(
+            "body".to_owned(),
+            serde_json::Value::String(vars.expand(&step.body)),
+        );
+        inputs.insert(
+            "user".to_owned(),
+            serde_json::Value::String(vars.expand(&step.user)),
+        );
+        inputs.insert(
+            "password".to_owned(),
+            serde_json::Value::String(vars.expand(&step.password)),
+        );
+        inputs.insert(
+            "port".to_owned(),
+            serde_json::Value::Number(step.port.into()),
+        );
         if let Some(c) = step.cc.as_deref().map(|s| vars.expand(s)) {
             inputs.insert("cc".to_owned(), serde_json::Value::String(c));
         }
@@ -5062,7 +5269,11 @@ impl ScenarioEngine {
             }
             if let Some(cell) = row.get(col_idx as usize) {
                 if cell.to_string() == search_value {
-                    let data_row = if step.has_header { r as i64 } else { (r + 1) as i64 };
+                    let data_row = if step.has_header {
+                        r as i64
+                    } else {
+                        (r + 1) as i64
+                    };
                     vars.set(
                         &step.save_as,
                         serde_json::Value::Number(serde_json::Number::from(data_row)),
@@ -5082,7 +5293,11 @@ impl ScenarioEngine {
         let value = vars.expand(&step.value);
         let search = vars.expand(&step.search);
         let (v, s) = Self::with_case_pair(&value, &search, step.ignore_case);
-        let count = if s.is_empty() { 0 } else { v.matches(s.as_str()).count() };
+        let count = if s.is_empty() {
+            0
+        } else {
+            v.matches(s.as_str()).count()
+        };
         vars.set(
             &step.save_as,
             serde_json::Value::Number(serde_json::Number::from(count)),
@@ -5124,10 +5339,8 @@ impl ScenarioEngine {
             .find_all(&selector, attr.as_deref())
             .await
             .map_err(|e| EngineError::Other(format!("web_get_all: {e}")))?;
-        let arr: Vec<serde_json::Value> = items
-            .into_iter()
-            .map(serde_json::Value::String)
-            .collect();
+        let arr: Vec<serde_json::Value> =
+            items.into_iter().map(serde_json::Value::String).collect();
         vars.set(&step.save_as, serde_json::Value::Array(arr));
         Ok(())
     }
@@ -5246,7 +5459,10 @@ impl ScenarioEngine {
         let files: Vec<serde_json::Value> = step
             .files
             .iter()
-            .map(|f| self.safe_join_str(&vars.expand(f)).map(serde_json::Value::String))
+            .map(|f| {
+                self.safe_join_str(&vars.expand(f))
+                    .map(serde_json::Value::String)
+            })
             .collect::<std::result::Result<Vec<_>, _>>()?;
         let mut inputs = std::collections::HashMap::new();
         inputs.insert("dest".to_owned(), serde_json::Value::String(dest));
