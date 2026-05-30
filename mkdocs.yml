@@ -26,8 +26,33 @@ theme:
     - search.highlight
     - content.code.copy
 
+extra:
+  alternate:
+    - name: English
+      link: /robost/
+      lang: en
+    - name: 日本語
+      link: /robost/ja/
+      lang: ja
+    - name: 中文
+      link: /robost/zh/
+      lang: zh
+
 plugins:
   - search
+  - i18n:
+      docs_structure: suffix
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: ja
+          name: 日本語
+          build: true
+        - locale: zh
+          name: 中文
+          build: true
 
 markdown_extensions:
   - pymdownx.highlight:

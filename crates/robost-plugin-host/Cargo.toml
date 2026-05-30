@@ -4,7 +4,6 @@ description = "wasmtime-based WASM plugin loader with WASI permission enforcemen
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-publish = false
 
 [features]
 default = ["wasm"]
