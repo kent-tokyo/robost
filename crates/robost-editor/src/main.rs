@@ -939,6 +939,7 @@ struct EditorApp {
     form_edit_buffers: HashMap<String, String>,
     settings: AppSettings,
     settings_open: bool,
+    about_open: bool,
     ai_panel_open: bool,
     ai_messages: Vec<AiMessage>,
     ai_input: String,
@@ -989,6 +990,7 @@ impl Default for EditorApp {
             form_edit_buffers: HashMap::new(),
             settings: load_settings(),
             settings_open: false,
+            about_open: false,
             ai_panel_open: false,
             ai_messages: Vec::new(),
             ai_input: String::new(),
@@ -2907,13 +2909,6 @@ impl eframe::App for EditorApp {
                         self.ai_panel_open = !self.ai_panel_open;
                         ui.close();
                     }
-                    if ui
-                        .selectable_label(self.manual_open, "マニュアル")
-                        .clicked()
-                    {
-                        self.manual_open = !self.manual_open;
-                        ui.close();
-                    }
                 });
                 ui.menu_button("実行", |ui| {
                     if self.run_child.is_some() {
@@ -2927,9 +2922,22 @@ impl eframe::App for EditorApp {
                     }
                 });
                 ui.menu_button("ヘルプ", |ui| {
+                    if ui
+                        .selectable_label(self.manual_open, "マニュアル")
+                        .clicked()
+                    {
+                        self.manual_open = !self.manual_open;
+                        ui.close();
+                    }
+                    ui.separator();
                     if ui.button("設定").clicked() {
                         ui.close();
                         self.settings_open = true;
+                    }
+                    ui.separator();
+                    if ui.button("バージョン情報").clicked() {
+                        ui.close();
+                        self.about_open = true;
                     }
                 });
             });
@@ -3505,6 +3513,45 @@ impl eframe::App for EditorApp {
 
         // ── Manual window ─────────────────────────────────────────────────
         self.show_manual_window(ctx);
+
+        // ── About dialog ──────────────────────────────────────────────────
+        if self.about_open {
+            let mut open = true;
+            egui::Window::new("robost について")
+                .collapsible(false)
+                .resizable(false)
+                .default_width(320.0)
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(8.0);
+                        ui.heading("robost");
+                        ui.label("RPA 自動化ツール");
+                        ui.add_space(8.0);
+                        ui.separator();
+                        ui.add_space(4.0);
+                        egui::Grid::new("about_grid")
+                            .num_columns(2)
+                            .spacing([16.0, 4.0])
+                            .show(ui, |ui| {
+                                ui.label("バージョン");
+                                ui.label(env!("CARGO_PKG_VERSION"));
+                                ui.end_row();
+                                ui.label("ライセンス");
+                                ui.label("MIT OR Apache-2.0");
+                                ui.end_row();
+                                ui.label("ソースコード");
+                                ui.hyperlink_to(
+                                    "github.com/kent-tokyo/robost",
+                                    "https://github.com/kent-tokyo/robost",
+                                );
+                                ui.end_row();
+                            });
+                        ui.add_space(8.0);
+                    });
+                });
+            self.about_open = open;
+        }
     }
 }
 
