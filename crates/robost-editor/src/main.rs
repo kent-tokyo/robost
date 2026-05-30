@@ -78,6 +78,10 @@ struct S {
     onboard_4: &'static str,
     onboard_open: &'static str,
     clear: &'static str,
+    // empty state messages
+    empty_no_steps: &'static str,
+    empty_select_step: &'static str,
+    empty_canvas_no_file: &'static str,
 }
 
 impl S {
@@ -142,6 +146,9 @@ impl S {
                 onboard_4: "④ 「保存」してから「実行」でシナリオを起動できます",
                 onboard_open: "既存のシナリオを開くには上部の「⌘ 開く」をご利用ください",
                 clear: "クリア",
+                empty_no_steps: "ステップがありません。左のパレットから追加してください。",
+                empty_select_step: "ステップを選択してください。",
+                empty_canvas_no_file: "シナリオを開くか、List ビューでステップを追加してください。",
             },
             Lang::En => Self {
                 menu_file: "File",
@@ -202,6 +209,9 @@ impl S {
                 onboard_4: "④ Save then Run to execute the scenario",
                 onboard_open: "Use \"⌘ Open\" above to load an existing scenario",
                 clear: "Clear",
+                empty_no_steps: "No steps. Add one from the left palette.",
+                empty_select_step: "Select a step.",
+                empty_canvas_no_file: "Open a scenario or add steps in List view.",
             },
             Lang::Zh => Self {
                 menu_file: "文件",
@@ -262,6 +272,9 @@ impl S {
                 onboard_4: "④ 保存后点击「运行」即可执行场景",
                 onboard_open: "使用上方「⌘ 打开」加载已有场景",
                 clear: "清除",
+                empty_no_steps: "没有步骤。从左侧面板添加。",
+                empty_select_step: "请选择一个步骤。",
+                empty_canvas_no_file: "打开场景或在列表视图中添加步骤。",
             },
         }
     }
@@ -1248,6 +1261,7 @@ struct EditorApp {
     add_menu_open: bool,
     add_menu_just_opened: bool,
     add_filter: String,
+    add_menu_selected_idx: usize,
     log: Vec<LogEntry>,
     toasts: Vec<Toast>,
     view_mode: ViewMode,
@@ -1301,6 +1315,10 @@ struct EditorApp {
     canvas_dragging: Option<(usize, egui::Vec2)>,
     /// When Some, step list rows referencing this variable name get an amber tint.
     var_highlight: Option<String>,
+    /// Active category filter in the manual window (independent of text search).
+    manual_category_filter: Option<&'static str>,
+    /// Tracks when the undo-limit warning toast was last shown (throttles the toast).
+    undo_limit_warned_at: Option<std::time::Instant>,
 }
 
 impl Default for EditorApp {
@@ -1315,6 +1333,7 @@ impl Default for EditorApp {
             add_menu_open: false,
             add_menu_just_opened: false,
             add_filter: String::new(),
+            add_menu_selected_idx: 0,
             log: Vec::new(),
             toasts: Vec::new(),
             view_mode: ViewMode::List,
@@ -1360,6 +1379,8 @@ impl Default for EditorApp {
             canvas_pan: egui::Vec2::ZERO,
             canvas_dragging: None,
             var_highlight: None,
+            manual_category_filter: None,
+            undo_limit_warned_at: None,
         }
     }
 }
@@ -1757,6 +1778,17 @@ impl EditorApp {
             self.undo_stack.push_back(snap);
             if self.undo_stack.len() > 50 {
                 self.undo_stack.pop_front();
+                let should_warn = self
+                    .undo_limit_warned_at
+                    .map(|t| t.elapsed() > std::time::Duration::from_secs(5))
+                    .unwrap_or(true);
+                if should_warn {
+                    self.undo_limit_warned_at = Some(std::time::Instant::now());
+                    self.push_toast(
+                        "undo 履歴の上限 (50件) に達しました".to_owned(),
+                        LogLevel::Info,
+                    );
+                }
             }
             self.redo_stack.clear();
         }
@@ -1918,36 +1950,54 @@ impl EditorApp {
     fn validate_scenario(&self) -> Vec<ValidationIssue> {
         let mut issues = Vec::new();
         let mut defined: HashSet<String> = HashSet::new();
+        // Pre-seed built-in loop variables
+        defined.insert("item".to_owned());
+        defined.insert("_index".to_owned());
         for (k, _) in &self.scenario_vars {
             if let Some(s) = k.as_str() {
                 defined.insert(s.to_owned());
             }
         }
+
+        const BRANCH_KEYS: &[&str] = &["do", "then", "else", "catch", "branches", "finally"];
+
         for (step_idx, step) in self.steps.iter().enumerate() {
-            if let Some(map) = step.as_mapping() {
-                for (_, v) in map {
-                    if let Some(serde_yml::Value::String(save_as)) = map.get("save_as") {
-                        let _ = save_as;
+            let Some(map) = step.as_mapping() else {
+                continue;
+            };
+
+            // Register save_as before scanning this step's refs
+            if let Some(serde_yml::Value::String(sv)) = map.get("save_as") {
+                defined.insert(sv.clone());
+            }
+
+            // For foreach: register custom loop var from "as" field
+            if let Some(inner) = map.get("foreach").and_then(|v| v.as_mapping()) {
+                if let Some(serde_yml::Value::String(as_var)) = inner.get("as") {
+                    defined.insert(as_var.clone());
+                }
+            }
+
+            // Scan all keys except branch sub-keys and save_as
+            for (k, v) in map {
+                let k_str = k.as_str().unwrap_or("");
+                if k_str == "save_as" || BRANCH_KEYS.contains(&k_str) {
+                    continue;
+                }
+                let mut refs = Vec::new();
+                Self::collect_var_refs_from_value(v, &mut |name| {
+                    if !defined.contains(name) {
+                        refs.push(name.to_owned());
                     }
-                    let _ = v;
-                }
-                if let Some(serde_yml::Value::String(save_as)) = map.get("save_as") {
-                    defined.insert(save_as.clone());
-                }
-                for (_, v) in map {
-                    let mut refs = Vec::new();
-                    Self::collect_var_refs_from_value(v, &mut |name| {
-                        if name != "item" && !defined.contains(name) {
-                            refs.push(name.to_owned());
-                        }
+                });
+                refs.sort_unstable();
+                refs.dedup();
+                for name in refs {
+                    issues.push(ValidationIssue {
+                        step_idx,
+                        message: format!("未定義の変数 '{{{{ {name} }}}}' を参照しています"),
+                        level: LogLevel::Error,
                     });
-                    for name in refs {
-                        issues.push(ValidationIssue {
-                            step_idx,
-                            message: format!("未定義の変数 '{{{{ {name} }}}}' を参照しています"),
-                            level: LogLevel::Error,
-                        });
-                    }
                 }
             }
         }
@@ -2623,8 +2673,9 @@ impl EditorApp {
         let selected = self.selected;
 
         if nodes.is_empty() {
+            let s = S::for_lang(&self.settings.lang);
             ui.centered_and_justified(|ui| {
-                ui.label("ステップがありません。左パネルで追加してください。");
+                ui.label(s.empty_no_steps);
             });
             return;
         }
@@ -3085,11 +3136,16 @@ impl EditorApp {
                         ui.end_row();
 
                         ui.label(format!("{}:", s.settings_api_key));
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.settings.api_key)
-                                .password(true)
-                                .desired_width(240.0),
-                        );
+                        if ui
+                            .add(
+                                egui::TextEdit::singleline(&mut self.settings.api_key)
+                                    .password(true)
+                                    .desired_width(240.0),
+                            )
+                            .changed()
+                        {
+                            save_settings(&self.settings);
+                        }
                         ui.end_row();
 
                         ui.label(format!("{}:", s.settings_model));
@@ -3156,6 +3212,10 @@ impl EditorApp {
                     }
                 });
             });
+        // Flush settings when the window is closed by clicking the X button.
+        if self.settings_open && !open {
+            save_settings(&self.settings);
+        }
         self.settings_open = open;
     }
 
@@ -3179,42 +3239,50 @@ impl EditorApp {
                     }
                 });
 
-                // Category chips
+                // Category chips — toggles the category filter independently of the text search.
                 ui.horizontal_wrapped(|ui| {
                     let mut seen = std::collections::HashSet::new();
                     for t in STEP_TEMPLATES {
                         if seen.insert(t.category) {
                             let col = category_color(t.category);
+                            let is_active = self.manual_category_filter == Some(t.category);
+                            let fill = if is_active {
+                                egui::Color32::from_rgba_unmultiplied(
+                                    col.r(),
+                                    col.g(),
+                                    col.b(),
+                                    100,
+                                )
+                            } else {
+                                egui::Color32::from_rgba_unmultiplied(col.r(), col.g(), col.b(), 35)
+                            };
                             if ui
                                 .add(
                                     egui::Button::new(egui::RichText::new(t.category).size(10.0))
-                                        .fill(egui::Color32::from_rgba_unmultiplied(
-                                            col.r(),
-                                            col.g(),
-                                            col.b(),
-                                            35,
-                                        ))
+                                        .fill(fill)
                                         .min_size(egui::vec2(0.0, 18.0)),
                                 )
                                 .clicked()
                             {
-                                self.manual_search = t.category.to_owned();
+                                self.manual_category_filter =
+                                    if is_active { None } else { Some(t.category) };
                             }
                         }
                     }
                 });
                 ui.separator();
 
-                let filter = self.manual_search.to_lowercase();
+                let kw_filter = self.manual_search.to_lowercase();
                 egui::ScrollArea::vertical()
                     .max_height(440.0)
                     .show(ui, |ui| {
                         let mut last_cat = "";
                         for t in STEP_TEMPLATES {
-                            let match_filter = filter.is_empty()
-                                || t.name.to_lowercase().contains(&filter)
-                                || t.display_name.to_lowercase().contains(&filter)
-                                || t.category.to_lowercase().contains(&filter);
+                            let match_filter = (kw_filter.is_empty()
+                                || t.name.to_lowercase().contains(&kw_filter)
+                                || t.display_name.to_lowercase().contains(&kw_filter))
+                                && (self.manual_category_filter.is_none()
+                                    || self.manual_category_filter == Some(t.category));
                             if !match_filter {
                                 continue;
                             }
@@ -3379,21 +3447,38 @@ impl EditorApp {
 
         // ── Draw edges (behind nodes) ──────────────────────────────────────
         for i in 0..n.saturating_sub(1) {
+            let step_key = get_step_key(&self.steps[i]);
+            let is_compound = matches!(
+                step_key,
+                "if" | "foreach"
+                    | "repeat"
+                    | "while"
+                    | "do_while"
+                    | "try_catch"
+                    | "group"
+                    | "switch"
+            );
             let from = screen_positions[i] + Vec2::new(NODE_W * z / 2.0, NODE_H * z);
             let to = screen_positions[i + 1] + Vec2::new(NODE_W * z / 2.0, 0.0);
             let ctrl = Vec2::new(0.0, 40.0 * z);
+            let stroke_color = if is_compound {
+                Color32::from_rgb(120, 100, 60)
+            } else {
+                Color32::from_gray(70)
+            };
+            let stroke_width = if is_compound { 1.0 * z } else { 1.5 * z };
             painter.add(egui::Shape::CubicBezier(
                 CubicBezierShape::from_points_stroke(
                     [from, from + ctrl, to - ctrl, to],
                     false,
                     Color32::TRANSPARENT,
-                    Stroke::new(1.5 * z, Color32::from_gray(70)),
+                    Stroke::new(stroke_width, stroke_color),
                 ),
             ));
             painter.arrow(
                 to - Vec2::new(0.0, 6.0 * z),
                 Vec2::new(0.0, 5.0 * z),
-                Stroke::new(1.5 * z, Color32::from_gray(70)),
+                Stroke::new(stroke_width, stroke_color),
             );
         }
 
@@ -3502,6 +3587,33 @@ impl EditorApp {
                 FontId::proportional(11.0 * z),
                 Color32::from_gray(220),
             );
+
+            // Badge: show child step count for compound steps
+            let step_key_badge = get_step_key(step);
+            let is_compound_node = matches!(
+                step_key_badge,
+                "if" | "foreach"
+                    | "repeat"
+                    | "while"
+                    | "do_while"
+                    | "try_catch"
+                    | "group"
+                    | "switch"
+            );
+            if is_compound_node {
+                let child_count: usize = get_inner_steps(step).iter().map(|(_, v)| v.len()).sum();
+                if child_count > 0 {
+                    let badge_text = format!("+{child_count}");
+                    let badge_pos = node_rect.max - Vec2::new(4.0 * z, 2.0 * z);
+                    painter.text(
+                        badge_pos,
+                        Align2::RIGHT_BOTTOM,
+                        badge_text,
+                        FontId::proportional(9.0 * z),
+                        Color32::from_rgba_premultiplied(255, 200, 80, 200),
+                    );
+                }
+            }
         }
 
         // Apply interactions after the draw loop
@@ -3520,10 +3632,16 @@ impl EditorApp {
 
         // Empty state hint
         if n == 0 {
+            let s = S::for_lang(&self.settings.lang);
+            let msg = if self.path.is_none() {
+                s.empty_canvas_no_file
+            } else {
+                s.empty_no_steps
+            };
             painter.text(
                 resp.rect.center(),
                 Align2::CENTER_CENTER,
-                "ステップがありません。左のパレットから追加してください。",
+                msg,
                 FontId::proportional(13.0),
                 Color32::from_gray(100),
             );
@@ -3812,15 +3930,22 @@ impl eframe::App for EditorApp {
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
 
         // ── Live run progress polling ─────────────────────────────────────────
-        let child_exited = if let Some(ref mut child) = self.run_child {
-            matches!(child.try_wait(), Ok(Some(_)))
-        } else {
-            false
-        };
-        if child_exited {
+        let child_exited_status: Option<std::process::ExitStatus> =
+            if let Some(ref mut child) = self.run_child {
+                child.try_wait().ok().flatten()
+            } else {
+                None
+            };
+        if let Some(status) = child_exited_status {
             self.run_child = None;
             self.run_progress_file = None;
-            self.log_info("実行が完了しました");
+            self.current_run_step = None;
+            if status.success() {
+                self.log_ok("実行が完了しました");
+            } else {
+                let code = status.code().unwrap_or(-1);
+                self.log_err(format!("実行に失敗しました (終了コード: {code})"));
+            }
         }
         if self.last_progress_check.elapsed() > std::time::Duration::from_millis(100) {
             if let Some(ref f) = self.run_progress_file {
@@ -4325,7 +4450,10 @@ impl eframe::App for EditorApp {
                                     if resp.double_clicked() {
                                         palette_insert = Some(t.yaml);
                                     }
-                                    resp.on_hover_text(format!("{}\n\n{}", t.name, t.yaml));
+                                    resp.on_hover_text(format!(
+                                        "{}\n{}\n\n{}",
+                                        t.name, s.hint_double_click, t.yaml
+                                    ));
                                 }
                             });
                     }
@@ -4402,7 +4530,7 @@ impl eframe::App for EditorApp {
                                                     ui.colored_label(bar_color, "▌");
                                                     let resp = ui
                                                         .selectable_label(is_primary, &label_text);
-                                                    if is_multi && !is_primary {
+                                                    if is_multi && !is_primary && !is_running {
                                                         ui.painter().rect_filled(
                                                             resp.rect.expand2(egui::vec2(2.0, 1.0)),
                                                             2.0,
@@ -4411,7 +4539,11 @@ impl eframe::App for EditorApp {
                                                             ),
                                                         );
                                                     }
-                                                    if is_var_match && !is_primary && !is_multi {
+                                                    if is_var_match
+                                                        && !is_primary
+                                                        && !is_multi
+                                                        && !is_running
+                                                    {
                                                         ui.painter().rect_filled(
                                                             resp.rect.expand2(egui::vec2(2.0, 1.0)),
                                                             2.0,
@@ -4793,7 +4925,7 @@ impl eframe::App for EditorApp {
                 });
             } else {
                 ui.centered_and_justified(|ui| {
-                    ui.label("左のパネルからステップを選択してください");
+                    ui.label(s.empty_select_step);
                 });
             }
         });
@@ -4816,16 +4948,59 @@ impl eframe::App for EditorApp {
                     if self.add_menu_just_opened {
                         filter_resp.request_focus();
                         self.add_menu_just_opened = false;
+                        self.add_menu_selected_idx = 0;
                     }
                     ui.separator();
 
+                    let prev_filter = self.add_filter.clone();
                     let filter = self.add_filter.to_lowercase();
-                    let first_match = STEP_TEMPLATES.iter().find(|t| {
-                        filter.is_empty()
-                            || t.name.to_lowercase().contains(&filter)
-                            || t.display_name.to_lowercase().contains(&filter)
-                            || t.category.to_lowercase().contains(&filter)
-                    });
+
+                    // Collect visible templates for keyboard navigation
+                    let visible_templates: Vec<&StepTemplate> = STEP_TEMPLATES
+                        .iter()
+                        .filter(|t| {
+                            filter.is_empty()
+                                || t.name.to_lowercase().contains(&filter)
+                                || t.display_name.to_lowercase().contains(&filter)
+                                || t.category.to_lowercase().contains(&filter)
+                        })
+                        .collect();
+                    let n_visible = visible_templates.len();
+
+                    // Reset keyboard selection when filter changes
+                    let _ = prev_filter; // consumed above
+                    if filter_resp.changed() {
+                        self.add_menu_selected_idx = 0;
+                    }
+
+                    // Handle arrow-key and Enter navigation
+                    if n_visible > 0 {
+                        let (up, down, enter) = ui.input_mut(|i| {
+                            (
+                                i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
+                                i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
+                                i.consume_key(egui::Modifiers::NONE, egui::Key::Enter),
+                            )
+                        });
+                        if down {
+                            self.add_menu_selected_idx =
+                                (self.add_menu_selected_idx + 1) % n_visible;
+                        }
+                        if up {
+                            self.add_menu_selected_idx =
+                                self.add_menu_selected_idx.saturating_sub(1);
+                        }
+                        self.add_menu_selected_idx =
+                            self.add_menu_selected_idx.min(n_visible.saturating_sub(1));
+                        if enter {
+                            insert = Some(visible_templates[self.add_menu_selected_idx].yaml);
+                            close = true;
+                        }
+                    } else if ui
+                        .input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter))
+                    {
+                        // no-op: nothing to insert
+                    }
 
                     egui::ScrollArea::vertical()
                         .max_height(420.0)
@@ -4838,6 +5013,7 @@ impl eframe::App for EditorApp {
                                         cats.push(t.category);
                                     }
                                 }
+                                let mut flat_idx: usize = 0;
                                 for cat in cats {
                                     let col = category_color(cat);
                                     let hdr = egui::RichText::new(cat).color(col).strong();
@@ -4847,28 +5023,27 @@ impl eframe::App for EditorApp {
                                             for t in
                                                 STEP_TEMPLATES.iter().filter(|t| t.category == cat)
                                             {
+                                                let is_kbd_sel =
+                                                    flat_idx == self.add_menu_selected_idx;
                                                 let label = egui::RichText::new(format!(
                                                     "  {} ({})",
                                                     t.display_name, t.name
                                                 ))
                                                 .size(12.0);
-                                                if ui.selectable_label(false, label).clicked() {
+                                                if ui.selectable_label(is_kbd_sel, label).clicked()
+                                                {
                                                     insert = Some(t.yaml);
                                                     close = true;
                                                 }
+                                                flat_idx += 1;
                                             }
                                         },
                                     );
                                 }
                             } else {
-                                // Flat filtered list with category prefix
-                                for t in STEP_TEMPLATES {
-                                    if !t.name.to_lowercase().contains(&filter)
-                                        && !t.display_name.to_lowercase().contains(&filter)
-                                        && !t.category.to_lowercase().contains(&filter)
-                                    {
-                                        continue;
-                                    }
+                                // Flat filtered list with keyboard highlight
+                                for (i, t) in visible_templates.iter().enumerate() {
+                                    let is_kbd_sel = i == self.add_menu_selected_idx;
                                     let col = category_color(t.category);
                                     let label = egui::RichText::new(format!(
                                         "{} / {} ({})",
@@ -4876,12 +5051,21 @@ impl eframe::App for EditorApp {
                                     ))
                                     .size(12.0);
                                     let btn = egui::Button::new(label)
-                                        .fill(egui::Color32::from_rgba_unmultiplied(
-                                            col.r(),
-                                            col.g(),
-                                            col.b(),
-                                            18,
-                                        ))
+                                        .fill(if is_kbd_sel {
+                                            egui::Color32::from_rgba_unmultiplied(
+                                                col.r(),
+                                                col.g(),
+                                                col.b(),
+                                                60,
+                                            )
+                                        } else {
+                                            egui::Color32::from_rgba_unmultiplied(
+                                                col.r(),
+                                                col.g(),
+                                                col.b(),
+                                                18,
+                                            )
+                                        })
                                         .min_size(egui::vec2(250.0, 26.0));
                                     if ui.add(btn).clicked() {
                                         insert = Some(t.yaml);
@@ -4891,20 +5075,12 @@ impl eframe::App for EditorApp {
                             }
                         });
 
-                    // Enter key inserts the first visible match
-                    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
-                        if let Some(t) = first_match {
-                            insert = Some(t.yaml);
-                            close = true;
-                        }
-                    }
-
                     ui.separator();
                     ui.horizontal(|ui| {
                         if ui.button("キャンセル").clicked() {
                             close = true;
                         }
-                        ui.weak("Esc / Enter で最初の候補を挿入");
+                        ui.weak("Esc / ↑↓ で選択 / Enter で挿入");
                     });
                 });
 
