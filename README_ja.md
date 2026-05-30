@@ -49,6 +49,7 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 - **transient UI のキャプチャ** — ホットキーで画面をフリーズするため、消えてしまうドロップダウンやツールチップも採取できる
 - **WASM プラグイン** — サンドボックス内で実行。プラグインがクラッシュしてもランナーには影響しない
 - **プレーン YAML シナリオ** — 変数・ループ・分岐・Rhai インラインスクリプト・サブシナリオ・データソース対応
+- **ビジュアルエディタ** — ステップの DnD・複数選択・AI シナリオアシスタント (Anthropic/OpenAI)・EN/JA/ZH UI
 
 ## 自動化ツール比較
 
@@ -502,11 +503,28 @@ cargo run -p robost-snip          # テンプレート採取ツール起動
 cargo run -p robost-editor        # ビジュアルシナリオエディタ起動
 ```
 
-## 公開済み Crate
+## 公開クレート
 
-| Crate | バージョン | 説明 |
-|---|---|---|
-| [robost-vision](https://crates.io/crates/robost-vision) | 0.1.1 | デスクトップ自動化向けマルチスケール NCC テンプレマッチ + find_all + diff + async + OCR |
+全クレートが [crates.io](https://crates.io/) に v0.1.0 で公開されています。
+
+| クレート | 説明 |
+|---|---|
+| [robost](https://crates.io/crates/robost) | メタクレート |
+| [robost-vision](https://crates.io/crates/robost-vision) | マルチスケール NCC テンプレートマッチ・OCR・ML 検出 |
+| [robost-capture](https://crates.io/crates/robost-capture) | クロスプラットフォーム画面/ウィンドウキャプチャ |
+| [robost-input](https://crates.io/crates/robost-input) | マウス/キーボード入力エミュレーション |
+| [robost-template](https://crates.io/crates/robost-template) | 座標・テンプレート共有型 |
+| [robost-backend](https://crates.io/crates/robost-backend) | バックエンド統一 trait (Local/RDP/VNC) |
+| [robost-core](https://crates.io/crates/robost-core) | YAML シナリオエンジン |
+| [robost-stdlib](https://crates.io/crates/robost-stdlib) | 組み込みシナリオノードライブラリ |
+| [robost-script](https://crates.io/crates/robost-script) | Rhai インラインスクリプト |
+| [robost-plugin-api](https://crates.io/crates/robost-plugin-api) | プラグイン作者向け API |
+| [robost-plugin-host](https://crates.io/crates/robost-plugin-host) | WASM プラグインランナー (wasmtime) |
+| [robost-uia](https://crates.io/crates/robost-uia) | Windows UI Automation |
+| [robost-web](https://crates.io/crates/robost-web) | WebDriver ブラウザ自動化 |
+| [robost-editor](https://crates.io/crates/robost-editor) | ビジュアルシナリオエディタ |
+| [robost-snip](https://crates.io/crates/robost-snip) | テンプレート採取トレイアプリ |
+| [robost-cli](https://crates.io/crates/robost-cli) | CLI ランナー (`rpa` バイナリ) |
 
 ## ライセンス
 
@@ -516,6 +534,6 @@ MIT OR Apache-2.0
 
 | フェーズ | 状態 | 主要内容 |
 |---|---|---|
-| **Phase 1** | 完了 | 200+ シナリオノード · CLI · ビジュアルエディタ · スニップツール · Web/UIA/Excel/メール/OCR/スケジューラー |
+| **Phase 1** | 完了 | 200+ シナリオノード · CLI · ビジュアルエディタ (AI チャット・DnD・多言語) · snip · Web/UIA/Excel/Mail/OCR/スケジューラー · 全クレート crates.io 公開 |
 | **Phase 2** | 計画中 | シナリオ記録 · Word/SFTP/ML 検出/並列実行/レジストリ/M365 |
 | **Phase 3** | 将来 | オーケストレーター · キューモデル · AI 支援シナリオ生成 |

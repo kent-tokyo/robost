@@ -49,6 +49,7 @@
 - **瞬态 UI 采集** — 热键冻结屏幕，可以选取平时会消失的下拉菜单和悬浮提示
 - **WASM 插件** — 沙箱内运行，插件崩溃不影响主进程
 - **纯 YAML 场景** — 支持变量、循环、分支、Rhai 内联脚本、子场景、数据源
+- **可视化编辑器** — 拖放步骤、多选、AI 场景助手（Anthropic/OpenAI）、EN/JA/ZH 界面
 
 ## 自动化工具对比
 
@@ -502,11 +503,28 @@ cargo run -p robost-snip          # 模板采集工具
 cargo run -p robost-editor        # 可视化场景编辑器
 ```
 
-## 已发布 Crate
+## 已发布的 Crate
 
-| Crate | 版本 | 说明 |
-|---|---|---|
-| [robost-vision](https://crates.io/crates/robost-vision) | 0.1.1 | 面向桌面自动化的多尺度 NCC 模板匹配 + find_all + diff + async + OCR |
+所有 crate 均以 v0.1.0 发布于 [crates.io](https://crates.io/)。
+
+| Crate | 说明 |
+|---|---|
+| [robost](https://crates.io/crates/robost) | 元 crate |
+| [robost-vision](https://crates.io/crates/robost-vision) | 多尺度 NCC 模板匹配、OCR、ML 检测 |
+| [robost-capture](https://crates.io/crates/robost-capture) | 跨平台屏幕/窗口截图 |
+| [robost-input](https://crates.io/crates/robost-input) | 鼠标/键盘输入模拟 |
+| [robost-template](https://crates.io/crates/robost-template) | 坐标与模板共享类型 |
+| [robost-backend](https://crates.io/crates/robost-backend) | 统一后端 trait（本地/RDP/VNC）|
+| [robost-core](https://crates.io/crates/robost-core) | YAML 场景引擎 |
+| [robost-stdlib](https://crates.io/crates/robost-stdlib) | 内置场景节点库 |
+| [robost-script](https://crates.io/crates/robost-script) | Rhai 内联脚本 |
+| [robost-plugin-api](https://crates.io/crates/robost-plugin-api) | 插件作者 API |
+| [robost-plugin-host](https://crates.io/crates/robost-plugin-host) | WASM 插件运行器（wasmtime）|
+| [robost-uia](https://crates.io/crates/robost-uia) | Windows UI Automation |
+| [robost-web](https://crates.io/crates/robost-web) | WebDriver 浏览器自动化 |
+| [robost-editor](https://crates.io/crates/robost-editor) | 可视化场景编辑器 |
+| [robost-snip](https://crates.io/crates/robost-snip) | 模板截取托盘应用 |
+| [robost-cli](https://crates.io/crates/robost-cli) | CLI 运行器（`rpa` 二进制）|
 
 ## 许可证
 
@@ -516,6 +534,6 @@ MIT OR Apache-2.0
 
 | 阶段 | 状态 | 主要内容 |
 |---|---|---|
-| **Phase 1** | 已完成 | 200+ 场景节点 · CLI · 可视化编辑器 · 截图工具 · Web/UIA/Excel/邮件/OCR/调度器 |
+| **Phase 1** | 已完成 | 200+ 场景节点 · CLI · 可视化编辑器（AI 聊天·拖放·多语言）· snip 工具 · Web/UIA/Excel/Mail/OCR/调度器 · 所有 crate 已发布至 crates.io |
 | **Phase 2** | 计划中 | 场景录制 · Word/SFTP/ML 检测/并行执行/注册表/M365 |
 | **Phase 3** | 未来 | 编排器 · 队列模型 · AI 辅助场景生成 |

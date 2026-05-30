@@ -49,6 +49,7 @@ A Rust-based OSS desktop automation (RPA) tool.
 - **Transient UI capture** — hotkey freezes the screen so you can select dropdowns and tooltips that would otherwise disappear
 - **WASM plugins** — sandboxed extensions; a crashing plugin can't bring down the runner
 - **Plain YAML scenarios** — variables, loops, branches, inline Rhai scripts, sub-scenarios, data sources
+- **Visual editor** — drag-and-drop steps, multi-select, AI scenario assistant (Anthropic/OpenAI), EN/JA/ZH UI
 
 ## Comparison with Automation Tools
 
@@ -91,7 +92,7 @@ crates/
 ├── robost-backend/      # Backend trait: Local / RDP / VNC unified
 ├── robost-core/         # Scenario engine: YAML parsing, step execution, retry, flow control
 ├── robost-snip/         # Template capture GUI (tray app, hotkey, overlay, Japanese UI)
-├── robost-editor/       # Visual scenario editor (step list + YAML, dark theme, log panel)
+├── robost-editor/       # Visual scenario editor (step list + YAML, AI chat, i18n EN/JA/ZH, DnD)
 ├── robost-template/     # Shared coordinate/geometry types
 ├── robost-plugin-api/   # Public plugin author API (crates.io publish candidate)
 ├── robost-plugin-host/  # wasmtime-based WASM plugin runner with epoch timeout
@@ -504,9 +505,26 @@ cargo run -p robost-editor        # Visual scenario editor
 
 ## Published Crates
 
-| Crate | Version | Description |
-|---|---|---|
-| [robost-vision](https://crates.io/crates/robost-vision) | 0.1.1 | Multi-scale NCC template matching + find_all + diff + async + OCR for desktop automation |
+All crates are published on [crates.io](https://crates.io/) at v0.1.0.
+
+| Crate | Description |
+|---|---|
+| [robost](https://crates.io/crates/robost) | Meta-crate |
+| [robost-vision](https://crates.io/crates/robost-vision) | Multi-scale NCC template matching, OCR, ML detection |
+| [robost-capture](https://crates.io/crates/robost-capture) | Cross-platform screen/window capture |
+| [robost-input](https://crates.io/crates/robost-input) | Mouse/keyboard input emulation |
+| [robost-template](https://crates.io/crates/robost-template) | Shared coordinate and template types |
+| [robost-backend](https://crates.io/crates/robost-backend) | Unified backend trait (Local/RDP/VNC) |
+| [robost-core](https://crates.io/crates/robost-core) | YAML scenario engine |
+| [robost-stdlib](https://crates.io/crates/robost-stdlib) | Built-in scenario node library |
+| [robost-script](https://crates.io/crates/robost-script) | Rhai inline scripting |
+| [robost-plugin-api](https://crates.io/crates/robost-plugin-api) | Plugin author API |
+| [robost-plugin-host](https://crates.io/crates/robost-plugin-host) | WASM plugin runner (wasmtime) |
+| [robost-uia](https://crates.io/crates/robost-uia) | Windows UI Automation |
+| [robost-web](https://crates.io/crates/robost-web) | WebDriver browser automation |
+| [robost-editor](https://crates.io/crates/robost-editor) | Visual scenario editor |
+| [robost-snip](https://crates.io/crates/robost-snip) | Template capture tray app |
+| [robost-cli](https://crates.io/crates/robost-cli) | CLI runner (`rpa` binary) |
 
 ## License
 
@@ -516,6 +534,6 @@ MIT OR Apache-2.0
 
 | Phase | Status | Highlights |
 |---|---|---|
-| **Phase 1** | Complete | 200+ scenario nodes · CLI · visual editor · snip tool · Web/UIA/Excel/Mail/OCR/Scheduler |
+| **Phase 1** | Complete | 200+ scenario nodes · CLI · visual editor (AI chat, DnD, i18n) · snip tool · Web/UIA/Excel/Mail/OCR/Scheduler · all crates on crates.io |
 | **Phase 2** | Planned | Scenario recorder · Word/SFTP/ML detection/Parallel execution/Registry/M365 |
 | **Phase 3** | Future | Orchestrator · queue model · AI-assisted scenario generation |
