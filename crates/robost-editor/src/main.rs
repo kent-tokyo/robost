@@ -2677,11 +2677,11 @@ impl EditorApp {
         }
         self.ai_unread = false;
 
-        let default_pos = egui::pos2(screen.max.x - 390.0, screen.max.y - 490.0);
+        let default_pos = egui::pos2(screen.max.x - 390.0, screen.max.y - 360.0);
         egui::Window::new("AI アシスタント")
             .default_pos(default_pos)
-            .default_size([360.0, 440.0])
-            .min_size([280.0, 280.0])
+            .default_size([360.0, 320.0])
+            .min_size([280.0, 220.0])
             .resizable(true)
             .collapsible(false)
             .show(ctx, |ui| {
@@ -2753,7 +2753,10 @@ impl EditorApp {
                     let resp = ui.add(
                         egui::TextEdit::multiline(&mut self.ai_input)
                             .desired_rows(2)
-                            .desired_width(ui.available_width() - 55.0),
+                            .desired_width(ui.available_width() - 55.0)
+                            .hint_text(
+                                "e.g. \"Create an Excel loop\"\n\"画像クリックのステップを追加して\"",
+                            ),
                     );
                     let send = ui.add_enabled(
                         !self.ai_loading,
