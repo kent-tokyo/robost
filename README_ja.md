@@ -4,7 +4,7 @@
 
 Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 
-[English](README.md) | [中文](README_zh.md)
+[English](README.md) | [中文](README_zh.md) | [詳細マニュアル](https://kent-tokyo.github.io/robost/)
 
 ## スクリーンショット
 

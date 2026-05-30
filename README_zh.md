@@ -4,7 +4,7 @@
 
 基于 Rust 的开源桌面自动化 (RPA) 工具。
 
-[English](README.md) | [日本語](README_ja.md)
+[English](README.md) | [日本語](README_ja.md) | [详细文档](https://kent-tokyo.github.io/robost/)
 
 ## 截图
 
