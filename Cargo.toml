@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/robost",
     "crates/robost-template",
     "crates/robost-capture",
     "crates/robost-input",

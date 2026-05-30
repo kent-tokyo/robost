@@ -1,0 +1,9 @@
+[package]
+name = "robost"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust-based OSS desktop automation (RPA) — image recognition, OCR, WASM plugins, and remote desktop support"
+keywords = ["rpa", "automation", "desktop", "image-recognition", "ocr"]
+categories = ["gui", "os"]
