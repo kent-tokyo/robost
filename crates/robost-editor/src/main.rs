@@ -303,6 +303,8 @@ struct AppSettings {
     model: String,
     #[serde(default)]
     lang: Lang,
+    #[serde(default)]
+    canvas_snap: bool,
 }
 
 impl Default for AppSettings {
@@ -312,6 +314,7 @@ impl Default for AppSettings {
             api_key: String::new(),
             model: "claude-haiku-4-5-20251001".to_owned(),
             lang: Lang::default(),
+            canvas_snap: false,
         }
     }
 }
@@ -1329,7 +1332,6 @@ struct EditorApp {
     canvas_pan: egui::Vec2,
     canvas_dragging: Option<(usize, egui::Vec2)>,
     canvas_viewport_size: egui::Vec2,
-    canvas_snap: bool,
     /// When Some, step list rows referencing this variable name get an amber tint.
     var_highlight: Option<String>,
     /// Active category filter in the manual window (independent of text search).
@@ -1396,7 +1398,6 @@ impl Default for EditorApp {
             canvas_pan: egui::Vec2::ZERO,
             canvas_dragging: None,
             canvas_viewport_size: egui::Vec2::new(800.0, 600.0),
-            canvas_snap: false,
             var_highlight: None,
             manual_category_filter: None,
             undo_limit_warned_at: None,
@@ -3462,9 +3463,11 @@ impl EditorApp {
 
         // Center the content
         let z = self.canvas_zoom;
+        let center_x = (min_x + max_x) / 2.0;
+        let center_y = (min_y + max_y) / 2.0;
         self.canvas_pan = egui::vec2(
-            (viewport_size.x / z - (min_x + max_x)) / 2.0 - min_x,
-            (viewport_size.y / z - (min_y + max_y)) / 2.0 - min_y,
+            viewport_size.x / 2.0 / z - center_x,
+            viewport_size.y / 2.0 / z - center_y,
         );
     }
 
@@ -3549,7 +3552,17 @@ impl EditorApp {
             );
             let from = screen_positions[i] + Vec2::new(NODE_W * z / 2.0, NODE_H * z);
             let to = screen_positions[i + 1] + Vec2::new(NODE_W * z / 2.0, 0.0);
-            let ctrl = Vec2::new(0.0, 40.0 * z);
+            let dy = to.y - from.y;
+            let ctrl_mag = if dy.abs() > 20.0 * z {
+                40.0 * z
+            } else {
+                dy.abs() * 0.5 + 10.0 * z
+            };
+            let ctrl = if dy >= 0.0 {
+                Vec2::new(0.0, ctrl_mag)
+            } else {
+                Vec2::new(0.0, -ctrl_mag)
+            };
             let stroke_color = if is_compound {
                 Color32::from_rgb(120, 100, 60)
             } else {
@@ -3633,6 +3646,18 @@ impl EditorApp {
                 }
             });
 
+            // Hoist these before culling so the tooltip works for partially off-screen nodes.
+            let hovered = node_resp.hovered();
+            let step = &self.steps[idx];
+            let full_label = step_summary(step);
+
+            // Show full label as tooltip on hover when text is truncated (before culling)
+            if hovered && full_label.chars().count() > 32 {
+                node_resp.show_tooltip_ui(|ui| {
+                    ui.label(&full_label);
+                });
+            }
+
             // ── Draw (skip nodes fully outside the viewport) ────────────────
             if !resp.rect.intersects(node_rect) {
                 continue;
@@ -3641,8 +3666,6 @@ impl EditorApp {
             let selected = self.selected == Some(idx);
             let is_multi_only = self.multi_selected.contains(&idx) && !selected;
             let is_running = self.current_run_step == Some(idx);
-            let hovered = node_resp.hovered();
-            let step = &self.steps[idx];
             let key = get_step_key(step);
             let cat_color = category_color(step_key_category(key));
             // Blend category color into base background
@@ -3724,7 +3747,6 @@ impl EditorApp {
             );
 
             // Step label
-            let full_label = step_summary(step);
             let label: String = full_label.chars().take(32).collect();
             painter.text(
                 node_rect.min + Vec2::new(10.0 * z, NODE_H * z * 0.68),
@@ -3733,13 +3755,6 @@ impl EditorApp {
                 FontId::proportional(11.0 * z),
                 Color32::from_gray(220),
             );
-
-            // Show full label as tooltip on hover when text is truncated
-            if hovered && full_label.chars().count() > 32 {
-                node_resp.show_tooltip_ui(|ui| {
-                    ui.label(&full_label);
-                });
-            }
 
             // Badge: show child step count for compound steps
             let step_key_badge = get_step_key(step);
@@ -3779,15 +3794,31 @@ impl EditorApp {
 
         // Apply interactions after the draw loop
         if let Some((idx, offset)) = drag_started_node {
+            self.push_undo();
             self.canvas_dragging = Some((idx, offset));
         }
         if let Some((idx, mut canvas_pos)) = drag_delta_node {
-            if self.canvas_snap {
+            if self.settings.canvas_snap {
                 const SNAP: f32 = 20.0;
                 canvas_pos.x = (canvas_pos.x / SNAP).round() * SNAP;
                 canvas_pos.y = (canvas_pos.y / SNAP).round() * SNAP;
             }
-            self.canvas_positions.insert(idx, canvas_pos);
+            if self.multi_selected.len() > 1 && self.multi_selected.contains(&idx) {
+                let old_pos = self
+                    .canvas_positions
+                    .get(&idx)
+                    .copied()
+                    .unwrap_or(canvas_pos);
+                let delta = canvas_pos - old_pos;
+                let selected_indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
+                for sel_idx in selected_indices {
+                    if let Some(pos) = self.canvas_positions.get(&sel_idx).copied() {
+                        self.canvas_positions.insert(sel_idx, pos + delta);
+                    }
+                }
+            } else {
+                self.canvas_positions.insert(idx, canvas_pos);
+            }
         }
         if drag_ended {
             self.canvas_dragging = None;
@@ -3958,6 +3989,23 @@ impl eframe::App for EditorApp {
         {
             self.run_selection();
         }
+        // Canvas-mode Delete/Backspace: delete selected node(s) without confirm
+        if self.view_mode == ViewMode::Canvas
+            && !self.add_menu_open
+            && self.confirm_dialog.is_none()
+            && ctx.input_mut(|i| {
+                i.consume_key(egui::Modifiers::NONE, egui::Key::Delete)
+                    || i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace)
+            })
+        {
+            if self.multi_selected.len() > 1 {
+                self.delete_selected_steps();
+            } else if let Some(idx) = self.selected {
+                if idx < self.steps.len() {
+                    self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
+                }
+            }
+        }
         if !self.add_menu_open
             && self.confirm_dialog.is_none()
             && self.prop_view != PropView::Yaml
@@ -3999,6 +4047,10 @@ impl eframe::App for EditorApp {
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.add_menu_open = false;
+            if self.view_mode == ViewMode::Canvas {
+                self.selected = None;
+                self.multi_selected.clear();
+            }
         }
         if !self.add_menu_open
             && self.confirm_dialog.is_none()
@@ -4016,6 +4068,14 @@ impl eframe::App for EditorApp {
                 if i > 0 {
                     self.push_undo();
                     self.steps.swap(i, i - 1);
+                    let pos_a = self.canvas_positions.remove(&i);
+                    let pos_b = self.canvas_positions.remove(&(i - 1));
+                    if let Some(p) = pos_a {
+                        self.canvas_positions.insert(i - 1, p);
+                    }
+                    if let Some(p) = pos_b {
+                        self.canvas_positions.insert(i, p);
+                    }
                     self.multi_selected = self
                         .multi_selected
                         .iter()
@@ -4043,6 +4103,14 @@ impl eframe::App for EditorApp {
                 if i + 1 < self.steps.len() {
                     self.push_undo();
                     self.steps.swap(i, i + 1);
+                    let pos_a = self.canvas_positions.remove(&i);
+                    let pos_b = self.canvas_positions.remove(&(i + 1));
+                    if let Some(p) = pos_a {
+                        self.canvas_positions.insert(i + 1, p);
+                    }
+                    if let Some(p) = pos_b {
+                        self.canvas_positions.insert(i, p);
+                    }
                     self.multi_selected = self
                         .multi_selected
                         .iter()
@@ -4491,10 +4559,11 @@ impl eframe::App for EditorApp {
                         self.canvas_fit_view(self.canvas_viewport_size);
                     }
                     if ui
-                        .selectable_label(self.canvas_snap, s.canvas_snap)
+                        .selectable_label(self.settings.canvas_snap, s.canvas_snap)
                         .clicked()
                     {
-                        self.canvas_snap = !self.canvas_snap;
+                        self.settings.canvas_snap = !self.settings.canvas_snap;
+                        save_settings(&self.settings);
                     }
                     ui.label(format!("{:.0}%", self.canvas_zoom * 100.0));
                 }
