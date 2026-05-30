@@ -2389,26 +2389,19 @@ impl EditorApp {
             .fixed_pos(egui::pos2(screen.max.x - 60.0, screen.max.y - 60.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                let (fill, label) = if self.ai_unread {
-                    (
-                        egui::Color32::from_rgb(220, 80, 40),
-                        egui::RichText::new("AI")
-                            .color(egui::Color32::WHITE)
-                            .strong(),
-                    )
+                let fill = if self.ai_unread {
+                    egui::Color32::from_rgb(220, 80, 40)
                 } else {
-                    (
-                        egui::Color32::from_rgb(60, 100, 200),
-                        egui::RichText::new("AI")
-                            .color(egui::Color32::WHITE)
-                            .strong(),
-                    )
+                    egui::Color32::from_rgb(60, 100, 200)
                 };
+                let label = egui::RichText::new("💬")
+                    .color(egui::Color32::WHITE)
+                    .size(22.0);
                 if ui
                     .add(
                         egui::Button::new(label)
-                            .min_size(egui::vec2(44.0, 44.0))
-                            .corner_radius(egui::CornerRadius::same(22))
+                            .min_size(egui::vec2(48.0, 48.0))
+                            .corner_radius(egui::CornerRadius::same(24))
                             .fill(fill),
                     )
                     .on_hover_text("AI アシスタント")
