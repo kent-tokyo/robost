@@ -7,15 +7,11 @@ use std::time::Duration;
 /// Reject non-HTTPS or RFC-1918/link-local targets to prevent SSRF via webhook_url.
 fn validate_webhook_url(url: &str) -> Result<(), NodeError> {
     if !url.starts_with("https://") {
-        return Err(NodeError::Other(
-            "webhook_url must use https".to_owned(),
-        ));
+        return Err(NodeError::Other("webhook_url must use https".to_owned()));
     }
     // Extract the host (strip "https://", take up to first '/', '?', or '#').
     let rest = &url[8..];
-    let host_end = rest
-        .find(['/', '?', '#'])
-        .unwrap_or(rest.len());
+    let host_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let host_port = &rest[..host_end];
     // Strip optional port.
     let host = match host_port.rfind(':') {
