@@ -4039,31 +4039,45 @@ steps:
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 7);
 
-        let ScenarioStep::DirCreate(dc) = &s.steps[0] else { panic!() };
+        let ScenarioStep::DirCreate(dc) = &s.steps[0] else {
+            panic!()
+        };
         assert_eq!(dc.path, "output/2024");
 
-        let ScenarioStep::DirDelete(dd) = &s.steps[1] else { panic!() };
+        let ScenarioStep::DirDelete(dd) = &s.steps[1] else {
+            panic!()
+        };
         assert!(dd.recursive);
         assert!(dd.ignore_missing);
 
-        let ScenarioStep::DirExists(de) = &s.steps[2] else { panic!() };
+        let ScenarioStep::DirExists(de) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(de.save_as, "has_logs");
 
-        let ScenarioStep::WaitProcess(wp) = &s.steps[3] else { panic!() };
+        let ScenarioStep::WaitProcess(wp) = &s.steps[3] else {
+            panic!()
+        };
         assert_eq!(wp.name, "notepad.exe");
         assert_eq!(wp.state, ProcessWaitState::Started);
         assert_eq!(wp.timeout_ms, 5000);
         assert_eq!(wp.save_as.as_deref(), Some("np_ready"));
 
-        let ScenarioStep::MouseHover(mh) = &s.steps[4] else { panic!() };
+        let ScenarioStep::MouseHover(mh) = &s.steps[4] else {
+            panic!()
+        };
         assert_eq!(mh.x, "{{ btn_x }}");
         assert_eq!(mh.hover_ms, 800);
 
-        let ScenarioStep::ExcelReadSheet(ers) = &s.steps[5] else { panic!() };
+        let ScenarioStep::ExcelReadSheet(ers) = &s.steps[5] else {
+            panic!()
+        };
         assert!(ers.has_header);
         assert_eq!(ers.sheet.as_deref(), Some("Sheet1"));
 
-        let ScenarioStep::ExcelGetDims(egd) = &s.steps[6] else { panic!() };
+        let ScenarioStep::ExcelGetDims(egd) = &s.steps[6] else {
+            panic!()
+        };
         assert_eq!(egd.save_as, "dims");
         assert!(egd.sheet.is_none());
     }
@@ -4086,20 +4100,28 @@ steps:
 "#;
         let s = Scenario::from_yaml(yaml).unwrap();
 
-        let ScenarioStep::DirDelete(dd) = &s.steps[0] else { panic!() };
+        let ScenarioStep::DirDelete(dd) = &s.steps[0] else {
+            panic!()
+        };
         assert!(!dd.recursive);
         assert!(!dd.ignore_missing);
 
-        let ScenarioStep::WaitProcess(wp) = &s.steps[1] else { panic!() };
+        let ScenarioStep::WaitProcess(wp) = &s.steps[1] else {
+            panic!()
+        };
         assert_eq!(wp.state, ProcessWaitState::Started);
         assert_eq!(wp.timeout_ms, 5_000);
         assert_eq!(wp.retry_interval_ms, 200);
         assert!(wp.save_as.is_none());
 
-        let ScenarioStep::MouseHover(mh) = &s.steps[2] else { panic!() };
+        let ScenarioStep::MouseHover(mh) = &s.steps[2] else {
+            panic!()
+        };
         assert_eq!(mh.hover_ms, 500);
 
-        let ScenarioStep::ExcelReadSheet(ers) = &s.steps[3] else { panic!() };
+        let ScenarioStep::ExcelReadSheet(ers) = &s.steps[3] else {
+            panic!()
+        };
         assert!(!ers.has_header);
         assert!(ers.sheet.is_none());
     }
@@ -4146,52 +4168,74 @@ steps:
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 11);
 
-        let ScenarioStep::WebSelect(ws) = &s.steps[0] else { panic!("0") };
+        let ScenarioStep::WebSelect(ws) = &s.steps[0] else {
+            panic!("0")
+        };
         assert_eq!(ws.selector, "select#country");
         assert_eq!(ws.item, "日本");
         assert_eq!(ws.timeout_ms, 5_000);
 
-        let ScenarioStep::WebExecuteJs(wej) = &s.steps[1] else { panic!("1") };
+        let ScenarioStep::WebExecuteJs(wej) = &s.steps[1] else {
+            panic!("1")
+        };
         assert_eq!(wej.script, "return arguments[0].innerText;");
         assert_eq!(wej.args, vec!["hello"]);
         assert_eq!(wej.save_as.as_deref(), Some("result"));
 
-        let ScenarioStep::WebSwitchFrame(wsf) = &s.steps[2] else { panic!("2") };
+        let ScenarioStep::WebSwitchFrame(wsf) = &s.steps[2] else {
+            panic!("2")
+        };
         assert_eq!(wsf.selector.as_deref(), Some("iframe#content"));
         assert!(wsf.index.is_none());
 
-        let ScenarioStep::WebSwitchFrame(wsf_idx) = &s.steps[3] else { panic!("3") };
+        let ScenarioStep::WebSwitchFrame(wsf_idx) = &s.steps[3] else {
+            panic!("3")
+        };
         assert_eq!(wsf_idx.index, Some(1u16));
         assert!(wsf_idx.selector.is_none());
 
-        let ScenarioStep::WebSwitchFrame(wsf_main) = &s.steps[4] else { panic!("4") };
+        let ScenarioStep::WebSwitchFrame(wsf_main) = &s.steps[4] else {
+            panic!("4")
+        };
         assert!(wsf_main.selector.is_none());
         assert!(wsf_main.index.is_none());
 
-        let ScenarioStep::WebScroll(wsc) = &s.steps[5] else { panic!("5") };
+        let ScenarioStep::WebScroll(wsc) = &s.steps[5] else {
+            panic!("5")
+        };
         assert_eq!(wsc.selector.as_deref(), Some("#list"));
         assert_eq!(wsc.x, 0);
         assert_eq!(wsc.y, 300);
 
-        let ScenarioStep::WebAlert(wa) = &s.steps[6] else { panic!("6") };
+        let ScenarioStep::WebAlert(wa) = &s.steps[6] else {
+            panic!("6")
+        };
         assert_eq!(wa.action, AlertAction::GetText);
         assert_eq!(wa.save_as.as_deref(), Some("msg"));
 
-        let ScenarioStep::ExcelWriteRange(ewr) = &s.steps[7] else { panic!("7") };
+        let ScenarioStep::ExcelWriteRange(ewr) = &s.steps[7] else {
+            panic!("7")
+        };
         assert_eq!(ewr.cell, "A2");
         assert_eq!(ewr.data, "rows");
         assert!(ewr.sheet.is_none());
 
-        let ScenarioStep::StringFormat(sf) = &s.steps[8] else { panic!("8") };
+        let ScenarioStep::StringFormat(sf) = &s.steps[8] else {
+            panic!("8")
+        };
         assert_eq!(sf.format, "Hello, {0}!");
         assert_eq!(sf.args, vec!["world"]);
         assert_eq!(sf.save_as, "greeting");
 
-        let ScenarioStep::Base64Encode(be) = &s.steps[9] else { panic!("9") };
+        let ScenarioStep::Base64Encode(be) = &s.steps[9] else {
+            panic!("9")
+        };
         assert_eq!(be.value, "hello");
         assert_eq!(be.save_as, "encoded");
 
-        let ScenarioStep::Base64Decode(bd) = &s.steps[10] else { panic!("10") };
+        let ScenarioStep::Base64Decode(bd) = &s.steps[10] else {
+            panic!("10")
+        };
         assert_eq!(bd.value, "aGVsbG8=");
         assert_eq!(bd.save_as, "decoded");
     }
@@ -4261,47 +4305,73 @@ steps:
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 16);
 
-        let ScenarioStep::StringContains(sc) = &s.steps[0] else { panic!("0") };
+        let ScenarioStep::StringContains(sc) = &s.steps[0] else {
+            panic!("0")
+        };
         assert_eq!(sc.value, "hello world");
         assert_eq!(sc.search, "world");
         assert!(!sc.ignore_case);
         assert_eq!(sc.save_as, "found");
 
-        let ScenarioStep::StringStartsWith(ssw) = &s.steps[1] else { panic!("1") };
+        let ScenarioStep::StringStartsWith(ssw) = &s.steps[1] else {
+            panic!("1")
+        };
         assert!(ssw.ignore_case);
 
-        let ScenarioStep::StringEndsWith(sew) = &s.steps[2] else { panic!("2") };
+        let ScenarioStep::StringEndsWith(sew) = &s.steps[2] else {
+            panic!("2")
+        };
         assert!(sew.ignore_case);
 
-        let ScenarioStep::StringIndexOf(sio) = &s.steps[3] else { panic!("3") };
+        let ScenarioStep::StringIndexOf(sio) = &s.steps[3] else {
+            panic!("3")
+        };
         assert_eq!(sio.search, "world");
         assert_eq!(sio.save_as, "pos");
 
-        let ScenarioStep::ToNumber(tn) = &s.steps[4] else { panic!("4") };
+        let ScenarioStep::ToNumber(tn) = &s.steps[4] else {
+            panic!("4")
+        };
         assert_eq!(tn.default, Some(0.0));
 
-        let ScenarioStep::ToString(ts) = &s.steps[5] else { panic!("5") };
+        let ScenarioStep::ToString(ts) = &s.steps[5] else {
+            panic!("5")
+        };
         assert_eq!(ts.save_as, "count_str");
 
-        let ScenarioStep::VarType(vt) = &s.steps[6] else { panic!("6") };
+        let ScenarioStep::VarType(vt) = &s.steps[6] else {
+            panic!("6")
+        };
         assert_eq!(vt.value, "my_var");
 
-        let ScenarioStep::ListLength(ll) = &s.steps[7] else { panic!("7") };
+        let ScenarioStep::ListLength(ll) = &s.steps[7] else {
+            panic!("7")
+        };
         assert_eq!(ll.list, "rows");
 
-        let ScenarioStep::ListGet(lg) = &s.steps[8] else { panic!("8") };
+        let ScenarioStep::ListGet(lg) = &s.steps[8] else {
+            panic!("8")
+        };
         assert_eq!(lg.index, "0");
 
-        let ScenarioStep::ListPush(lp) = &s.steps[9] else { panic!("9") };
+        let ScenarioStep::ListPush(lp) = &s.steps[9] else {
+            panic!("9")
+        };
         assert_eq!(lp.value, "new");
 
-        let ScenarioStep::ListRemove(lr) = &s.steps[10] else { panic!("10") };
+        let ScenarioStep::ListRemove(lr) = &s.steps[10] else {
+            panic!("10")
+        };
         assert_eq!(lr.index, "0");
 
-        let ScenarioStep::ListContains(lc) = &s.steps[11] else { panic!("11") };
+        let ScenarioStep::ListContains(lc) = &s.steps[11] else {
+            panic!("11")
+        };
         assert_eq!(lc.value, "urgent");
 
-        let ScenarioStep::NumberRandom(nr) = &s.steps[12] else { panic!("12") };
+        let ScenarioStep::NumberRandom(nr) = &s.steps[12] else {
+            panic!("12")
+        };
         assert_eq!(nr.min, 1.0);
         assert_eq!(nr.max, 100.0);
         assert!(nr.integer);
@@ -4309,7 +4379,9 @@ steps:
         assert!(matches!(&s.steps[13], ScenarioStep::WebNavigateBack));
         assert!(matches!(&s.steps[14], ScenarioStep::WebNavigateForward));
 
-        let ScenarioStep::WebWaitText(wwt) = &s.steps[15] else { panic!("15") };
+        let ScenarioStep::WebWaitText(wwt) = &s.steps[15] else {
+            panic!("15")
+        };
         assert_eq!(wwt.selector, ".status");
         assert_eq!(wwt.text, "完了");
         assert_eq!(wwt.timeout_ms, 10000);
@@ -4366,43 +4438,61 @@ steps:
         let s = Scenario::from_yaml(yaml).unwrap();
         assert_eq!(s.steps.len(), 9);
 
-        let ScenarioStep::MailSend(ms) = &s.steps[0] else { panic!("0") };
+        let ScenarioStep::MailSend(ms) = &s.steps[0] else {
+            panic!("0")
+        };
         assert_eq!(ms.host, "smtp.example.com");
         assert_eq!(ms.port, 587);
         assert_eq!(ms.cc.as_deref(), Some("cc@example.com"));
         assert!(ms.bcc.is_none());
 
-        let ScenarioStep::FileSize(fs) = &s.steps[1] else { panic!("1") };
+        let ScenarioStep::FileSize(fs) = &s.steps[1] else {
+            panic!("1")
+        };
         assert_eq!(fs.path, "data.xlsx");
         assert_eq!(fs.save_as, "sz");
 
-        let ScenarioStep::FileModifiedAt(fm) = &s.steps[2] else { panic!("2") };
+        let ScenarioStep::FileModifiedAt(fm) = &s.steps[2] else {
+            panic!("2")
+        };
         assert_eq!(fm.format, "%Y-%m-%d");
         assert_eq!(fm.save_as, "mtime");
 
-        let ScenarioStep::ExcelFindRow(efr) = &s.steps[3] else { panic!("3") };
+        let ScenarioStep::ExcelFindRow(efr) = &s.steps[3] else {
+            panic!("3")
+        };
         assert_eq!(efr.col, "A");
         assert_eq!(efr.value, "target");
         assert!(efr.has_header);
         assert_eq!(efr.save_as, "row_num");
 
-        let ScenarioStep::StringCount(sc) = &s.steps[4] else { panic!("4") };
+        let ScenarioStep::StringCount(sc) = &s.steps[4] else {
+            panic!("4")
+        };
         assert_eq!(sc.value, "hello world hello");
         assert_eq!(sc.search, "hello");
         assert!(!sc.ignore_case);
         assert_eq!(sc.save_as, "cnt");
 
-        let ScenarioStep::Foreach(fe) = &s.steps[5] else { panic!("5") };
+        let ScenarioStep::Foreach(fe) = &s.steps[5] else {
+            panic!("5")
+        };
         assert_eq!(fe.var, "items");
         assert_eq!(fe.index_var.as_deref(), Some("idx"));
 
-        let ScenarioStep::WebGetUrl(wgu) = &s.steps[6] else { panic!("6") };
+        let ScenarioStep::WebGetUrl(wgu) = &s.steps[6] else {
+            panic!("6")
+        };
         assert_eq!(wgu.save_as, "url");
 
-        let ScenarioStep::WebGetTitle(wgt) = &s.steps[7] else { panic!("7") };
+        let ScenarioStep::WebGetTitle(wgt) = &s.steps[7] else {
+            panic!("7")
+        };
         assert_eq!(wgt.save_as, "title");
 
-        let ScenarioStep::WebGetAll(wga) = &s.steps[8] else { panic!("8") };
+        let ScenarioStep::WebGetAll(wga) = &s.steps[8] else {
+            panic!("8")
+        };
         assert_eq!(wga.selector, ".item");
         assert_eq!(wga.attr.as_deref(), Some("href"));
         assert_eq!(wga.timeout_ms, 3000);

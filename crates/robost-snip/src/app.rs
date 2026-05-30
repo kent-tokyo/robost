@@ -358,7 +358,10 @@ impl SnipApp {
             // Too small — start timer, reset drag so user can retry
             self.too_small_until =
                 Some(std::time::Instant::now() + std::time::Duration::from_millis(1500));
-            if let OverlayState::Selecting { ref mut drag_start, .. } = self.state {
+            if let OverlayState::Selecting {
+                ref mut drag_start, ..
+            } = self.state
+            {
                 *drag_start = None;
             }
             ctx.request_repaint();

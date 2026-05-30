@@ -124,12 +124,10 @@ fn parse_cell_ref(s: &str) -> Option<(u32, u32)> {
     if col_str.is_empty() || row_str.is_empty() {
         return None;
     }
-    let col = col_str
-        .chars()
-        .try_fold(0u32, |acc, c| {
-            acc.checked_mul(26)
-                .and_then(|v| v.checked_add(c as u32 - 'A' as u32 + 1))
-        })?;
+    let col = col_str.chars().try_fold(0u32, |acc, c| {
+        acc.checked_mul(26)
+            .and_then(|v| v.checked_add(c as u32 - 'A' as u32 + 1))
+    })?;
     let row = row_str.parse::<u32>().ok()?;
     Some((col, row))
 }

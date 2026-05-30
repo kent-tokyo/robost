@@ -162,8 +162,7 @@ impl WebSession {
     /// Select an option in a `<select>` element by visible text or value attribute.
     pub async fn select(&self, selector: &str, item: &str, timeout_ms: u64) -> Result<()> {
         let el = self.find(selector, timeout_ms).await?;
-        let el_json =
-            serde_json::to_value(&el).map_err(|e| WebError::Command(e.to_string()))?;
+        let el_json = serde_json::to_value(&el).map_err(|e| WebError::Command(e.to_string()))?;
         let script = "var s=arguments[0],v=arguments[1];\
             for(var i=0;i<s.options.length;i++){\
                 if(s.options[i].text===v||s.options[i].value===v){\
@@ -174,7 +173,10 @@ impl WebSession {
             }\
             throw new Error('option not found: '+v);";
         self.client
-            .execute(script, vec![el_json, serde_json::Value::String(item.to_owned())])
+            .execute(
+                script,
+                vec![el_json, serde_json::Value::String(item.to_owned())],
+            )
             .await
             .map_err(|e| WebError::Command(e.to_string()))?;
         Ok(())
@@ -298,7 +300,10 @@ impl WebSession {
                     .await
                     .map_err(|e| WebError::Command(e.to_string()))?
                     .unwrap_or_default(),
-                None => el.text().await.map_err(|e| WebError::Command(e.to_string()))?,
+                None => el
+                    .text()
+                    .await
+                    .map_err(|e| WebError::Command(e.to_string()))?,
             };
             result.push(s);
         }

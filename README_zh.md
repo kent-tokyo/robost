@@ -4,6 +4,8 @@
 
 基于 Rust 的开源桌面自动化 (RPA) 工具。
 
+[English](README.md) | [日本語](README_ja.md)
+
 ## 截图
 
 | 场景 YAML | 运行输出 |
@@ -40,13 +42,13 @@
 | macOS (Intel) | [rpa-x86_64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-apple-darwin.tar.gz) |
 | Windows | [rpa-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip) |
 
-## 核心特性
+## 特性
 
-- **基于图像识别的自动化** — 多尺度 NCC 模板匹配、OCR（Tesseract）、ML 检测
-- **远程桌面支持** — 通过外部屏幕捕获操作 RDP/Citrix/VNC 会话
-- **企业级模板采集体验** — 通过热键冻结屏幕，捕获下拉菜单、悬浮提示等瞬态 UI；支持锚点/遮罩/多尺度
-- **WASM 插件扩展性** — 带权限声明的沙箱化社区插件
-- **丰富的 YAML 场景格式** — 支持变量、流程控制、数据源、内联脚本、子场景
+- **图像识别** — 多尺度 NCC 模板匹配、Tesseract OCR、ONNX ML 检测
+- **远程桌面支持** — 在本地捕获 RDP/Citrix/VNC 窗口，目标机器无需安装代理
+- **瞬态 UI 采集** — 热键冻结屏幕，可以选取平时会消失的下拉菜单和悬浮提示
+- **WASM 插件** — 沙箱内运行，插件崩溃不影响主进程
+- **纯 YAML 场景** — 支持变量、循环、分支、Rhai 内联脚本、子场景、数据源
 
 ## 自动化工具对比
 
@@ -71,23 +73,13 @@
 | 启动开销 | 约 10 ms（原生二进制） | 数秒 | 数秒 | Python 启动 | JVM 启动（约 2 秒） | Python 启动 |
 | OCR 支持 | 是（Tesseract，可选） | 是 | 是 | 否 | 部分 | 否（通过插件） |
 
-## 为什么选择 robost？
+## 为什么选 robost？
 
-**适合从商用 RPA 工具迁移的团队**
-robost 采用与主流商用 RPA 产品相同的节点词汇（click_image、wait_image、foreach、dialog_input 等），使场景迁移变得简单。场景以纯 YAML 格式保存，可在 PR 中审查，通过 `git diff` 直观查看变更，无需专有工具。
+相比 PyAutoGUI 和 SikuliX，最主要的区别是**无需在目标机器安装代理就能操作 RDP/Citrix**。它在本地捕获远程桌面窗口并通过 enigo 发送输入，不依赖对端运行的环境。多尺度 NCC 匹配也能自动处理会让像素精确工具失效的 DPI 缩放（100/125/150%）。
 
-**适合 RDP / 远程桌面自动化**
-无需在目标机器上安装代理。通过在本地机器上捕获 RDP 窗口并经由 enigo 发送输入，同样的方式也适用于 Citrix、VNC 及任何窗口化会话。多尺度 NCC 匹配可自动处理导致像素精确工具失效的 DPI 缩放（100/125/150%）。
+场景格式的节点词汇贴近 WinActor（click_image、wait_image、foreach、dialog_input 等），从现有自动化流程迁移比较直接。场景是纯 YAML，能在文本编辑器里看，用 git 管理变更，不需要专有工具。
 
-**适合工程团队**
-- **零许可证成本** — 不论机器人数量或用户数量，完全免费。并发工作进程不受限制。
-- **Git 原生** — YAML 场景是文本文件；`git diff` 可精确展示运行间的变化。
-- **可组合** — 子场景、变量、Rhai 内联脚本和 WASM 插件共享统一的调用语法。
-- **默认安全** — WASM 插件在沙箱中运行；崩溃的插件不会影响运行进程。
-- **快速启动** — Rust 二进制在毫秒内启动；无需 JVM 或 .NET 运行时预热。
-
-**适合开源贡献者**
-WASM 插件接口（`robost-plugin-api`）将运行器与节点实现解耦。用 Rust、AssemblyScript、Go 或 C 编写的插件编译为 `.wasm` 后无需 fork 核心即可集成。权限在 `plugin.toml` 中声明并在运行时强制执行。
+插件在 WASM 沙箱里运行：权限在 `plugin.toml` 里声明并在运行时强制检查。插件只能访问它声明过的资源，崩溃了主进程也继续运行。用 Rust、AssemblyScript、Go 或 C 写的插件编译成 `.wasm` 就能集成，不需要 fork 核心。
 
 ## 架构
 

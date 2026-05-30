@@ -4,6 +4,8 @@
 
 A Rust-based OSS desktop automation (RPA) tool.
 
+[日本語](README_ja.md) | [中文](README_zh.md)
+
 ## Screenshots
 
 | Scenario YAML | Run Output |
@@ -42,11 +44,11 @@ A Rust-based OSS desktop automation (RPA) tool.
 
 ## Key Features
 
-- **Image recognition automation** — multi-scale NCC template matching, OCR (Tesseract), ML detection
-- **Remote desktop support** — operates RDP/Citrix/VNC sessions via external screen capture
-- **Enterprise-grade template capture UX** — captures transient UI (dropdowns, tooltips) via hotkey freeze; anchor/mask/multi-scale support
-- **WASM plugin extensibility** — sandboxed community plugins with explicit permission declarations
-- **Rich scenario format** — YAML with variables, flow control, data sources, inline scripts, sub-scenarios
+- **Image recognition** — NCC template matching (multi-scale), OCR via Tesseract, ONNX ML detection
+- **Remote desktop** — captures the RDP/Citrix/VNC window locally; no agent needed on the target machine
+- **Transient UI capture** — hotkey freezes the screen so you can select dropdowns and tooltips that would otherwise disappear
+- **WASM plugins** — sandboxed extensions; a crashing plugin can't bring down the runner
+- **Plain YAML scenarios** — variables, loops, branches, inline Rhai scripts, sub-scenarios, data sources
 
 ## Comparison with Automation Tools
 
@@ -73,21 +75,11 @@ A Rust-based OSS desktop automation (RPA) tool.
 
 ## Why robost?
 
-**For teams migrating from commercial RPA tools**
-robost covers the same node vocabulary found in mainstream commercial RPA products (click_image, wait_image, foreach, dialog_input, …) making scenario migration straightforward. Scenarios are plain YAML — reviewable in PRs, diffable, and storable in Git without proprietary tooling.
+The main reason to reach for robost over PyAutoGUI or SikuliX is **RDP/Citrix support without an agent**. It captures the remote desktop window on the local machine and sends input through enigo, so it works regardless of what's running on the other end. Multi-scale NCC matching also handles DPI scaling (100/125/150%) that breaks pixel-perfect tools.
 
-**For RDP / remote desktop automation**
-robost requires no agent installed on the remote machine. It operates by capturing the RDP window on the local machine and sending input via enigo — the same technique works for Citrix, VNC, and any windowed session. Multi-scale NCC matching handles DPI scaling (100/125/150%) that breaks pixel-perfect tools.
+The scenario format is close to WinActor's node vocabulary (click_image, wait_image, foreach, dialog_input, …), so migrating existing automations is fairly direct. Scenarios are plain YAML — readable in any text editor and diffable in git with no proprietary tooling involved.
 
-**For engineering teams**
-- **Zero license cost** — no per-bot or per-user fees. Run as many concurrent workers as needed.
-- **Git-native** — YAML scenarios are text files; `git diff` shows exactly what changed between runs.
-- **Composable** — sub-scenarios, variables, inline Rhai scripts, and WASM plugins share one uniform call syntax.
-- **Safe by default** — WASM plugins are sandboxed; a crashing plugin cannot bring down the runner process.
-- **Fast startup** — the Rust binary starts in milliseconds; no JVM or .NET runtime warm-up.
-
-**For open-source contributors**
-The WASM plugin interface (`robost-plugin-api`) decouples the runner from node implementations. Community plugins written in Rust, AssemblyScript, Go, or C compile to `.wasm` and integrate without forking the core. Permissions are declared in `plugin.toml` and enforced at runtime — not just documented.
+Plugins run in a WASM sandbox: permissions are declared in `plugin.toml` and enforced at runtime. A plugin can only access what it declared, and if it panics, the runner keeps going. Plugins can be written in Rust, AssemblyScript, Go, or C — anything that compiles to `.wasm`.
 
 ## Architecture
 
