@@ -22,7 +22,7 @@ jobs:
             bin_cli: rpa
             archive_editor: robost-editor-aarch64-apple-darwin.tar.gz
             archive_cli: rpa-aarch64-apple-darwin.tar.gz
-          - os: macos-latest
+          - os: macos-13
             target: x86_64-apple-darwin
             bin_editor: robost-editor
             bin_cli: rpa
