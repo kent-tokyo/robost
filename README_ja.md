@@ -61,10 +61,10 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 | 画像認識 | Yes — マルチスケール NCC | Yes | Yes — AI 支援 | No | Yes — ピクセル完全一致 | No (プラグイン経由) |
 | Web ブラウザ自動化 | Yes — WebDriver | Yes | Yes | No | No | Yes (SeleniumLibrary) |
 | Excel 自動化 | Yes — セル/シート/数式 | Yes | Yes | No | No | No (プラグイン経由) |
-| Word / PowerPoint | ❌ Phase 2 | Yes | Yes | No | No | No |
-| SAP GUI 自動化 | ❌ Phase 2 | Yes | Yes | No | No | No |
-| シナリオ記録 | ❌ Phase 2 | Yes | Yes | No | No | No |
-| オーケストレーター (中央管理) | ❌ Phase 3 | Yes (限定的) | Yes | No | No | No |
+| Word / PowerPoint | — Phase 2 | Yes | Yes | No | No | No |
+| SAP GUI 自動化 | — Phase 2 | Yes | Yes | No | No | No |
+| シナリオ記録 | — Phase 2 | Yes | Yes | No | No | No |
+| オーケストレーター (中央管理) | — Phase 3 | Yes (限定的) | Yes | No | No | No |
 | 瞬間 UI キャプチャ (ドロップダウン等) | Yes — フリーズ + オーバーレイ | Yes | 部分的 | No | No | No |
 | マルチスケール DPI 対応 (125%/150%) | Yes — 内蔵 | 部分的 | 部分的 | No | No | No |
 | WASM プラグインサンドボックス | Yes — メモリ安全 | No | No | No | No | No |
@@ -427,7 +427,7 @@ cargo run -p robost-cli -- run scenario.yaml --export result.xlsx
 3. **Ctrl+Shift+C** を押下 (またはトレイメニューから「キャプチャ開始」) — 画面が凍結されフルスクリーンオーバーレイ表示
 4. 矩形選択でテンプレート範囲を決定
 5. 必要に応じて **アンカーポイント** (クリック基準点) と **マスク領域** (タイムスタンプ等の動的部分を除外) を追加
-6. **▶ マッチング確認** ボタンで現在の凍結画面でのマッチを検証
+6. マッチング確認 ボタンで現在の凍結画面でのマッチを検証
 7. **💾 保存** — PNG + メタデータ YAML が `templates/` に保存; 125%/150% の自動マルチスケール生成
 
 ## プラグイン
@@ -516,6 +516,6 @@ MIT OR Apache-2.0
 
 | フェーズ | 状態 | 主要内容 |
 |---|---|---|
-| **Phase 1** | ✅ 完了 | 200+ シナリオノード · CLI · ビジュアルエディタ · スニップツール · Web/UIA/Excel/メール/OCR/スケジューラー |
-| **Phase 2** | 🚧 計画中 | シナリオ記録 · Word/SFTP/ML 検出/並列実行/レジストリ/M365 |
-| **Phase 3** | 💡 将来 | オーケストレーター · キューモデル · AI 支援シナリオ生成 |
+| **Phase 1** | 完了 | 200+ シナリオノード · CLI · ビジュアルエディタ · スニップツール · Web/UIA/Excel/メール/OCR/スケジューラー |
+| **Phase 2** | 計画中 | シナリオ記録 · Word/SFTP/ML 検出/並列実行/レジストリ/M365 |
+| **Phase 3** | 将来 | オーケストレーター · キューモデル · AI 支援シナリオ生成 |

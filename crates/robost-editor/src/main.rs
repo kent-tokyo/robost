@@ -3271,6 +3271,44 @@ enum StepAction {
 
 // ---- main -----------------------------------------------------------------
 
+fn setup_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    let candidates: &[&str] = &[
+        // macOS
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        // Windows
+        "C:\\Windows\\Fonts\\meiryo.ttc",
+        "C:\\Windows\\Fonts\\msgothic.ttc",
+        "C:\\Windows\\Fonts\\YuGothR.ttc",
+        // Linux
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJKjp-Regular.otf",
+    ];
+
+    for path in candidates {
+        if let Ok(data) = std::fs::read(path) {
+            fonts
+                .font_data
+                .insert("cjk".to_owned(), egui::FontData::from_owned(data));
+            fonts
+                .families
+                .entry(egui::FontFamily::Proportional)
+                .or_default()
+                .push("cjk".to_owned());
+            fonts
+                .families
+                .entry(egui::FontFamily::Monospace)
+                .or_default()
+                .push("cjk".to_owned());
+            break;
+        }
+    }
+
+    ctx.set_fonts(fonts);
+}
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -3288,6 +3326,7 @@ fn main() -> Result<()> {
         native_options,
         Box::new(|cc| {
             cc.egui_ctx.set_visuals(egui::Visuals::dark());
+            setup_fonts(&cc.egui_ctx);
             Ok(Box::new(EditorApp::default()))
         }),
     )

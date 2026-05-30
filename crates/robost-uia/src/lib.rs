@@ -443,7 +443,7 @@ mod windows_impl {
                     let name = child
                         .CurrentName()
                         .map_err(|e| UiaError::Com(e.to_string()))?;
-                    if name.to_string() == item_name {
+                    if name == item_name {
                         if let Ok(p) = child.GetCurrentPattern(UIA_SelectionItemPatternId) {
                             let sip = p
                                 .cast::<IUIAutomationSelectionItemPattern>()

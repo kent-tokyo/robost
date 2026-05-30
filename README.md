@@ -61,10 +61,10 @@ A Rust-based OSS desktop automation (RPA) tool.
 | Image recognition | Yes — multi-scale NCC | Yes | Yes — AI-assisted | No | Yes — pixel-exact | No (via plugins) |
 | Web browser automation | Yes — WebDriver | Yes | Yes | No | No | Yes (via SeleniumLibrary) |
 | Excel automation | Yes — cell/sheet/formula | Yes | Yes | No | No | No (via plugins) |
-| Word / PowerPoint | ❌ Phase 2 | Yes | Yes | No | No | No |
-| SAP GUI automation | ❌ Phase 2 | Yes | Yes | No | No | No |
-| Scenario recorder | ❌ Phase 2 | Yes | Yes | No | No | No |
-| Orchestrator (central management) | ❌ Phase 3 | Yes (limited) | Yes | No | No | No |
+| Word / PowerPoint | — Phase 2 | Yes | Yes | No | No | No |
+| SAP GUI automation | — Phase 2 | Yes | Yes | No | No | No |
+| Scenario recorder | — Phase 2 | Yes | Yes | No | No | No |
+| Orchestrator (central management) | — Phase 3 | Yes (limited) | Yes | No | No | No |
 | Transient UI capture (dropdowns, tooltips) | Yes — freeze + overlay | Yes | Partial | No | No | No |
 | Multi-scale DPI resilience (125%/150%) | Yes — built-in | Partial | Partial | No | No | No |
 | WASM plugin sandbox | Yes — memory-safe | No | No | No | No | No |
@@ -427,7 +427,7 @@ cargo run -p robost-cli -- run scenario.yaml --export result.xlsx
 3. Press **Ctrl+Shift+C** (or use tray menu) — freezes the screen into a fullscreen overlay
 4. Drag to select the template region
 5. Optionally add **anchor points** (click reference targets) and **mask regions** (exclude dynamic areas like timestamps)
-6. Press **▶ Match test** to verify the match against the frozen screen
+6. Press Match test to verify the match against the frozen screen
 7. **Save** — PNG + metadata YAML written to `templates/`; multi-scale variants (125%, 150%) generated automatically
 
 ## Plugin System
@@ -516,6 +516,6 @@ MIT OR Apache-2.0
 
 | Phase | Status | Highlights |
 |---|---|---|
-| **Phase 1** | ✅ Complete | 200+ scenario nodes · CLI · visual editor · snip tool · Web/UIA/Excel/Mail/OCR/Scheduler |
-| **Phase 2** | 🚧 Planned | Scenario recorder · Word/SFTP/ML detection/Parallel execution/Registry/M365 |
-| **Phase 3** | 💡 Future | Orchestrator · queue model · AI-assisted scenario generation |
+| **Phase 1** | Complete | 200+ scenario nodes · CLI · visual editor · snip tool · Web/UIA/Excel/Mail/OCR/Scheduler |
+| **Phase 2** | Planned | Scenario recorder · Word/SFTP/ML detection/Parallel execution/Registry/M365 |
+| **Phase 3** | Future | Orchestrator · queue model · AI-assisted scenario generation |
