@@ -6497,10 +6497,12 @@ dependencies = [
  "robost-template",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "tray-icon",
+ "ureq 2.12.1",
 ]
 
 [[package]]

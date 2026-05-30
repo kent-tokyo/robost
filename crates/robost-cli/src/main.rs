@@ -2,8 +2,9 @@ mod config;
 mod scheduler;
 mod tray;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
+use std::io::Read as _;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -84,9 +85,10 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum PluginCommands {
-    /// Install a .wasm plugin
+    /// Install a .wasm plugin from a local path, HTTPS URL, or owner/repo@tag
     Install {
-        path: PathBuf,
+        /// Local .wasm path, https://…/plugin.wasm URL, or owner/repo@tag
+        source: String,
         /// Skip interactive permission confirmation
         #[arg(long, short = 'y')]
         yes: bool,
@@ -265,8 +267,9 @@ fn main() -> Result<()> {
             rt.block_on(scheduler::run_daemon())
         }
         Commands::Plugin { action } => match action {
-            PluginCommands::Install { path, yes } => {
-                let plugin = robost_plugin_host::PluginInstance::load(&path)?;
+            PluginCommands::Install { source, yes } => {
+                let (_tmpdir, wasm_path) = resolve_plugin_source(&source)?;
+                let plugin = robost_plugin_host::PluginInstance::load(&wasm_path)?;
                 let m = &plugin.manifest;
 
                 if !yes {
@@ -301,7 +304,7 @@ fn main() -> Result<()> {
                     }
                 }
 
-                let dest = config::install_plugin(&path, m)?;
+                let dest = config::install_plugin(&wasm_path, m)?;
                 println!(
                     "installed: {} v{} → {}",
                     m.plugin.name,
@@ -324,4 +327,79 @@ fn main() -> Result<()> {
             }
         },
     }
+}
+
+// ── Plugin source resolution ──────────────────────────────────────────────────
+
+/// Returns a (optional temp-dir guard, wasm path) pair.
+/// The temp dir is kept alive by the caller; dropping it removes the temp files.
+fn resolve_plugin_source(source: &str) -> Result<(Option<tempfile::TempDir>, PathBuf)> {
+    if source.starts_with("https://") || source.starts_with("http://") {
+        let (dir, path) = download_wasm_url(source)?;
+        Ok((Some(dir), path))
+    } else if let Some((repo, tag)) = source.split_once('@') {
+        if repo.contains('/') {
+            let (dir, path) = download_github_release(repo, tag)?;
+            Ok((Some(dir), path))
+        } else {
+            bail!("invalid source '{}': expected a file path, https:// URL, or owner/repo@tag", source)
+        }
+    } else {
+        Ok((None, PathBuf::from(source)))
+    }
+}
+
+/// Download a .wasm file (and adjacent plugin.toml) from an HTTPS URL into a temp dir.
+fn download_wasm_url(wasm_url: &str) -> Result<(tempfile::TempDir, PathBuf)> {
+    let dir = tempfile::tempdir()?;
+    let filename = wasm_url
+        .rsplit('/')
+        .next()
+        .unwrap_or("plugin.wasm");
+    let wasm_dest = dir.path().join(filename);
+
+    let toml_base = wasm_url.rsplit_once('/').map(|(base, _)| base).unwrap_or(wasm_url);
+    let toml_url = format!("{toml_base}/plugin.toml");
+
+    eprintln!("Downloading {wasm_url}");
+    fetch_to_file(wasm_url, &wasm_dest)?;
+    eprintln!("Downloading {toml_url}");
+    fetch_to_file(&toml_url, &dir.path().join("plugin.toml"))?;
+
+    Ok((dir, wasm_dest))
+}
+
+/// Resolve `owner/repo@tag` via the GitHub Releases API, then download the .wasm asset.
+fn download_github_release(repo: &str, tag: &str) -> Result<(tempfile::TempDir, PathBuf)> {
+    let api_url = format!("https://api.github.com/repos/{repo}/releases/tags/{tag}");
+    eprintln!("Fetching release metadata: {api_url}");
+
+    let body: serde_json::Value = ureq::get(&api_url)
+        .set("User-Agent", "robost-cli")
+        .set("Accept", "application/vnd.github+json")
+        .call()
+        .context("GitHub API request failed")?
+        .into_json()
+        .context("failed to parse GitHub API response")?;
+
+    let assets = body["assets"]
+        .as_array()
+        .context("no 'assets' field in GitHub release")?;
+
+    let wasm_url = assets
+        .iter()
+        .find(|a| a["name"].as_str().map(|n| n.ends_with(".wasm")).unwrap_or(false))
+        .and_then(|a| a["browser_download_url"].as_str())
+        .context("no .wasm asset found in GitHub release")?;
+
+    download_wasm_url(wasm_url)
+}
+
+fn fetch_to_file(url: &str, dest: &std::path::Path) -> Result<()> {
+    let resp = ureq::get(url)
+        .call()
+        .with_context(|| format!("GET {url} failed"))?;
+    let mut buf = Vec::new();
+    resp.into_reader().read_to_end(&mut buf)?;
+    std::fs::write(dest, buf).with_context(|| format!("write to {} failed", dest.display()))
 }

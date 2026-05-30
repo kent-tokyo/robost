@@ -27,13 +27,13 @@ rust-version = "1.89"
 
 [workspace.dependencies]
 # Internal crates
-robost-template   = { path = "crates/robost-template" }
-robost-capture    = { path = "crates/robost-capture" }
-robost-input      = { path = "crates/robost-input" }
-robost-vision     = { path = "crates/robost-vision", version = "0.1.0" }
+robost-template   = { path = "crates/robost-template",   version = "0.1.0" }
+robost-capture    = { path = "crates/robost-capture",    version = "0.1.0" }
+robost-input      = { path = "crates/robost-input",      version = "0.1.0" }
+robost-vision     = { path = "crates/robost-vision",     version = "0.1.0" }
 robost-backend    = { path = "crates/robost-backend" }
 robost-core       = { path = "crates/robost-core" }
-robost-plugin-api = { path = "crates/robost-plugin-api" }
+robost-plugin-api = { path = "crates/robost-plugin-api", version = "0.1.0" }
 robost-plugin-host = { path = "crates/robost-plugin-host" }
 robost-script     = { path = "crates/robost-script" }
 robost-stdlib     = { path = "crates/robost-stdlib" }

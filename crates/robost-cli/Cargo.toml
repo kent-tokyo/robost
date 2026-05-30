@@ -5,6 +5,7 @@ version.workspace     = true
 edition.workspace     = true
 license.workspace     = true
 repository.workspace  = true
+publish = false
 keywords   = ["rpa", "automation", "cli", "scheduler", "robot"]
 categories = ["command-line-utilities"]
 
@@ -31,6 +32,8 @@ tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 clap = { version = "4", features = ["derive"] }
+ureq.workspace = true
+tempfile.workspace = true
 eframe.workspace = true
 egui.workspace = true
 tray-icon.workspace = true
