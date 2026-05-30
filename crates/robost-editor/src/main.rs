@@ -84,6 +84,7 @@ struct AiMessage {
 #[derive(Clone)]
 enum ConfirmAction {
     OpenFile,
+    NewFile,
     DeleteStep(usize),
     Quit,
 }
@@ -226,6 +227,13 @@ enum PropView {
     #[default]
     Form,
     Yaml,
+}
+
+#[derive(PartialEq, Default)]
+enum BottomTab {
+    Variables,
+    #[default]
+    Log,
 }
 
 struct FlowNode {
@@ -672,27 +680,42 @@ fn step_summary(v: &serde_yml::Value) -> String {
     }
 }
 
-fn parse_scenario_steps(text: &str) -> Result<(String, Vec<serde_yml::Value>)> {
+fn parse_scenario_steps(text: &str) -> Result<(String, serde_yml::Mapping, Vec<serde_yml::Value>)> {
     let doc: serde_yml::Value = serde_yml::from_str(text)?;
     let name = doc
         .get("name")
         .and_then(|v| v.as_str())
         .unwrap_or("unnamed")
         .to_owned();
+    let vars = doc
+        .get("variables")
+        .and_then(|v| v.as_mapping())
+        .cloned()
+        .unwrap_or_default();
     let steps = doc
         .get("steps")
         .and_then(|v| v.as_sequence())
         .cloned()
         .unwrap_or_default();
-    Ok((name, steps))
+    Ok((name, vars, steps))
 }
 
-fn build_scenario_yaml(name: &str, steps: &[serde_yml::Value]) -> Result<String> {
+fn build_scenario_yaml(
+    name: &str,
+    vars: &serde_yml::Mapping,
+    steps: &[serde_yml::Value],
+) -> Result<String> {
     let mut map = serde_yml::Mapping::new();
     map.insert(
         serde_yml::Value::String("name".into()),
         serde_yml::Value::String(name.into()),
     );
+    if !vars.is_empty() {
+        map.insert(
+            serde_yml::Value::String("variables".into()),
+            serde_yml::Value::Mapping(vars.clone()),
+        );
+    }
     map.insert(
         serde_yml::Value::String("steps".into()),
         serde_yml::Value::Sequence(steps.to_vec()),
@@ -929,6 +952,8 @@ struct EditorApp {
     scroll_to_selected: bool,
     settings_test_result: Option<(bool, String)>,
     settings_test_rx: Option<std::sync::mpsc::Receiver<(bool, String)>>,
+    scenario_vars: serde_yml::Mapping,
+    bottom_tab: BottomTab,
 }
 
 impl Default for EditorApp {
@@ -976,6 +1001,8 @@ impl Default for EditorApp {
             scroll_to_selected: false,
             settings_test_result: None,
             settings_test_rx: None,
+            scenario_vars: serde_yml::Mapping::new(),
+            bottom_tab: BottomTab::default(),
         }
     }
 }
@@ -1029,8 +1056,9 @@ impl EditorApp {
         {
             match std::fs::read_to_string(&p) {
                 Ok(text) => match parse_scenario_steps(&text) {
-                    Ok((name, steps)) => {
+                    Ok((name, vars, steps)) => {
                         self.name = name;
+                        self.scenario_vars = vars;
                         self.steps = steps;
                         self.selected = None;
                         self.edit_buf.clear();
@@ -1049,7 +1077,7 @@ impl EditorApp {
     }
 
     fn write_scenario_to_path(&mut self, path: PathBuf) {
-        match build_scenario_yaml(&self.name, &self.steps) {
+        match build_scenario_yaml(&self.name, &self.scenario_vars, &self.steps) {
             Ok(text) => match std::fs::write(&path, &text) {
                 Ok(()) => {
                     self.path = Some(path.clone());
@@ -2639,12 +2667,28 @@ impl eframe::App for EditorApp {
             self.add_menu_just_opened = true;
             self.add_filter.clear();
         }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::N)) {
+            if !self.dirty {
+                self.name = "new_scenario".into();
+                self.steps.clear();
+                self.scenario_vars.clear();
+                self.selected = None;
+                self.path = None;
+                self.dirty = false;
+            } else {
+                self.confirm_dialog = Some(ConfirmAction::NewFile);
+            }
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::O)) {
+            self.open_file();
+        }
 
         // ── Confirm dialog (modal) ────────────────────────────────────────────
         if let Some(action) = self.confirm_dialog.clone() {
             let delete_msg_buf;
             let desc = match &action {
                 ConfirmAction::OpenFile => "変更が保存されていません。破棄して開きますか？",
+                ConfirmAction::NewFile => "変更が保存されていません。破棄して新規作成しますか？",
                 ConfirmAction::DeleteStep(idx) => {
                     let child_count = self.steps.get(*idx).map(count_child_steps).unwrap_or(0);
                     if child_count > 0 {
@@ -2683,6 +2727,14 @@ impl eframe::App for EditorApp {
                 self.confirm_dialog = None;
                 match action {
                     ConfirmAction::OpenFile => self.do_open_file(),
+                    ConfirmAction::NewFile => {
+                        self.name = "new_scenario".into();
+                        self.steps.clear();
+                        self.scenario_vars.clear();
+                        self.selected = None;
+                        self.path = None;
+                        self.dirty = false;
+                    }
                     ConfirmAction::DeleteStep(idx) => {
                         if idx < self.steps.len() {
                             self.push_undo();
@@ -2771,6 +2823,117 @@ impl eframe::App for EditorApp {
                 ctx.request_repaint();
             }
         }
+
+        // ── Menu bar ─────────────────────────────────────────────────────────
+        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                ui.menu_button("ファイル", |ui| {
+                    if ui.button("新規         Cmd+N").clicked() {
+                        ui.close();
+                        if !self.dirty {
+                            self.name = "new_scenario".into();
+                            self.steps.clear();
+                            self.scenario_vars.clear();
+                            self.selected = None;
+                            self.path = None;
+                            self.dirty = false;
+                        } else {
+                            self.confirm_dialog = Some(ConfirmAction::NewFile);
+                        }
+                    }
+                    if ui.button("開く…       Cmd+O").clicked() {
+                        ui.close();
+                        self.open_file();
+                    }
+                    ui.separator();
+                    if ui.button("保存         Cmd+S").clicked() {
+                        ui.close();
+                        self.save_file();
+                    }
+                    if ui.button("名前を付けて保存  Cmd+Shift+S").clicked() {
+                        ui.close();
+                        self.save_file_as();
+                    }
+                });
+                ui.menu_button("編集", |ui| {
+                    ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
+                        if ui.button("アンドゥ    Cmd+Z").clicked() {
+                            ui.close();
+                            self.undo();
+                        }
+                    });
+                    ui.add_enabled_ui(!self.redo_stack.is_empty(), |ui| {
+                        if ui.button("リドゥ  Cmd+Shift+Z").clicked() {
+                            ui.close();
+                            self.redo();
+                        }
+                    });
+                    ui.separator();
+                    if ui.button("ステップ追加  Cmd+Shift+A").clicked() {
+                        ui.close();
+                        self.add_menu_open = true;
+                        self.add_menu_just_opened = true;
+                        self.add_filter.clear();
+                    }
+                    ui.add_enabled_ui(self.selected.is_some(), |ui| {
+                        if ui.button("ステップ削除  Delete").clicked() {
+                            ui.close();
+                            if let Some(idx) = self.selected {
+                                self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
+                            }
+                        }
+                    });
+                });
+                ui.menu_button("表示", |ui| {
+                    if ui
+                        .selectable_label(self.view_mode == ViewMode::List, "リスト")
+                        .clicked()
+                    {
+                        self.view_mode = ViewMode::List;
+                        ui.close();
+                    }
+                    if ui
+                        .selectable_label(self.view_mode == ViewMode::Flow, "フロー")
+                        .clicked()
+                    {
+                        self.view_mode = ViewMode::Flow;
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui
+                        .selectable_label(self.ai_panel_open, "AI パネル")
+                        .clicked()
+                    {
+                        self.ai_panel_open = !self.ai_panel_open;
+                        ui.close();
+                    }
+                    if ui
+                        .selectable_label(self.manual_open, "マニュアル")
+                        .clicked()
+                    {
+                        self.manual_open = !self.manual_open;
+                        ui.close();
+                    }
+                });
+                ui.menu_button("実行", |ui| {
+                    if self.run_child.is_some() {
+                        if ui.button("停止         F5").clicked() {
+                            ui.close();
+                            self.stop_run();
+                        }
+                    } else if ui.button("実行         F5").clicked() {
+                        ui.close();
+                        self.run_scenario();
+                    }
+                });
+                ui.menu_button("ヘルプ", |ui| {
+                    if ui.button("設定").clicked() {
+                        ui.close();
+                        self.settings_open = true;
+                    }
+                });
+            });
+        });
 
         // ── Toolbar ──────────────────────────────────────────────────────────
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
@@ -2894,15 +3057,16 @@ impl eframe::App for EditorApp {
             });
         });
 
-        // ── Log panel (bottom, resizable) ─────────────────────────────────
-        egui::TopBottomPanel::bottom("log_panel")
+        // ── Bottom: tabbed Variables + Log ────────────────────────────────
+        egui::TopBottomPanel::bottom("bottom_panel")
             .resizable(true)
             .min_height(60.0)
-            .default_height(130.0)
+            .default_height(160.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.strong("ログ");
-                    if ui.small_button("クリア").clicked() {
+                    ui.selectable_value(&mut self.bottom_tab, BottomTab::Variables, "変数");
+                    ui.selectable_value(&mut self.bottom_tab, BottomTab::Log, "ログ");
+                    if self.bottom_tab == BottomTab::Log && ui.small_button("クリア").clicked() {
                         self.log.clear();
                     }
                     if let Some(ref p) = self.path {
@@ -2912,16 +3076,94 @@ impl eframe::App for EditorApp {
                     }
                 });
                 ui.separator();
-                egui::ScrollArea::vertical()
-                    .stick_to_bottom(true)
-                    .show(ui, |ui| {
-                        for entry in &self.log {
-                            ui.colored_label(
-                                entry.level.color(),
-                                egui::RichText::new(&entry.message).monospace().size(11.0),
-                            );
+                match self.bottom_tab {
+                    BottomTab::Log => {
+                        egui::ScrollArea::vertical()
+                            .stick_to_bottom(true)
+                            .show(ui, |ui| {
+                                for entry in &self.log {
+                                    ui.colored_label(
+                                        entry.level.color(),
+                                        egui::RichText::new(&entry.message).monospace().size(11.0),
+                                    );
+                                }
+                            });
+                    }
+                    BottomTab::Variables => {
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            egui::Grid::new("vars_grid")
+                                .striped(true)
+                                .num_columns(2)
+                                .min_col_width(120.0)
+                                .show(ui, |ui| {
+                                    ui.strong("変数名");
+                                    ui.strong("初期値");
+                                    ui.end_row();
+                                    let keys: Vec<serde_yml::Value> =
+                                        self.scenario_vars.keys().cloned().collect();
+                                    for key in &keys {
+                                        let name_str = key.as_str().unwrap_or("").to_owned();
+                                        let val_str = self
+                                            .scenario_vars
+                                            .get(key)
+                                            .map(|v| {
+                                                v.as_str().map(|s| s.to_owned()).unwrap_or_else(
+                                                    || {
+                                                        serde_yml::to_string(v)
+                                                            .unwrap_or_default()
+                                                            .trim()
+                                                            .to_owned()
+                                                    },
+                                                )
+                                            })
+                                            .unwrap_or_default();
+                                        ui.label(&name_str);
+                                        ui.label(&val_str);
+                                        ui.end_row();
+                                    }
+                                    if self.scenario_vars.is_empty() {
+                                        ui.weak("(変数なし)");
+                                        ui.end_row();
+                                    }
+                                });
+                        });
+                    }
+                }
+            });
+
+        // ── Left: step palette (permanent tree of available step types) ─────
+        let mut palette_insert: Option<&'static str> = None;
+        egui::SidePanel::left("step_palette")
+            .resizable(true)
+            .default_width(200.0)
+            .min_width(140.0)
+            .show(ctx, |ui| {
+                ui.heading("ノード");
+                ui.separator();
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    let mut cats: Vec<&str> = Vec::new();
+                    for t in STEP_TEMPLATES {
+                        if !cats.contains(&t.category) {
+                            cats.push(t.category);
                         }
-                    });
+                    }
+                    for cat in cats {
+                        let col = category_color(cat);
+                        let hdr = egui::RichText::new(cat).color(col).strong().size(11.0);
+                        egui::CollapsingHeader::new(hdr)
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                for t in STEP_TEMPLATES.iter().filter(|t| t.category == cat) {
+                                    let label = egui::RichText::new(t.display_name).size(11.0);
+                                    let resp = ui.selectable_label(false, label);
+                                    if resp.double_clicked() {
+                                        palette_insert = Some(t.yaml);
+                                    }
+                                    resp.on_hover_text(format!("{}\n\n{}", t.name, t.yaml));
+                                }
+                            });
+                    }
+                });
             });
 
         // ── Left: step list ───────────────────────────────────────────────
@@ -3244,6 +3486,17 @@ impl eframe::App for EditorApp {
             if close {
                 self.add_menu_open = false;
                 self.add_branch_target = None;
+            }
+        }
+
+        // ── Handle palette double-click insert ───────────────────────────
+        if let Some(yaml) = palette_insert {
+            if let Ok(v) = serde_yml::from_str::<serde_yml::Value>(yaml) {
+                self.push_undo();
+                let idx = self.selected.map(|i| i + 1).unwrap_or(self.steps.len());
+                self.steps.insert(idx, v);
+                self.select_step(idx);
+                self.log_info("ノードを追加しました");
             }
         }
 
