@@ -3,6 +3,258 @@ use eframe::egui;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 
+// ---- i18n -------------------------------------------------------------------
+
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize, Default)]
+enum Lang {
+    Ja,
+    #[default]
+    En,
+    Zh,
+}
+
+#[allow(dead_code)]
+struct S {
+    // menus
+    menu_file: &'static str,
+    menu_new: &'static str,
+    menu_open: &'static str,
+    menu_save: &'static str,
+    menu_save_as: &'static str,
+    menu_edit: &'static str,
+    menu_undo: &'static str,
+    menu_redo: &'static str,
+    menu_add_step: &'static str,
+    menu_copy: &'static str,
+    menu_cut: &'static str,
+    menu_paste: &'static str,
+    menu_duplicate: &'static str,
+    menu_delete_step: &'static str,
+    menu_view: &'static str,
+    menu_list: &'static str,
+    menu_flow: &'static str,
+    menu_ai_panel: &'static str,
+    menu_manual: &'static str,
+    menu_run_menu: &'static str,
+    menu_run: &'static str,
+    menu_stop: &'static str,
+    menu_help: &'static str,
+    menu_settings: &'static str,
+    menu_about: &'static str,
+    // panels
+    panel_nodes: &'static str,
+    panel_steps: &'static str,
+    panel_vars: &'static str,
+    panel_log: &'static str,
+    btn_add_step: &'static str,
+    btn_expand_all: &'static str,
+    btn_collapse_all: &'static str,
+    btn_run: &'static str,
+    btn_stop: &'static str,
+    btn_save: &'static str,
+    btn_open: &'static str,
+    // settings dialog
+    settings_title: &'static str,
+    settings_lang: &'static str,
+    settings_provider: &'static str,
+    settings_api_key: &'static str,
+    settings_model: &'static str,
+    settings_save: &'static str,
+    settings_test: &'static str,
+    // about dialog
+    about_title: &'static str,
+    about_rpa_tool: &'static str,
+    about_version: &'static str,
+    about_license: &'static str,
+    // misc
+    scenario_name_label: &'static str,
+    hint_double_click: &'static str,
+    onboard_1: &'static str,
+    onboard_2: &'static str,
+    onboard_3: &'static str,
+    onboard_4: &'static str,
+    onboard_open: &'static str,
+    clear: &'static str,
+}
+
+impl S {
+    fn for_lang(lang: &Lang) -> Self {
+        match lang {
+            Lang::Ja => Self {
+                menu_file: "ファイル",
+                menu_new: "新規         Cmd+N",
+                menu_open: "開く…       Cmd+O",
+                menu_save: "保存         Cmd+S",
+                menu_save_as: "名前を付けて保存  Cmd+Shift+S",
+                menu_edit: "編集",
+                menu_undo: "アンドゥ    Cmd+Z",
+                menu_redo: "リドゥ  Cmd+Shift+Z",
+                menu_add_step: "ステップ追加  Cmd+Shift+A",
+                menu_copy: "コピー        Cmd+C",
+                menu_cut: "カット        Cmd+X",
+                menu_paste: "ペースト      Cmd+V",
+                menu_duplicate: "複製          Cmd+D",
+                menu_delete_step: "ステップ削除  Delete",
+                menu_view: "表示",
+                menu_list: "リスト",
+                menu_flow: "フロー",
+                menu_ai_panel: "AI パネル",
+                menu_manual: "マニュアル",
+                menu_run_menu: "実行",
+                menu_run: "実行          F5",
+                menu_stop: "停止          F5",
+                menu_help: "ヘルプ",
+                menu_settings: "設定",
+                menu_about: "バージョン情報",
+                panel_nodes: "ノード",
+                panel_steps: "ステップ一覧",
+                panel_vars: "変数",
+                panel_log: "ログ",
+                btn_add_step: "+ ステップ追加",
+                btn_expand_all: "開",
+                btn_collapse_all: "閉",
+                btn_run: "実行",
+                btn_stop: "停止",
+                btn_save: "保存",
+                btn_open: "開く",
+                settings_title: "設定",
+                settings_lang: "言語",
+                settings_provider: "プロバイダー",
+                settings_api_key: "API キー",
+                settings_model: "モデル",
+                settings_save: "保存",
+                settings_test: "接続テスト",
+                about_title: "robost について",
+                about_rpa_tool: "RPA 自動化ツール",
+                about_version: "バージョン",
+                about_license: "ライセンス",
+                scenario_name_label: "シナリオ名",
+                hint_double_click: "ダブルクリックで追加",
+                onboard_1: "① 上部の「シナリオ名」を入力してください",
+                onboard_2: "② 左パネルの「+ ステップ追加」でステップを選んでください",
+                onboard_3: "③ ステップを選択するとフォームまたは YAML で内容を編集できます",
+                onboard_4: "④ 「保存」してから「実行」でシナリオを起動できます",
+                onboard_open: "既存のシナリオを開くには上部の「⌘ 開く」をご利用ください",
+                clear: "クリア",
+            },
+            Lang::En => Self {
+                menu_file: "File",
+                menu_new: "New              Cmd+N",
+                menu_open: "Open…           Cmd+O",
+                menu_save: "Save             Cmd+S",
+                menu_save_as: "Save As…  Cmd+Shift+S",
+                menu_edit: "Edit",
+                menu_undo: "Undo        Cmd+Z",
+                menu_redo: "Redo   Cmd+Shift+Z",
+                menu_add_step: "Add Step  Cmd+Shift+A",
+                menu_copy: "Copy          Cmd+C",
+                menu_cut: "Cut            Cmd+X",
+                menu_paste: "Paste         Cmd+V",
+                menu_duplicate: "Duplicate    Cmd+D",
+                menu_delete_step: "Delete Step  Delete",
+                menu_view: "View",
+                menu_list: "List",
+                menu_flow: "Flow",
+                menu_ai_panel: "AI Panel",
+                menu_manual: "Manual",
+                menu_run_menu: "Run",
+                menu_run: "Run             F5",
+                menu_stop: "Stop            F5",
+                menu_help: "Help",
+                menu_settings: "Settings",
+                menu_about: "About robost",
+                panel_nodes: "Nodes",
+                panel_steps: "Steps",
+                panel_vars: "Variables",
+                panel_log: "Log",
+                btn_add_step: "+ Add Step",
+                btn_expand_all: "▾",
+                btn_collapse_all: "▸",
+                btn_run: "Run",
+                btn_stop: "Stop",
+                btn_save: "Save",
+                btn_open: "Open",
+                settings_title: "Settings",
+                settings_lang: "Language",
+                settings_provider: "Provider",
+                settings_api_key: "API Key",
+                settings_model: "Model",
+                settings_save: "Save",
+                settings_test: "Test Connection",
+                about_title: "About robost",
+                about_rpa_tool: "RPA Automation Tool",
+                about_version: "Version",
+                about_license: "License",
+                scenario_name_label: "Scenario name",
+                hint_double_click: "Double-click to insert",
+                onboard_1: "① Enter a scenario name above",
+                onboard_2: "② Use \"+ Add Step\" in the left panel to pick steps",
+                onboard_3: "③ Select a step to edit its properties via form or YAML",
+                onboard_4: "④ Save then Run to execute the scenario",
+                onboard_open: "Use \"⌘ Open\" above to load an existing scenario",
+                clear: "Clear",
+            },
+            Lang::Zh => Self {
+                menu_file: "文件",
+                menu_new: "新建         Cmd+N",
+                menu_open: "打开…       Cmd+O",
+                menu_save: "保存         Cmd+S",
+                menu_save_as: "另存为  Cmd+Shift+S",
+                menu_edit: "编辑",
+                menu_undo: "撤销    Cmd+Z",
+                menu_redo: "重做  Cmd+Shift+Z",
+                menu_add_step: "添加步骤  Cmd+Shift+A",
+                menu_copy: "复制          Cmd+C",
+                menu_cut: "剪切          Cmd+X",
+                menu_paste: "粘贴          Cmd+V",
+                menu_duplicate: "复制步骤    Cmd+D",
+                menu_delete_step: "删除步骤  Delete",
+                menu_view: "视图",
+                menu_list: "列表",
+                menu_flow: "流程图",
+                menu_ai_panel: "AI 面板",
+                menu_manual: "手册",
+                menu_run_menu: "运行",
+                menu_run: "运行          F5",
+                menu_stop: "停止          F5",
+                menu_help: "帮助",
+                menu_settings: "设置",
+                menu_about: "关于 robost",
+                panel_nodes: "节点",
+                panel_steps: "步骤列表",
+                panel_vars: "变量",
+                panel_log: "日志",
+                btn_add_step: "+ 添加步骤",
+                btn_expand_all: "开",
+                btn_collapse_all: "闭",
+                btn_run: "运行",
+                btn_stop: "停止",
+                btn_save: "保存",
+                btn_open: "打开",
+                settings_title: "设置",
+                settings_lang: "语言",
+                settings_provider: "服务商",
+                settings_api_key: "API 密钥",
+                settings_model: "模型",
+                settings_save: "保存",
+                settings_test: "连接测试",
+                about_title: "关于 robost",
+                about_rpa_tool: "RPA 自动化工具",
+                about_version: "版本",
+                about_license: "许可证",
+                scenario_name_label: "场景名",
+                hint_double_click: "双击以插入",
+                onboard_1: "① 在上方输入场景名称",
+                onboard_2: "② 在左侧面板使用「添加步骤」选择步骤",
+                onboard_3: "③ 选中步骤后可通过表单或 YAML 编辑其属性",
+                onboard_4: "④ 保存后点击「运行」即可执行场景",
+                onboard_open: "使用上方「⌘ 打开」加载已有场景",
+                clear: "清除",
+            },
+        }
+    }
+}
+
 // ---- settings ---------------------------------------------------------------
 
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -16,6 +268,8 @@ struct AppSettings {
     provider: AiProvider,
     api_key: String,
     model: String,
+    #[serde(default)]
+    lang: Lang,
 }
 
 impl Default for AppSettings {
@@ -24,6 +278,7 @@ impl Default for AppSettings {
             provider: AiProvider::Anthropic,
             api_key: String::new(),
             model: "claude-haiku-4-5-20251001".to_owned(),
+            lang: Lang::default(),
         }
     }
 }
@@ -2520,18 +2775,33 @@ impl EditorApp {
         if !self.settings_open {
             return;
         }
+        let s = S::for_lang(&self.settings.lang);
         let mut open = self.settings_open;
-        egui::Window::new("設定")
+        egui::Window::new(s.settings_title)
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_size([380.0, 220.0])
+            .default_size([380.0, 240.0])
             .show(ctx, |ui| {
                 egui::Grid::new("settings_grid")
                     .num_columns(2)
                     .spacing([12.0, 8.0])
                     .show(ui, |ui| {
-                        ui.label("プロバイダー:");
+                        ui.label(format!("{}:", s.settings_lang));
+                        egui::ComboBox::from_id_salt("lang_combo")
+                            .selected_text(match self.settings.lang {
+                                Lang::Ja => "日本語",
+                                Lang::En => "English",
+                                Lang::Zh => "中文",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.settings.lang, Lang::En, "English");
+                                ui.selectable_value(&mut self.settings.lang, Lang::Ja, "日本語");
+                                ui.selectable_value(&mut self.settings.lang, Lang::Zh, "中文");
+                            });
+                        ui.end_row();
+
+                        ui.label(format!("{}:", s.settings_provider));
                         egui::ComboBox::from_id_salt("provider_combo")
                             .selected_text(match self.settings.provider {
                                 AiProvider::Anthropic => "Anthropic (Claude)",
@@ -2551,7 +2821,7 @@ impl EditorApp {
                             });
                         ui.end_row();
 
-                        ui.label("APIキー:");
+                        ui.label(format!("{}:", s.settings_api_key));
                         ui.add(
                             egui::TextEdit::singleline(&mut self.settings.api_key)
                                 .password(true)
@@ -2559,7 +2829,7 @@ impl EditorApp {
                         );
                         ui.end_row();
 
-                        ui.label("モデル:");
+                        ui.label(format!("{}:", s.settings_model));
                         let models: &[&str] = match self.settings.provider {
                             AiProvider::Anthropic => &[
                                 "claude-haiku-4-5-20251001",
@@ -2584,7 +2854,7 @@ impl EditorApp {
 
                 ui.separator();
                 ui.horizontal(|ui| {
-                    if ui.button("保存").clicked() {
+                    if ui.button(s.settings_save).clicked() {
                         save_settings(&self.settings);
                         self.settings_open = false;
                     }
@@ -2592,7 +2862,7 @@ impl EditorApp {
                     if ui
                         .add_enabled(
                             !testing && !self.settings.api_key.is_empty(),
-                            egui::Button::new("接続テスト"),
+                            egui::Button::new(s.settings_test),
                         )
                         .clicked()
                     {
@@ -2723,6 +2993,7 @@ impl EditorApp {
 
 impl eframe::App for EditorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let s = S::for_lang(&self.settings.lang);
         // ── OS window close button ────────────────────────────────────────────
         if ctx.input(|i| i.viewport().close_requested())
             && self.dirty
@@ -2975,8 +3246,8 @@ impl eframe::App for EditorApp {
         // ── Menu bar ─────────────────────────────────────────────────────────
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("ファイル", |ui| {
-                    if ui.button("新規         Cmd+N").clicked() {
+                ui.menu_button(s.menu_file, |ui| {
+                    if ui.button(s.menu_new).clicked() {
                         ui.close();
                         if !self.dirty {
                             self.name = "new_scenario".into();
@@ -2989,35 +3260,35 @@ impl eframe::App for EditorApp {
                             self.confirm_dialog = Some(ConfirmAction::NewFile);
                         }
                     }
-                    if ui.button("開く…       Cmd+O").clicked() {
+                    if ui.button(s.menu_open).clicked() {
                         ui.close();
                         self.open_file();
                     }
                     ui.separator();
-                    if ui.button("保存         Cmd+S").clicked() {
+                    if ui.button(s.menu_save).clicked() {
                         ui.close();
                         self.save_file();
                     }
-                    if ui.button("名前を付けて保存  Cmd+Shift+S").clicked() {
+                    if ui.button(s.menu_save_as).clicked() {
                         ui.close();
                         self.save_file_as();
                     }
                 });
-                ui.menu_button("編集", |ui| {
+                ui.menu_button(s.menu_edit, |ui| {
                     ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
-                        if ui.button("アンドゥ    Cmd+Z").clicked() {
+                        if ui.button(s.menu_undo).clicked() {
                             ui.close();
                             self.undo();
                         }
                     });
                     ui.add_enabled_ui(!self.redo_stack.is_empty(), |ui| {
-                        if ui.button("リドゥ  Cmd+Shift+Z").clicked() {
+                        if ui.button(s.menu_redo).clicked() {
                             ui.close();
                             self.redo();
                         }
                     });
                     ui.separator();
-                    if ui.button("ステップ追加  Cmd+Shift+A").clicked() {
+                    if ui.button(s.menu_add_step).clicked() {
                         ui.close();
                         self.add_menu_open = true;
                         self.add_menu_just_opened = true;
@@ -3027,26 +3298,26 @@ impl eframe::App for EditorApp {
                     let has_sel = !self.multi_selected.is_empty();
                     let has_clip = !self.step_clipboard.is_empty();
                     ui.add_enabled_ui(has_sel, |ui| {
-                        if ui.button("コピー        Cmd+C").clicked() {
+                        if ui.button(s.menu_copy).clicked() {
                             ui.close();
                             self.copy_selected_steps();
                         }
                     });
                     ui.add_enabled_ui(has_sel, |ui| {
-                        if ui.button("カット        Cmd+X").clicked() {
+                        if ui.button(s.menu_cut).clicked() {
                             ui.close();
                             self.copy_selected_steps();
                             self.delete_selected_steps();
                         }
                     });
                     ui.add_enabled_ui(has_clip, |ui| {
-                        if ui.button("ペースト      Cmd+V").clicked() {
+                        if ui.button(s.menu_paste).clicked() {
                             ui.close();
                             self.paste_steps();
                         }
                     });
                     ui.add_enabled_ui(has_sel, |ui| {
-                        if ui.button("複製          Cmd+D").clicked() {
+                        if ui.button(s.menu_duplicate).clicked() {
                             ui.close();
                             self.copy_selected_steps();
                             self.paste_steps();
@@ -3054,7 +3325,7 @@ impl eframe::App for EditorApp {
                     });
                     ui.separator();
                     ui.add_enabled_ui(has_sel, |ui| {
-                        if ui.button("ステップ削除  Delete").clicked() {
+                        if ui.button(s.menu_delete_step).clicked() {
                             ui.close();
                             if self.multi_selected.len() > 1 {
                                 self.delete_selected_steps();
@@ -3064,16 +3335,16 @@ impl eframe::App for EditorApp {
                         }
                     });
                 });
-                ui.menu_button("表示", |ui| {
+                ui.menu_button(s.menu_view, |ui| {
                     if ui
-                        .selectable_label(self.view_mode == ViewMode::List, "リスト")
+                        .selectable_label(self.view_mode == ViewMode::List, s.menu_list)
                         .clicked()
                     {
                         self.view_mode = ViewMode::List;
                         ui.close();
                     }
                     if ui
-                        .selectable_label(self.view_mode == ViewMode::Flow, "フロー")
+                        .selectable_label(self.view_mode == ViewMode::Flow, s.menu_flow)
                         .clicked()
                     {
                         self.view_mode = ViewMode::Flow;
@@ -3081,39 +3352,39 @@ impl eframe::App for EditorApp {
                     }
                     ui.separator();
                     if ui
-                        .selectable_label(self.ai_panel_open, "AI パネル")
+                        .selectable_label(self.ai_panel_open, s.menu_ai_panel)
                         .clicked()
                     {
                         self.ai_panel_open = !self.ai_panel_open;
                         ui.close();
                     }
                 });
-                ui.menu_button("実行", |ui| {
+                ui.menu_button(s.menu_run_menu, |ui| {
                     if self.run_child.is_some() {
-                        if ui.button("停止         F5").clicked() {
+                        if ui.button(s.menu_stop).clicked() {
                             ui.close();
                             self.stop_run();
                         }
-                    } else if ui.button("実行         F5").clicked() {
+                    } else if ui.button(s.menu_run).clicked() {
                         ui.close();
                         self.run_scenario();
                     }
                 });
-                ui.menu_button("ヘルプ", |ui| {
+                ui.menu_button(s.menu_help, |ui| {
                     if ui
-                        .selectable_label(self.manual_open, "マニュアル")
+                        .selectable_label(self.manual_open, s.menu_manual)
                         .clicked()
                     {
                         self.manual_open = !self.manual_open;
                         ui.close();
                     }
                     ui.separator();
-                    if ui.button("設定").clicked() {
+                    if ui.button(s.menu_settings).clicked() {
                         ui.close();
                         self.settings_open = true;
                     }
                     ui.separator();
-                    if ui.button("バージョン情報").clicked() {
+                    if ui.button(s.menu_about).clicked() {
                         ui.close();
                         self.about_open = true;
                     }
@@ -3153,31 +3424,35 @@ impl eframe::App for EditorApp {
                     }
                 });
                 ui.separator();
-                ui.label("シナリオ名:");
+                ui.label(format!("{}:", s.scenario_name_label));
                 if ui.text_edit_singleline(&mut self.name).changed() {
                     self.dirty = true;
                 }
                 ui.separator();
                 if self.run_child.is_some() {
                     if ui
-                        .button("⏹ 停止")
-                        .on_hover_text("実行を停止 (F5)")
+                        .button(format!("⏹ {}", s.btn_stop))
+                        .on_hover_text(format!("{} (F5)", s.btn_stop))
                         .clicked()
                     {
                         self.stop_run();
                     }
-                } else if ui.button("▶ 実行").on_hover_text("実行 (F5)").clicked() {
+                } else if ui
+                    .button(format!("▶ {}", s.btn_run))
+                    .on_hover_text(format!("{} (F5)", s.btn_run))
+                    .clicked()
+                {
                     self.run_scenario();
                 }
                 ui.separator();
                 if ui
-                    .selectable_value(&mut self.view_mode, ViewMode::List, "リスト")
+                    .selectable_value(&mut self.view_mode, ViewMode::List, s.menu_list)
                     .clicked()
                 {
                     // nothing extra
                 }
                 if ui
-                    .selectable_value(&mut self.view_mode, ViewMode::Flow, "フロー")
+                    .selectable_value(&mut self.view_mode, ViewMode::Flow, s.menu_flow)
                     .clicked()
                 {
                     self.scroll_to_selected = true;
@@ -3225,9 +3500,9 @@ impl eframe::App for EditorApp {
             .default_height(160.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.bottom_tab, BottomTab::Variables, "変数");
-                    ui.selectable_value(&mut self.bottom_tab, BottomTab::Log, "ログ");
-                    if self.bottom_tab == BottomTab::Log && ui.small_button("クリア").clicked() {
+                    ui.selectable_value(&mut self.bottom_tab, BottomTab::Variables, s.panel_vars);
+                    ui.selectable_value(&mut self.bottom_tab, BottomTab::Log, s.panel_log);
+                    if self.bottom_tab == BottomTab::Log && ui.small_button(s.clear).clicked() {
                         self.log.clear();
                     }
                     if let Some(ref p) = self.path {
@@ -3300,12 +3575,20 @@ impl eframe::App for EditorApp {
             .min_width(140.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.heading("ノード");
+                    ui.heading(s.panel_nodes);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button("閉").on_hover_text("全て閉じる").clicked() {
+                        if ui
+                            .small_button(s.btn_collapse_all)
+                            .on_hover_text("全て閉じる")
+                            .clicked()
+                        {
                             self.palette_force_open = Some(false);
                         }
-                        if ui.small_button("開").on_hover_text("全て展開").clicked() {
+                        if ui
+                            .small_button(s.btn_expand_all)
+                            .on_hover_text("全て展開")
+                            .clicked()
+                        {
                             self.palette_force_open = Some(true);
                         }
                     });
@@ -3343,7 +3626,7 @@ impl eframe::App for EditorApp {
         egui::SidePanel::left("steps_panel")
             .min_width(210.0)
             .show(ctx, |ui| {
-                ui.heading("ステップ一覧");
+                ui.heading(s.panel_steps);
                 ui.separator();
 
                 let mut action: Option<StepAction> = None;
@@ -3405,7 +3688,7 @@ impl eframe::App for EditorApp {
                     });
 
                 ui.separator();
-                if ui.button("+ ステップ追加").clicked() {
+                if ui.button(s.btn_add_step).clicked() {
                     self.add_menu_open = true;
                     self.add_menu_just_opened = true;
                     self.add_filter.clear();
@@ -3567,19 +3850,19 @@ impl eframe::App for EditorApp {
                 // Onboarding guide
                 ui.add_space(50.0);
                 ui.vertical_centered(|ui| {
-                    ui.heading("シナリオを作成しましょう");
+                    ui.heading("robost");
                     ui.add_space(20.0);
-                    ui.label("① 上部の「シナリオ名」を入力してください");
+                    ui.label(s.onboard_1);
                     ui.add_space(8.0);
-                    ui.label("② 左パネルの「+ ステップ追加」でステップを選んでください");
+                    ui.label(s.onboard_2);
                     ui.add_space(8.0);
-                    ui.label("③ ステップを選択するとフォームまたは YAML で内容を編集できます");
+                    ui.label(s.onboard_3);
                     ui.add_space(8.0);
-                    ui.label("④「保存」してから「実行」でシナリオを起動できます");
+                    ui.label(s.onboard_4);
                     ui.add_space(24.0);
                     ui.separator();
                     ui.add_space(8.0);
-                    ui.weak("既存のシナリオを開くには上部の「📂 開く」をご利用ください");
+                    ui.weak(s.onboard_open);
                 });
             } else {
                 ui.centered_and_justified(|ui| {
@@ -3751,8 +4034,9 @@ impl eframe::App for EditorApp {
 
         // ── About dialog ──────────────────────────────────────────────────
         if self.about_open {
+            let s = S::for_lang(&self.settings.lang);
             let mut open = true;
-            egui::Window::new("robost について")
+            egui::Window::new(s.about_title)
                 .collapsible(false)
                 .resizable(false)
                 .default_width(320.0)
@@ -3761,7 +4045,7 @@ impl eframe::App for EditorApp {
                     ui.vertical_centered(|ui| {
                         ui.add_space(8.0);
                         ui.heading("robost");
-                        ui.label("RPA 自動化ツール");
+                        ui.label(s.about_rpa_tool);
                         ui.add_space(8.0);
                         ui.separator();
                         ui.add_space(4.0);
@@ -3769,12 +4053,11 @@ impl eframe::App for EditorApp {
                             .num_columns(2)
                             .spacing([16.0, 4.0])
                             .show(ui, |ui| {
-                                ui.label("バージョン");
+                                ui.label(s.about_version);
                                 ui.label(env!("CARGO_PKG_VERSION"));
                                 ui.end_row();
-                                ui.label("ライセンス");
+                                ui.label(s.about_license);
                                 ui.label("MIT OR Apache-2.0");
-                                ui.end_row();
                                 ui.end_row();
                             });
                         ui.add_space(8.0);
