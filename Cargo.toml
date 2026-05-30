@@ -71,6 +71,7 @@ enigo = "0.6"
 # GUI (robost-snip)
 eframe        = "0.33"
 egui          = "0.33"
+egui_extras   = { version = "0.33", features = ["svg"] }
 tray-icon     = "0.24"
 global-hotkey = "0.8"
 

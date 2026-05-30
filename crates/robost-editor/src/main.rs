@@ -33,6 +33,8 @@ struct S {
     menu_view: &'static str,
     menu_list: &'static str,
     menu_flow: &'static str,
+    menu_canvas: &'static str,
+    canvas_reset: &'static str,
     menu_ai_panel: &'static str,
     menu_manual: &'static str,
     menu_run_menu: &'static str,
@@ -98,6 +100,8 @@ impl S {
                 menu_view: "表示",
                 menu_list: "リスト",
                 menu_flow: "フロー",
+                menu_canvas: "キャンバス",
+                canvas_reset: "配置リセット",
                 menu_ai_panel: "AI パネル",
                 menu_manual: "マニュアル",
                 menu_run_menu: "実行",
@@ -155,6 +159,8 @@ impl S {
                 menu_view: "View",
                 menu_list: "List",
                 menu_flow: "Flow",
+                menu_canvas: "Canvas",
+                canvas_reset: "Reset Layout",
                 menu_ai_panel: "AI Panel",
                 menu_manual: "Manual",
                 menu_run_menu: "Run",
@@ -212,6 +218,8 @@ impl S {
                 menu_view: "视图",
                 menu_list: "列表",
                 menu_flow: "流程图",
+                menu_canvas: "画布",
+                canvas_reset: "重置布局",
                 menu_ai_panel: "AI 面板",
                 menu_manual: "手册",
                 menu_run_menu: "运行",
@@ -496,6 +504,7 @@ enum ViewMode {
     #[default]
     List,
     Flow,
+    Canvas,
 }
 
 #[derive(PartialEq, Clone, Copy, Default)]
@@ -1267,6 +1276,10 @@ struct EditorApp {
     step_clipboard: Vec<serde_yml::Value>,
     /// When Some, forces all node-palette categories open (true) or closed (false) for one frame.
     palette_force_open: Option<bool>,
+    canvas_positions: HashMap<usize, egui::Pos2>,
+    canvas_zoom: f32,
+    canvas_pan: egui::Vec2,
+    canvas_dragging: Option<(usize, egui::Vec2)>,
 }
 
 impl Default for EditorApp {
@@ -1320,6 +1333,10 @@ impl Default for EditorApp {
             multi_selected: HashSet::new(),
             step_clipboard: Vec::new(),
             palette_force_open: None,
+            canvas_positions: HashMap::new(),
+            canvas_zoom: 1.0,
+            canvas_pan: egui::Vec2::ZERO,
+            canvas_dragging: None,
         }
     }
 }
@@ -1385,6 +1402,8 @@ impl EditorApp {
                         self.redo_stack.clear();
                         self.form_edit_buffers.clear();
                         self.log_ok(format!("開きました: {}", p.display()));
+                        self.canvas_positions.clear();
+                        self.load_canvas_layout(&p);
                     }
                     Err(e) => self.log_err(format!("構文エラー: {e}")),
                 },
@@ -1400,6 +1419,7 @@ impl EditorApp {
                     self.path = Some(path.clone());
                     self.dirty = false;
                     self.log_ok(format!("保存しました: {}", path.display()));
+                    self.save_canvas_layout();
                 }
                 Err(e) => self.log_err(format!("書き込みエラー: {e}")),
             },
@@ -1494,6 +1514,7 @@ impl EditorApp {
             .unwrap_or(self.steps.len());
         for (j, step) in self.step_clipboard.iter().enumerate() {
             self.steps.insert(at + j, step.clone());
+            Self::canvas_shift_positions(&mut self.canvas_positions, at + j, 1);
         }
         // Select the newly pasted range.
         let end = at + self.step_clipboard.len() - 1;
@@ -1515,6 +1536,7 @@ impl EditorApp {
         for i in &indices {
             if *i < self.steps.len() {
                 self.steps.remove(*i);
+                Self::canvas_shift_positions(&mut self.canvas_positions, *i, -1);
             }
         }
         self.multi_selected.clear();
@@ -2706,9 +2728,13 @@ impl EditorApp {
                     serde_yml::Value::Sequence(seq) => {
                         for (j, s) in seq.into_iter().enumerate() {
                             self.steps.insert(at + j, s);
+                            Self::canvas_shift_positions(&mut self.canvas_positions, at + j, 1);
                         }
                     }
-                    other => self.steps.insert(at, other),
+                    other => {
+                        self.steps.insert(at, other);
+                        Self::canvas_shift_positions(&mut self.canvas_positions, at, 1);
+                    }
                 }
                 self.dirty = true;
                 self.log.push(LogEntry {
@@ -3101,6 +3127,273 @@ impl EditorApp {
             self.insert_yaml_snippet(yaml);
         }
     }
+
+    fn ensure_canvas_layout(&mut self) {
+        const NODE_W: f32 = 260.0;
+        const NODE_H: f32 = 72.0;
+        const GAP_X: f32 = 80.0;
+        const GAP_Y: f32 = 60.0;
+        const COLS: usize = 5;
+        for idx in 0..self.steps.len() {
+            self.canvas_positions.entry(idx).or_insert_with(|| {
+                let col = idx % COLS;
+                let row = idx / COLS;
+                egui::pos2(
+                    col as f32 * (NODE_W + GAP_X) + 40.0,
+                    row as f32 * (NODE_H + GAP_Y) + 40.0,
+                )
+            });
+        }
+    }
+
+    fn canvas_shift_positions(positions: &mut HashMap<usize, egui::Pos2>, at: usize, delta: isize) {
+        let mut keys: Vec<usize> = positions.keys().cloned().collect();
+        if delta > 0 {
+            // Sort descending so we don't clobber higher indices when shifting up
+            keys.sort_unstable_by(|a, b| b.cmp(a));
+            for k in keys {
+                if k >= at {
+                    let v = positions.remove(&k).unwrap();
+                    positions.insert(k + 1, v);
+                }
+            }
+        } else if delta < 0 {
+            // Sort ascending so removal doesn't affect later keys
+            keys.sort_unstable();
+            for k in keys {
+                if k == at {
+                    positions.remove(&k);
+                } else if k > at {
+                    let v = positions.remove(&k).unwrap();
+                    positions.insert(k - 1, v);
+                }
+            }
+        }
+    }
+
+    fn save_canvas_layout(&self) {
+        let Some(ref path) = self.path else { return };
+        let lpath = layout_path(path);
+        let mut positions = serde_json::Map::new();
+        for (k, v) in &self.canvas_positions {
+            positions.insert(k.to_string(), serde_json::json!([v.x, v.y]));
+        }
+        let layout = serde_json::json!({ "positions": positions });
+        if let Ok(text) = serde_json::to_string(&layout) {
+            let _ = std::fs::write(&lpath, text);
+        }
+    }
+
+    fn load_canvas_layout(&mut self, scenario_path: &std::path::Path) {
+        self.canvas_positions.clear();
+        let lpath = layout_path(scenario_path);
+        let Ok(text) = std::fs::read_to_string(&lpath) else {
+            return;
+        };
+        let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) else {
+            return;
+        };
+        let Some(obj) = val["positions"].as_object() else {
+            return;
+        };
+        for (k, v) in obj {
+            let Ok(idx) = k.parse::<usize>() else {
+                continue;
+            };
+            let Some(arr) = v.as_array() else { continue };
+            if arr.len() == 2 {
+                let x = arr[0].as_f64().unwrap_or(0.0) as f32;
+                let y = arr[1].as_f64().unwrap_or(0.0) as f32;
+                self.canvas_positions.insert(idx, egui::pos2(x, y));
+            }
+        }
+    }
+
+    fn show_canvas(&mut self, ui: &mut egui::Ui) {
+        use egui::{epaint::CubicBezierShape, Align2, Color32, FontId, Rect, Sense, Stroke, Vec2};
+
+        const NODE_W: f32 = 260.0;
+        const NODE_H: f32 = 72.0;
+
+        let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
+        let origin = resp.rect.min;
+        let z = self.canvas_zoom;
+
+        // ── zoom / pan ─────────────────────────────────────────────────────
+        if resp.hovered() {
+            let (scroll, ctrl) = ui.input(|i| (i.smooth_scroll_delta, i.modifiers.command));
+            if ctrl && scroll.y != 0.0 {
+                let factor = 1.0 + scroll.y * 0.001;
+                self.canvas_zoom = (self.canvas_zoom * factor).clamp(0.25, 2.0);
+            } else {
+                if scroll.y != 0.0 {
+                    self.canvas_pan.y += scroll.y;
+                }
+                if scroll.x != 0.0 {
+                    self.canvas_pan.x += scroll.x;
+                }
+            }
+        }
+        // Pan on background drag (not on a node)
+        if resp.dragged_by(egui::PointerButton::Primary) && self.canvas_dragging.is_none() {
+            self.canvas_pan += resp.drag_delta();
+        }
+
+        let n = self.steps.len();
+
+        // Collect node screen positions
+        let screen_positions: Vec<egui::Pos2> = (0..n)
+            .map(|i| {
+                let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
+                    (i % 5) as f32 * 340.0 + 40.0,
+                    (i / 5) as f32 * 132.0 + 40.0,
+                ));
+                origin + (p.to_vec2() + self.canvas_pan) * z
+            })
+            .collect();
+
+        // ── Draw edges (behind nodes) ──────────────────────────────────────
+        for i in 0..n.saturating_sub(1) {
+            let from = screen_positions[i] + Vec2::new(NODE_W * z / 2.0, NODE_H * z);
+            let to = screen_positions[i + 1] + Vec2::new(NODE_W * z / 2.0, 0.0);
+            let ctrl = Vec2::new(0.0, 40.0 * z);
+            painter.add(egui::Shape::CubicBezier(
+                CubicBezierShape::from_points_stroke(
+                    [from, from + ctrl, to - ctrl, to],
+                    false,
+                    Color32::TRANSPARENT,
+                    Stroke::new(1.5 * z, Color32::from_gray(70)),
+                ),
+            ));
+            painter.arrow(
+                to - Vec2::new(0.0, 6.0 * z),
+                Vec2::new(0.0, 5.0 * z),
+                Stroke::new(1.5 * z, Color32::from_gray(70)),
+            );
+        }
+
+        // ── Collect interactions (to avoid borrow conflicts) ───────────────
+        let mut drag_started_node: Option<(usize, egui::Vec2)> = None;
+        let mut drag_delta_node: Option<(usize, egui::Pos2)> = None;
+        let mut drag_ended = false;
+        let mut clicked_node: Option<usize> = None;
+
+        for (idx, _step) in self.steps.iter().enumerate() {
+            let screen_pos = screen_positions[idx];
+            let node_rect = Rect::from_min_size(screen_pos, Vec2::new(NODE_W * z, NODE_H * z));
+            let node_resp = ui.allocate_rect(node_rect, Sense::click_and_drag());
+
+            if node_resp.drag_started() {
+                let cursor = ui.input(|i| i.pointer.interact_pos()).unwrap_or(screen_pos);
+                drag_started_node = Some((idx, cursor - screen_pos));
+            }
+            if node_resp.dragged() {
+                if let Some((di, _)) = self.canvas_dragging {
+                    if di == idx {
+                        let cursor = ui.input(|i| i.pointer.interact_pos()).unwrap_or(screen_pos);
+                        let drag_offset = self.canvas_dragging.unwrap().1;
+                        // Convert screen cursor to canvas space: subtract origin and drag
+                        // offset (both in screen pixels), divide by zoom, subtract pan.
+                        let screen_rel = cursor - origin - drag_offset;
+                        let canvas_pos = egui::pos2(
+                            screen_rel.x / z - self.canvas_pan.x,
+                            screen_rel.y / z - self.canvas_pan.y,
+                        );
+                        drag_delta_node = Some((idx, canvas_pos));
+                    }
+                }
+            }
+            if node_resp.drag_stopped() {
+                drag_ended = true;
+            }
+            if node_resp.clicked() {
+                clicked_node = Some(idx);
+            }
+
+            // ── Draw node ──────────────────────────────────────────────────
+            let selected = self.selected == Some(idx);
+            let bg = if selected {
+                Color32::from_rgb(28, 52, 88)
+            } else {
+                Color32::from_gray(40)
+            };
+            let border = if selected {
+                Color32::from_rgb(70, 125, 200)
+            } else {
+                Color32::from_gray(58)
+            };
+
+            painter.rect_filled(node_rect, 4.0 * z, bg);
+            painter.rect_stroke(
+                node_rect,
+                4.0 * z,
+                Stroke::new(1.0, border),
+                egui::StrokeKind::Inside,
+            );
+
+            // Left color stripe
+            let step = &self.steps[idx];
+            let key = get_step_key(step);
+            let cat_color = category_color(step_key_category(key));
+            let stripe = Rect::from_min_size(node_rect.min, Vec2::new(4.0 * z, NODE_H * z));
+            painter.rect_filled(stripe, 0.0, cat_color);
+
+            // Step index badge
+            painter.text(
+                node_rect.min + Vec2::new(10.0 * z, NODE_H * z * 0.3),
+                Align2::LEFT_CENTER,
+                format!("{}", idx + 1),
+                FontId::proportional(9.0 * z),
+                Color32::from_gray(140),
+            );
+
+            // Step label
+            let full_label = step_summary(step);
+            let label: String = full_label.chars().take(32).collect();
+            painter.text(
+                node_rect.min + Vec2::new(10.0 * z, NODE_H * z * 0.68),
+                Align2::LEFT_CENTER,
+                label,
+                FontId::proportional(11.0 * z),
+                Color32::from_gray(220),
+            );
+        }
+
+        // Apply interactions after the draw loop
+        if let Some((idx, offset)) = drag_started_node {
+            self.canvas_dragging = Some((idx, offset));
+        }
+        if let Some((idx, canvas_pos)) = drag_delta_node {
+            self.canvas_positions.insert(idx, canvas_pos);
+        }
+        if drag_ended {
+            self.canvas_dragging = None;
+        }
+        if let Some(idx) = clicked_node {
+            self.select_step(idx);
+        }
+
+        // Empty state hint
+        if n == 0 {
+            painter.text(
+                resp.rect.center(),
+                Align2::CENTER_CENTER,
+                "ステップがありません。左のパレットから追加してください。",
+                FontId::proportional(13.0),
+                Color32::from_gray(100),
+            );
+        }
+    }
+}
+
+fn layout_path(scenario_path: &std::path::Path) -> std::path::PathBuf {
+    let mut p = scenario_path.to_path_buf();
+    let fname = p
+        .file_name()
+        .map(|n| format!("{}.layout.json", n.to_string_lossy()))
+        .unwrap_or_else(|| "layout.json".into());
+    p.set_file_name(fname);
+    p
 }
 
 impl eframe::App for EditorApp {
@@ -3280,6 +3573,7 @@ impl eframe::App for EditorApp {
                         if idx < self.steps.len() {
                             self.push_undo();
                             self.steps.remove(idx);
+                            Self::canvas_shift_positions(&mut self.canvas_positions, idx, -1);
                             self.selected = None;
                             self.edit_buf.clear();
                             self.parse_error = None;
@@ -3472,6 +3766,14 @@ impl eframe::App for EditorApp {
                         self.view_mode = ViewMode::Flow;
                         ui.close();
                     }
+                    if ui
+                        .selectable_label(self.view_mode == ViewMode::Canvas, s.menu_canvas)
+                        .clicked()
+                    {
+                        self.view_mode = ViewMode::Canvas;
+                        self.ensure_canvas_layout();
+                        ui.close();
+                    }
                     ui.separator();
                     if ui
                         .selectable_label(self.ai_panel_open, s.menu_ai_panel)
@@ -3586,6 +3888,20 @@ impl eframe::App for EditorApp {
                     .clicked()
                 {
                     self.scroll_to_selected = true;
+                }
+                if ui
+                    .selectable_value(&mut self.view_mode, ViewMode::Canvas, s.menu_canvas)
+                    .clicked()
+                {
+                    self.ensure_canvas_layout();
+                }
+                if self.view_mode == ViewMode::Canvas {
+                    ui.separator();
+                    if ui.button(s.canvas_reset).clicked() {
+                        self.canvas_positions.clear();
+                        self.ensure_canvas_layout();
+                    }
+                    ui.label(format!("{:.0}%", self.canvas_zoom * 100.0));
                 }
                 if self.view_mode == ViewMode::Flow {
                     ui.separator();
@@ -3928,6 +4244,15 @@ impl eframe::App for EditorApp {
                         StepAction::MoveUp(i) => {
                             self.push_undo();
                             self.steps.swap(i - 1, i);
+                            // Swap canvas positions
+                            let pos_a = self.canvas_positions.get(&i).copied();
+                            let pos_b = self.canvas_positions.get(&(i - 1)).copied();
+                            if let Some(a) = pos_a {
+                                self.canvas_positions.insert(i - 1, a);
+                            }
+                            if let Some(b) = pos_b {
+                                self.canvas_positions.insert(i, b);
+                            }
                             if self.selected == Some(i) {
                                 self.selected = Some(i - 1);
                             }
@@ -3949,6 +4274,15 @@ impl eframe::App for EditorApp {
                         StepAction::MoveDown(i) => {
                             self.push_undo();
                             self.steps.swap(i, i + 1);
+                            // Swap canvas positions
+                            let pos_a = self.canvas_positions.get(&i).copied();
+                            let pos_b = self.canvas_positions.get(&(i + 1)).copied();
+                            if let Some(a) = pos_a {
+                                self.canvas_positions.insert(i + 1, a);
+                            }
+                            if let Some(b) = pos_b {
+                                self.canvas_positions.insert(i, b);
+                            }
                             if self.selected == Some(i) {
                                 self.selected = Some(i + 1);
                             }
@@ -3984,6 +4318,11 @@ impl eframe::App for EditorApp {
                             if let Ok(v) = serde_yml::from_str::<serde_yml::Value>(yaml) {
                                 self.push_undo();
                                 self.steps.insert(drop_insert_idx, v);
+                                Self::canvas_shift_positions(
+                                    &mut self.canvas_positions,
+                                    drop_insert_idx,
+                                    1,
+                                );
                                 self.select_step(drop_insert_idx);
                                 self.log_info("ノードをドロップしました");
                             }
@@ -3999,6 +4338,9 @@ impl eframe::App for EditorApp {
                                     drop_insert_idx
                                 };
                                 self.steps.insert(to, step);
+                                // Canvas: shift positions to match
+                                Self::canvas_shift_positions(&mut self.canvas_positions, from, -1);
+                                Self::canvas_shift_positions(&mut self.canvas_positions, to, 1);
                                 // Update selection to follow the moved step.
                                 self.selected = Some(to);
                                 self.multi_selected.clear();
@@ -4022,6 +4364,10 @@ impl eframe::App for EditorApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.view_mode == ViewMode::Flow {
                 self.show_flowchart(ui);
+                return;
+            }
+            if self.view_mode == ViewMode::Canvas {
+                self.show_canvas(ui);
                 return;
             }
 
@@ -4239,6 +4585,7 @@ impl eframe::App for EditorApp {
                         } else {
                             let idx = self.selected.map(|i| i + 1).unwrap_or(self.steps.len());
                             self.steps.insert(idx, v);
+                            Self::canvas_shift_positions(&mut self.canvas_positions, idx, 1);
                             self.select_step(idx);
                             self.log_info("ステップを追加しました");
                         }
@@ -4258,6 +4605,7 @@ impl eframe::App for EditorApp {
                 self.push_undo();
                 let idx = self.selected.map(|i| i + 1).unwrap_or(self.steps.len());
                 self.steps.insert(idx, v);
+                Self::canvas_shift_positions(&mut self.canvas_positions, idx, 1);
                 self.select_step(idx);
                 self.log_info("ノードを追加しました");
             }
@@ -4372,6 +4720,7 @@ fn main() -> Result<()> {
         Box::new(|cc| {
             cc.egui_ctx.set_visuals(egui::Visuals::dark());
             setup_fonts(&cc.egui_ctx);
+            egui_extras::install_image_loaders(&cc.egui_ctx);
             Ok(Box::new(EditorApp::default()))
         }),
     )
