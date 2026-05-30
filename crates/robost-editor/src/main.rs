@@ -35,6 +35,8 @@ struct S {
     menu_flow: &'static str,
     menu_canvas: &'static str,
     canvas_reset: &'static str,
+    canvas_fit: &'static str,
+    canvas_snap: &'static str,
     menu_ai_panel: &'static str,
     menu_manual: &'static str,
     menu_run_menu: &'static str,
@@ -107,6 +109,8 @@ impl S {
                 menu_flow: "フロー",
                 menu_canvas: "キャンバス",
                 canvas_reset: "配置リセット",
+                canvas_fit: "全体表示",
+                canvas_snap: "スナップ",
                 menu_ai_panel: "AI パネル",
                 menu_manual: "マニュアル",
                 menu_run_menu: "実行",
@@ -170,6 +174,8 @@ impl S {
                 menu_flow: "Flow",
                 menu_canvas: "Canvas",
                 canvas_reset: "Reset Layout",
+                canvas_fit: "Fit View",
+                canvas_snap: "Snap",
                 menu_ai_panel: "AI Panel",
                 menu_manual: "Manual",
                 menu_run_menu: "Run",
@@ -233,6 +239,8 @@ impl S {
                 menu_flow: "流程图",
                 menu_canvas: "画布",
                 canvas_reset: "重置布局",
+                canvas_fit: "适配视图",
+                canvas_snap: "对齐网格",
                 menu_ai_panel: "AI 面板",
                 menu_manual: "手册",
                 menu_run_menu: "运行",
@@ -515,6 +523,13 @@ fn step_key_category(key: &str) -> &str {
 }
 
 // ---- view mode / flowchart types ------------------------------------------
+
+#[derive(Clone)]
+enum CanvasContextAction {
+    Delete(usize),
+    Duplicate(usize),
+    OpenInList(usize),
+}
 
 #[derive(PartialEq, Clone, Copy, Default)]
 enum ViewMode {
@@ -1313,6 +1328,8 @@ struct EditorApp {
     canvas_zoom: f32,
     canvas_pan: egui::Vec2,
     canvas_dragging: Option<(usize, egui::Vec2)>,
+    canvas_viewport_size: egui::Vec2,
+    canvas_snap: bool,
     /// When Some, step list rows referencing this variable name get an amber tint.
     var_highlight: Option<String>,
     /// Active category filter in the manual window (independent of text search).
@@ -1378,6 +1395,8 @@ impl Default for EditorApp {
             canvas_zoom: 1.0,
             canvas_pan: egui::Vec2::ZERO,
             canvas_dragging: None,
+            canvas_viewport_size: egui::Vec2::new(800.0, 600.0),
+            canvas_snap: false,
             var_highlight: None,
             manual_category_filter: None,
             undo_limit_warned_at: None,
@@ -3402,6 +3421,53 @@ impl EditorApp {
         }
     }
 
+    fn canvas_fit_view(&mut self, viewport_size: egui::Vec2) {
+        if self.canvas_positions.is_empty() {
+            return;
+        }
+        const NODE_W: f32 = 260.0;
+        const NODE_H: f32 = 72.0;
+        let margin = 40.0_f32;
+
+        // Compute bounding box of all nodes in canvas space
+        let min_x = self
+            .canvas_positions
+            .values()
+            .map(|p| p.x)
+            .fold(f32::INFINITY, f32::min);
+        let min_y = self
+            .canvas_positions
+            .values()
+            .map(|p| p.y)
+            .fold(f32::INFINITY, f32::min);
+        let max_x = self
+            .canvas_positions
+            .values()
+            .map(|p| p.x)
+            .fold(f32::NEG_INFINITY, f32::max)
+            + NODE_W;
+        let max_y = self
+            .canvas_positions
+            .values()
+            .map(|p| p.y)
+            .fold(f32::NEG_INFINITY, f32::max)
+            + NODE_H;
+
+        let content_w = max_x - min_x + margin * 2.0;
+        let content_h = max_y - min_y + margin * 2.0;
+
+        let zoom_x = viewport_size.x / content_w;
+        let zoom_y = viewport_size.y / content_h;
+        self.canvas_zoom = zoom_x.min(zoom_y).clamp(0.25, 2.0);
+
+        // Center the content
+        let z = self.canvas_zoom;
+        self.canvas_pan = egui::vec2(
+            (viewport_size.x / z - (min_x + max_x)) / 2.0 - min_x,
+            (viewport_size.y / z - (min_y + max_y)) / 2.0 - min_y,
+        );
+    }
+
     fn show_canvas(&mut self, ui: &mut egui::Ui) {
         use egui::{epaint::CubicBezierShape, Align2, Color32, FontId, Rect, Sense, Stroke, Vec2};
 
@@ -3411,6 +3477,29 @@ impl EditorApp {
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let origin = resp.rect.min;
         let z = self.canvas_zoom;
+
+        // Dark canvas background
+        painter.rect_filled(resp.rect, 0.0, egui::Color32::from_rgb(26, 27, 30));
+
+        // Background dot grid (every 40px in canvas space, drawn as small dots)
+        {
+            let grid = 40.0 * z;
+            let offset_x = (self.canvas_pan.x * z).rem_euclid(grid);
+            let offset_y = (self.canvas_pan.y * z).rem_euclid(grid);
+            let mut x = resp.rect.min.x + offset_x;
+            while x < resp.rect.max.x {
+                let mut y = resp.rect.min.y + offset_y;
+                while y < resp.rect.max.y {
+                    painter.circle_filled(
+                        egui::pos2(x, y),
+                        1.0_f32.max(0.5 * z),
+                        egui::Color32::from_gray(50),
+                    );
+                    y += grid;
+                }
+                x += grid;
+            }
+        }
 
         // ── zoom / pan ─────────────────────────────────────────────────────
         if resp.hovered() {
@@ -3486,13 +3575,16 @@ impl EditorApp {
         let mut drag_started_node: Option<(usize, egui::Vec2)> = None;
         let mut drag_delta_node: Option<(usize, egui::Pos2)> = None;
         let mut drag_ended = false;
-        let mut clicked_node: Option<usize> = None;
+        let mut canvas_click_modifier: Option<(usize, bool, bool)> = None; // (idx, shift, cmd)
+        let mut double_clicked_node: Option<usize> = None;
+        let mut canvas_ctx_action: Option<CanvasContextAction> = None;
 
         for (idx, _step) in self.steps.iter().enumerate() {
             let screen_pos = screen_positions[idx];
             let node_rect = Rect::from_min_size(screen_pos, Vec2::new(NODE_W * z, NODE_H * z));
             let node_resp = ui.allocate_rect(node_rect, Sense::click_and_drag());
 
+            // ── Interaction collection (always, even for off-screen nodes) ──
             if node_resp.drag_started() {
                 let cursor = ui.input(|i| i.pointer.interact_pos()).unwrap_or(screen_pos);
                 drag_started_node = Some((idx, cursor - screen_pos));
@@ -3517,11 +3609,38 @@ impl EditorApp {
                 drag_ended = true;
             }
             if node_resp.clicked() {
-                clicked_node = Some(idx);
+                let (shift, cmd) = ui.input(|i| (i.modifiers.shift, i.modifiers.command));
+                canvas_click_modifier = Some((idx, shift, cmd));
+            }
+            if node_resp.double_clicked() {
+                double_clicked_node = Some(idx);
             }
 
-            // ── Draw node ──────────────────────────────────────────────────
+            // Right-click context menu
+            node_resp.context_menu(|ui| {
+                if ui.button("削除").clicked() {
+                    canvas_ctx_action = Some(CanvasContextAction::Delete(idx));
+                    ui.close();
+                }
+                if ui.button("複製").clicked() {
+                    canvas_ctx_action = Some(CanvasContextAction::Duplicate(idx));
+                    ui.close();
+                }
+                ui.separator();
+                if ui.button("List ビューで開く").clicked() {
+                    canvas_ctx_action = Some(CanvasContextAction::OpenInList(idx));
+                    ui.close();
+                }
+            });
+
+            // ── Draw (skip nodes fully outside the viewport) ────────────────
+            if !resp.rect.intersects(node_rect) {
+                continue;
+            }
+
             let selected = self.selected == Some(idx);
+            let is_multi_only = self.multi_selected.contains(&idx) && !selected;
+            let is_running = self.current_run_step == Some(idx);
             let hovered = node_resp.hovered();
             let step = &self.steps[idx];
             let key = get_step_key(step);
@@ -3529,6 +3648,8 @@ impl EditorApp {
             // Blend category color into base background
             let base_bg = if selected {
                 Color32::from_rgb(28, 52, 88)
+            } else if is_running {
+                Color32::from_rgb(80, 60, 10)
             } else {
                 Color32::from_gray(40)
             };
@@ -3543,17 +3664,42 @@ impl EditorApp {
             };
             let border = if selected {
                 Color32::from_rgb(70, 125, 200)
+            } else if is_multi_only {
+                Color32::from_rgb(60, 100, 200)
             } else {
                 Color32::from_gray(58)
             };
 
+            // Drop shadow (offset 3px down-right)
+            let shadow_rect = node_rect.translate(egui::vec2(3.0 * z, 3.0 * z));
+            painter.rect_filled(
+                shadow_rect,
+                4.0 * z,
+                Color32::from_rgba_premultiplied(0, 0, 0, 60),
+            );
+
             painter.rect_filled(node_rect, 4.0 * z, blended_bg);
+            if is_multi_only {
+                painter.rect_filled(
+                    node_rect,
+                    4.0 * z,
+                    egui::Color32::from_rgba_premultiplied(60, 100, 200, 40),
+                );
+            }
             painter.rect_stroke(
                 node_rect,
                 4.0 * z,
                 Stroke::new(1.0, border),
                 egui::StrokeKind::Inside,
             );
+            if is_multi_only {
+                painter.rect_stroke(
+                    node_rect,
+                    4.0 * z,
+                    egui::Stroke::new(1.5, Color32::from_rgb(60, 100, 200)),
+                    egui::StrokeKind::Outside,
+                );
+            }
             // Hover outline
             if hovered && !selected {
                 painter.rect_stroke(
@@ -3588,6 +3734,13 @@ impl EditorApp {
                 Color32::from_gray(220),
             );
 
+            // Show full label as tooltip on hover when text is truncated
+            if hovered && full_label.chars().count() > 32 {
+                node_resp.show_tooltip_ui(|ui| {
+                    ui.label(&full_label);
+                });
+            }
+
             // Badge: show child step count for compound steps
             let step_key_badge = get_step_key(step);
             let is_compound_node = matches!(
@@ -3614,20 +3767,112 @@ impl EditorApp {
                     );
                 }
             }
+            if is_running {
+                painter.rect_stroke(
+                    node_rect.expand(2.0 * z),
+                    4.0 * z,
+                    egui::Stroke::new(2.0 * z, egui::Color32::from_rgb(249, 226, 175)),
+                    egui::StrokeKind::Outside,
+                );
+            }
         }
 
         // Apply interactions after the draw loop
         if let Some((idx, offset)) = drag_started_node {
             self.canvas_dragging = Some((idx, offset));
         }
-        if let Some((idx, canvas_pos)) = drag_delta_node {
+        if let Some((idx, mut canvas_pos)) = drag_delta_node {
+            if self.canvas_snap {
+                const SNAP: f32 = 20.0;
+                canvas_pos.x = (canvas_pos.x / SNAP).round() * SNAP;
+                canvas_pos.y = (canvas_pos.y / SNAP).round() * SNAP;
+            }
             self.canvas_positions.insert(idx, canvas_pos);
         }
         if drag_ended {
             self.canvas_dragging = None;
+            self.save_canvas_layout();
         }
-        if let Some(idx) = clicked_node {
+        if let Some((idx, shift, cmd)) = canvas_click_modifier {
+            if cmd {
+                // Toggle selection
+                if self.multi_selected.contains(&idx) {
+                    self.multi_selected.remove(&idx);
+                    if self.selected == Some(idx) {
+                        self.selected = self.multi_selected.iter().next().cloned();
+                    }
+                } else {
+                    self.push_undo();
+                    self.flush_edit();
+                    self.multi_selected.insert(idx);
+                    self.selected = Some(idx);
+                    self.selected_child = None;
+                    if let Some(step) = self.steps.get(idx) {
+                        self.edit_buf = serde_yml::to_string(step).unwrap_or_default();
+                    }
+                }
+            } else if shift {
+                let anchor = self.selected.unwrap_or(idx);
+                let (lo, hi) = if anchor <= idx {
+                    (anchor, idx)
+                } else {
+                    (idx, anchor)
+                };
+                self.multi_selected = (lo..=hi).collect();
+                self.selected = Some(idx);
+            } else {
+                self.select_step(idx);
+            }
+        }
+        if let Some(idx) = double_clicked_node {
             self.select_step(idx);
+            self.view_mode = ViewMode::List;
+            self.selected_child = None;
+            self.scroll_to_selected = true;
+        }
+
+        // Handle context menu actions from the node loop
+        if let Some(act) = canvas_ctx_action {
+            match act {
+                CanvasContextAction::Delete(idx) => {
+                    if idx < self.steps.len() {
+                        self.push_undo();
+                        self.steps.remove(idx);
+                        Self::canvas_shift_positions(&mut self.canvas_positions, idx, -1);
+                        if self.selected == Some(idx) {
+                            self.selected = None;
+                            self.multi_selected.clear();
+                        }
+                        self.edit_buf.clear();
+                        self.parse_error = None;
+                        let suffix = format!("@{idx}");
+                        self.form_edit_buffers.retain(|k, _| !k.ends_with(&suffix));
+                        self.dirty = true;
+                    }
+                }
+                CanvasContextAction::Duplicate(idx) => {
+                    if idx < self.steps.len() {
+                        self.push_undo();
+                        let step = self.steps[idx].clone();
+                        let insert_at = idx + 1;
+                        self.steps.insert(insert_at, step);
+                        Self::canvas_shift_positions(&mut self.canvas_positions, insert_at, 1);
+                        if let Some(orig_pos) = self.canvas_positions.get(&idx).copied() {
+                            self.canvas_positions.insert(
+                                insert_at,
+                                egui::pos2(orig_pos.x + 30.0, orig_pos.y + 30.0),
+                            );
+                        }
+                        self.dirty = true;
+                    }
+                }
+                CanvasContextAction::OpenInList(idx) => {
+                    self.select_step(idx);
+                    self.view_mode = ViewMode::List;
+                    self.scroll_to_selected = true;
+                    self.selected_child = None;
+                }
+            }
         }
 
         // Empty state hint
@@ -3646,6 +3891,7 @@ impl EditorApp {
                 Color32::from_gray(100),
             );
         }
+        self.canvas_viewport_size = resp.rect.size();
     }
 }
 
@@ -4239,6 +4485,16 @@ impl eframe::App for EditorApp {
                     if ui.button(s.canvas_reset).clicked() {
                         self.canvas_positions.clear();
                         self.ensure_canvas_layout();
+                        self.save_canvas_layout();
+                    }
+                    if ui.button(s.canvas_fit).clicked() {
+                        self.canvas_fit_view(self.canvas_viewport_size);
+                    }
+                    if ui
+                        .selectable_label(self.canvas_snap, s.canvas_snap)
+                        .clicked()
+                    {
+                        self.canvas_snap = !self.canvas_snap;
                     }
                     ui.label(format!("{:.0}%", self.canvas_zoom * 100.0));
                 }
