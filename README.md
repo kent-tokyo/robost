@@ -20,6 +20,26 @@ A Rust-based OSS desktop automation (RPA) tool.
 |:---:|:---:|
 | ![Loop Flow](assets/screenshots/editor_flow_loop.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
 
+## Download
+
+> **Latest release**: [GitHub Releases](https://github.com/kent-tokyo/robost/releases/latest)
+
+### robost-editor — Visual Scenario Editor
+
+| Platform | Download |
+|---|---|
+| macOS (Apple Silicon) | [robost-editor-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-aarch64-apple-darwin.tar.gz) |
+| macOS (Intel) | [robost-editor-x86_64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-x86_64-apple-darwin.tar.gz) |
+| Windows | [robost-editor-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-x86_64-windows.zip) |
+
+### rpa — CLI Runner
+
+| Platform | Download |
+|---|---|
+| macOS (Apple Silicon) | [rpa-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-aarch64-apple-darwin.tar.gz) |
+| macOS (Intel) | [rpa-x86_64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-apple-darwin.tar.gz) |
+| Windows | [rpa-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip) |
+
 ## Key Features
 
 - **Image recognition automation** — multi-scale NCC template matching, OCR (Tesseract), ML detection

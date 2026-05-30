@@ -20,6 +20,26 @@
 |:---:|:---:|
 | ![Loop Flow](assets/screenshots/editor_flow_loop.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
 
+## 下载
+
+> **最新版本**: [GitHub Releases](https://github.com/kent-tokyo/robost/releases/latest)
+
+### robost-editor — 可视化场景编辑器
+
+| 平台 | 下载 |
+|---|---|
+| macOS (Apple Silicon) | [robost-editor-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-aarch64-apple-darwin.tar.gz) |
+| macOS (Intel) | [robost-editor-x86_64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-x86_64-apple-darwin.tar.gz) |
+| Windows | [robost-editor-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-x86_64-windows.zip) |
+
+### rpa — CLI 运行器
+
+| 平台 | 下载 |
+|---|---|
+| macOS (Apple Silicon) | [rpa-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-aarch64-apple-darwin.tar.gz) |
+| macOS (Intel) | [rpa-x86_64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-apple-darwin.tar.gz) |
+| Windows | [rpa-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip) |
+
 ## 核心特性
 
 - **基于图像识别的自动化** — 多尺度 NCC 模板匹配、OCR（Tesseract）、ML 检测
