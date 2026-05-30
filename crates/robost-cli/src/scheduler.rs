@@ -318,6 +318,9 @@ async fn fire_due(path: &Path) {
     }
 
     if changed {
+        // Acquire the write lock before persisting last_run / enabled changes so
+        // this save doesn't race with the spawned tasks that write last_status.
+        let _guard = write_lock.lock().await;
         let _ = save_schedules(path, &ss);
     }
 }

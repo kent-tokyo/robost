@@ -32,6 +32,8 @@ pub enum UiaError {
     Com(String),
     #[error("UIA not supported on this platform")]
     Unsupported,
+    #[error("{0}")]
+    Other(String),
 }
 
 pub type Result<T> = std::result::Result<T, UiaError>;

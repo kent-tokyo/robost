@@ -6558,6 +6558,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_commonmark",
+ "keyring",
  "rfd",
  "serde",
  "serde_json",

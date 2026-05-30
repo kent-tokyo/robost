@@ -1,8 +1,46 @@
-use crate::{get_str, opt_str, NodeResult};
+use crate::{get_str, opt_str, NodeError, NodeResult};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::time::Duration;
+
+/// Reject non-HTTPS or RFC-1918/link-local targets to prevent SSRF via webhook_url.
+fn validate_webhook_url(url: &str) -> Result<(), NodeError> {
+    if !url.starts_with("https://") {
+        return Err(NodeError::Other(
+            "webhook_url must use https".to_owned(),
+        ));
+    }
+    // Extract the host (strip "https://", take up to first '/', '?', or '#').
+    let rest = &url[8..];
+    let host_end = rest
+        .find(['/', '?', '#'])
+        .unwrap_or(rest.len());
+    let host_port = &rest[..host_end];
+    // Strip optional port.
+    let host = match host_port.rfind(':') {
+        Some(i) if host_port[i + 1..].chars().all(|c| c.is_ascii_digit()) => &host_port[..i],
+        _ => host_port,
+    };
+
+    // Reject IP literals that are loopback/private/link-local to block SSRF.
+    use std::net::IpAddr;
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        let blocked = match ip {
+            IpAddr::V4(v4) => {
+                v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified()
+            }
+            IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified(),
+        };
+        if blocked {
+            return Err(NodeError::Other(format!(
+                "webhook_url: disallowed IP address: {ip}"
+            )));
+        }
+    }
+
+    Ok(())
+}
 
 fn webhook_agent() -> &'static ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
@@ -19,6 +57,7 @@ fn webhook_agent() -> &'static ureq::Agent {
 /// Optional: username, icon_emoji, channel
 pub fn slack_send(inputs: HashMap<String, Value>) -> NodeResult {
     let url = get_str(&inputs, "webhook_url")?;
+    validate_webhook_url(&url)?;
     let text = get_str(&inputs, "text")?;
 
     let mut payload = json!({ "text": text });
@@ -62,6 +101,7 @@ pub fn slack_send(inputs: HashMap<String, Value>) -> NodeResult {
 /// Optional: title, color (hex without #, e.g. "00ff00")
 pub fn teams_send(inputs: HashMap<String, Value>) -> NodeResult {
     let url = get_str(&inputs, "webhook_url")?;
+    validate_webhook_url(&url)?;
     let text = get_str(&inputs, "text")?;
 
     let title = opt_str(&inputs, "title").unwrap_or_default();

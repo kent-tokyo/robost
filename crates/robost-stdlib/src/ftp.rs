@@ -70,9 +70,25 @@ fn connect(
     }
 }
 
+fn reject_unsafe_local(path: &str) -> Result<(), NodeError> {
+    let p = std::path::Path::new(path);
+    if p.is_absolute() {
+        return Err(NodeError::Other(format!(
+            "ftp local: absolute paths are not allowed: {path}"
+        )));
+    }
+    if p.components().any(|c| c == std::path::Component::ParentDir) {
+        return Err(NodeError::Other(format!(
+            "ftp local: path traversal ('..') is not allowed: {path}"
+        )));
+    }
+    Ok(())
+}
+
 pub fn upload(inputs: HashMap<String, Value>) -> NodeResult {
     let p = FtpParams::from_inputs(&inputs)?;
     let local = get_str(&inputs, "local")?;
+    reject_unsafe_local(&local)?;
     let remote = get_str(&inputs, "remote")?;
 
     let mut ftp = p.connect()?;
@@ -90,6 +106,7 @@ pub fn download(inputs: HashMap<String, Value>) -> NodeResult {
     let p = FtpParams::from_inputs(&inputs)?;
     let remote = get_str(&inputs, "remote")?;
     let local = get_str(&inputs, "local")?;
+    reject_unsafe_local(&local)?;
 
     let mut ftp = p.connect()?;
     let data = ftp_call!(ftp, retr_as_buffer, &remote)

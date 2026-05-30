@@ -213,10 +213,9 @@ impl PluginInstance {
         }
 
         let response: JValue = serde_json::from_slice(&out_bytes).map_err(|e| {
-            PluginError::Other(format!(
-                "parse plugin output: {e} (raw: {:?})",
-                String::from_utf8_lossy(&out_bytes)
-            ))
+            // Do not include raw output in the error — it may contain secrets from plugin inputs.
+            tracing::trace!(raw = %String::from_utf8_lossy(&out_bytes), "plugin output parse failed");
+            PluginError::Other(format!("parse plugin output: {e}"))
         })?;
 
         if let Some(ok) = response.get("ok") {

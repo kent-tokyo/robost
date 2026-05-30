@@ -291,20 +291,41 @@ fn settings_path() -> std::path::PathBuf {
         .join("settings.toml")
 }
 
+const KEYRING_SERVICE: &str = "robost-editor";
+const KEYRING_USER: &str = "api_key";
+
 fn load_settings() -> AppSettings {
     let path = settings_path();
-    std::fs::read_to_string(&path)
+    let mut settings: AppSettings = std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| toml::from_str(&s).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // Load the API key from the OS keychain (never stored in the TOML file).
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+        if let Ok(key) = entry.get_password() {
+            settings.api_key = key;
+        }
+    }
+    settings
 }
 
 fn save_settings(s: &AppSettings) {
+    // Store the API key in the OS keychain; write everything else to TOML.
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+        if s.api_key.is_empty() {
+            let _ = entry.delete_credential();
+        } else {
+            let _ = entry.set_password(&s.api_key);
+        }
+    }
+    // Persist non-secret settings (provider, model) to TOML without the api_key.
+    let mut s_safe = s.clone();
+    s_safe.api_key = String::new();
     let path = settings_path();
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    if let Ok(text) = toml::to_string(s) {
+    if let Ok(text) = toml::to_string(&s_safe) {
         #[cfg(unix)]
         {
             use std::fs::OpenOptions;

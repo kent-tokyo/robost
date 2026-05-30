@@ -7,6 +7,20 @@ fn open_sqlite(url: &str) -> Result<rusqlite::Connection, NodeError> {
         .strip_prefix("sqlite://")
         .or_else(|| url.strip_prefix("sqlite:"))
         .unwrap_or(url);
+    // Reject absolute paths and traversal to prevent library-call path traversal.
+    let p = std::path::Path::new(path);
+    if path != ":memory:" {
+        if p.is_absolute() {
+            return Err(NodeError::Other(format!(
+                "db: absolute paths are not allowed: {path}"
+            )));
+        }
+        if p.components().any(|c| c == std::path::Component::ParentDir) {
+            return Err(NodeError::Other(format!(
+                "db: path traversal ('..') is not allowed: {path}"
+            )));
+        }
+    }
     let conn = rusqlite::Connection::open(path)
         .map_err(|e| NodeError::Other(format!("db open failed: {e}")))?;
     conn.authorizer(Some(|ctx: rusqlite::hooks::AuthContext<'_>| {

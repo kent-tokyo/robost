@@ -947,7 +947,7 @@ impl ScenarioEngine {
                 Ok(Flow::Done)
             }
             ScenarioStep::MouseDrag(s) => {
-                self.mouse_drag(s, vars)?;
+                self.mouse_drag(s, vars).await?;
                 Ok(Flow::Done)
             }
             ScenarioStep::MouseScroll(s) => {
@@ -2182,7 +2182,9 @@ impl ScenarioEngine {
 
     fn run_increment(&self, step: &IncrementStep, vars: &mut Variables) -> Result<()> {
         let current = vars.get(&step.name).and_then(|v| v.as_i64()).unwrap_or(0);
-        let next = current.checked_add(step.by).unwrap_or(current);
+        let next = current
+            .checked_add(step.by)
+            .ok_or_else(|| EngineError::Other("counter overflow in increment".into()))?;
         vars.set(step.name.clone(), serde_json::Value::Number(next.into()));
         Ok(())
     }
@@ -2907,7 +2909,7 @@ impl ScenarioEngine {
         .map_err(EngineError::Backend)
     }
 
-    fn mouse_drag(&self, step: &MouseDragStep, vars: &Variables) -> Result<()> {
+    async fn mouse_drag(&self, step: &MouseDragStep, vars: &Variables) -> Result<()> {
         let from = robost_template::ScreenPoint {
             x: self.resolve_coord(&step.from_x, vars),
             y: self.resolve_coord(&step.from_y, vars),
@@ -2920,8 +2922,11 @@ impl ScenarioEngine {
             info!(dry_run = true, "mouse_drag skipped");
             return Ok(());
         }
-        self.backend
-            .drag(from, to, step.hold_ms)
+        let hold_ms = step.hold_ms;
+        let backend = Arc::clone(&self.backend);
+        tokio::task::spawn_blocking(move || backend.drag(from, to, hold_ms))
+            .await
+            .map_err(|e| EngineError::TaskPanic(e.to_string()))?
             .map_err(EngineError::Backend)
     }
 
@@ -3650,13 +3655,15 @@ impl ScenarioEngine {
     async fn process_start(&self, step: &ProcessStartStep, vars: &mut Variables) -> Result<()> {
         let command = vars.expand(&step.command);
         let args: Vec<String> = step.args.iter().map(|a| vars.expand(a)).collect();
-        let mut child = std::process::Command::new(&command)
+        let mut child = tokio::process::Command::new(&command)
             .args(&args)
+            .kill_on_drop(false)
             .spawn()
             .map_err(EngineError::Io)?;
-        let pid = child.id();
-        std::thread::spawn(move || {
-            let _ = child.wait();
+        let pid = child.id().unwrap_or(0);
+        // Reap the child asynchronously to avoid OS thread accumulation.
+        tokio::spawn(async move {
+            let _ = child.wait().await;
         });
         if step.wait_ms > 0 {
             sleep(Duration::from_millis(step.wait_ms)).await;
@@ -4492,7 +4499,11 @@ impl ScenarioEngine {
             uia_poll(selector, timeout_ms, "uia_get", |el| {
                 match property.as_str() {
                     "name" => el.get_name(),
-                    _ => el.get_value(),
+                    "value" => el.get_value(),
+                    "class" => el.get_class_name(),
+                    other => Err(robost_uia::UiaError::Other(format!(
+                        "unknown uia property: {other}"
+                    ))),
                 }
             })
         })
@@ -5158,8 +5169,20 @@ impl ScenarioEngine {
             )));
         }
         let mut rng = rand::thread_rng();
-        let val: f64 = rng.gen_range(step.min..=step.max);
-        let result = if step.integer { val.floor() } else { val };
+        let result = if step.integer {
+            // Sample as integer so max is always reachable.
+            let lo = step.min.ceil() as i64;
+            let hi = step.max.floor() as i64;
+            if lo > hi {
+                return Err(EngineError::Other(format!(
+                    "number_random: no integer in [{}, {}]",
+                    step.min, step.max
+                )));
+            }
+            rng.gen_range(lo..=hi) as f64
+        } else {
+            rng.gen_range(step.min..=step.max)
+        };
         let json_num = serde_json::Number::from_f64(result)
             .map(serde_json::Value::Number)
             .unwrap_or(serde_json::Value::Null);

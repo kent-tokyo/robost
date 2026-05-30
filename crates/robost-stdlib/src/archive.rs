@@ -6,8 +6,24 @@ use std::path::Path;
 /// Compress files/directories into a ZIP archive.
 ///
 /// Required: dest (output .zip path), files (JSON array of source paths)
+fn reject_unsafe_path(path: &str, field: &str) -> Result<(), NodeError> {
+    let p = std::path::Path::new(path);
+    if p.is_absolute() {
+        return Err(NodeError::Other(format!(
+            "{field}: absolute paths are not allowed: {path}"
+        )));
+    }
+    if p.components().any(|c| c == std::path::Component::ParentDir) {
+        return Err(NodeError::Other(format!(
+            "{field}: path traversal ('..') is not allowed: {path}"
+        )));
+    }
+    Ok(())
+}
+
 pub fn compress(inputs: HashMap<String, Value>) -> NodeResult {
     let dest = get_str(&inputs, "dest")?;
+    reject_unsafe_path(&dest, "dest")?;
     let files: Vec<String> = inputs
         .get("files")
         .and_then(|v| v.as_array())
@@ -33,11 +49,10 @@ pub fn compress(inputs: HashMap<String, Value>) -> NodeResult {
     for src in &files {
         let src_path = Path::new(src);
         if src_path.is_file() {
-            let name = src_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(src.as_str());
-            zip.start_file(name, options)
+            // Use the full source path as the entry name to avoid silent collisions
+            // when multiple source files share the same basename (e.g. a/x.csv, b/x.csv).
+            let name = src.replace('\\', "/");
+            zip.start_file(&name, options)
                 .map_err(|e| NodeError::Other(format!("zip start_file failed: {e}")))?;
             let content = std::fs::read(src_path)
                 .map_err(|e| NodeError::Other(format!("read {src}: {e}")))?;
@@ -97,6 +112,7 @@ fn add_dir_to_zip(
 pub fn extract(inputs: HashMap<String, Value>) -> NodeResult {
     let src = get_str(&inputs, "src")?;
     let dest = get_str(&inputs, "dest")?;
+    reject_unsafe_path(&dest, "dest")?;
 
     let file =
         std::fs::File::open(&src).map_err(|e| NodeError::Other(format!("open zip failed: {e}")))?;

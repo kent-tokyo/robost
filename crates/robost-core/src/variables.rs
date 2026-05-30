@@ -41,15 +41,26 @@ impl Variables {
     }
 
     /// Expand `{{ var_name }}` placeholders in a string.
+    ///
+    /// Two passes resolve one level of indirection (e.g. a variable whose value
+    /// contains another `{{ placeholder }}`). The cap prevents infinite loops on
+    /// circular references and keeps the expansion deterministic regardless of
+    /// the internal HashMap iteration order.
     pub fn expand(&self, template: &str) -> String {
         let mut result = template.to_owned();
-        for (k, v) in &self.0 {
-            let placeholder = format!("{{{{ {k} }}}}");
-            let val = match v {
-                Value::String(s) => s.clone(),
-                other => other.to_string(),
-            };
-            result = result.replace(&placeholder, &val);
+        for _ in 0..2 {
+            let prev = result.clone();
+            for (k, v) in &self.0 {
+                let placeholder = format!("{{{{ {k} }}}}");
+                let val = match v {
+                    Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                };
+                result = result.replace(&placeholder, &val);
+            }
+            if result == prev {
+                break;
+            }
         }
         result
     }
