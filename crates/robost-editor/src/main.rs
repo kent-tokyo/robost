@@ -555,6 +555,12 @@ struct LogEntry {
     level: LogLevel,
 }
 
+struct Toast {
+    message: String,
+    level: LogLevel,
+    expires: std::time::Instant,
+}
+
 // ---- step templates -------------------------------------------------------
 
 struct StepTemplate {
@@ -1206,6 +1212,7 @@ struct EditorState {
     name: String,
     steps: Vec<serde_yml::Value>,
     selected: Option<usize>,
+    selected_child: Option<(String, usize)>,
 }
 
 // ---- drag-and-drop payload ------------------------------------------------
@@ -1214,8 +1221,8 @@ struct EditorState {
 enum DragPayload {
     /// YAML snippet from a StepTemplate — insert as a new step.
     NewStep(&'static str),
-    /// Index of an existing step being reordered.
-    ReorderStep(usize),
+    /// Indices of existing steps being reordered (multi-select aware).
+    ReorderStep(Vec<usize>),
 }
 
 // ---- app ------------------------------------------------------------------
@@ -1231,6 +1238,7 @@ struct EditorApp {
     add_menu_just_opened: bool,
     add_filter: String,
     log: Vec<LogEntry>,
+    toasts: Vec<Toast>,
     view_mode: ViewMode,
     expanded_steps: HashSet<usize>,
     undo_stack: VecDeque<EditorState>,
@@ -1295,6 +1303,7 @@ impl Default for EditorApp {
             add_menu_just_opened: false,
             add_filter: String::new(),
             log: Vec::new(),
+            toasts: Vec::new(),
             view_mode: ViewMode::List,
             expanded_steps: HashSet::new(),
             undo_stack: VecDeque::new(),
@@ -1359,11 +1368,26 @@ impl EditorApp {
             self.log.drain(0..100);
         }
     }
+    fn push_toast(&mut self, message: String, level: LogLevel) {
+        let expires = std::time::Instant::now() + std::time::Duration::from_secs(4);
+        self.toasts.push(Toast {
+            message,
+            level,
+            expires,
+        });
+        if self.toasts.len() > 5 {
+            self.toasts.remove(0);
+        }
+    }
     fn log_ok(&mut self, msg: impl Into<String>) {
-        self.push_log(msg, LogLevel::Ok);
+        let s = msg.into();
+        self.push_toast(s.clone(), LogLevel::Ok);
+        self.push_log(s, LogLevel::Ok);
     }
     fn log_err(&mut self, msg: impl Into<String>) {
-        self.push_log(msg, LogLevel::Error);
+        let s = msg.into();
+        self.push_toast(s.clone(), LogLevel::Error);
+        self.push_log(s, LogLevel::Error);
     }
     fn log_info(&mut self, msg: impl Into<String>) {
         self.push_log(msg, LogLevel::Info);
@@ -1689,6 +1713,7 @@ impl EditorApp {
             name: self.name.clone(),
             steps: self.steps.clone(),
             selected: self.selected,
+            selected_child: self.selected_child.clone(),
         }
     }
 
@@ -1696,7 +1721,7 @@ impl EditorApp {
         self.name = state.name;
         self.steps = state.steps;
         self.selected = state.selected;
-        self.selected_child = None;
+        self.selected_child = state.selected_child;
         self.child_edit_buf.clear();
         self.edit_buf = self
             .selected
@@ -2172,6 +2197,9 @@ impl EditorApp {
                                                 let short = short.as_str();
                                                 ui.weak(egui::RichText::new(short).monospace().size(10.0))
                                                     .on_hover_text("複雑な値は YAML タブで編集してください");
+                                                if ui.small_button("YAML タブで編集").clicked() {
+                                                    self.prop_view = PropView::Yaml;
+                                                }
                                             }
                                         }
                                     });
@@ -3312,10 +3340,24 @@ impl EditorApp {
 
             // ── Draw node ──────────────────────────────────────────────────
             let selected = self.selected == Some(idx);
-            let bg = if selected {
+            let hovered = node_resp.hovered();
+            let step = &self.steps[idx];
+            let key = get_step_key(step);
+            let cat_color = category_color(step_key_category(key));
+            // Blend category color into base background
+            let base_bg = if selected {
                 Color32::from_rgb(28, 52, 88)
             } else {
                 Color32::from_gray(40)
+            };
+            let blended_bg = {
+                let [r0, g0, b0, _] = base_bg.to_array();
+                let [r1, g1, b1, _] = cat_color.to_array();
+                Color32::from_rgb(
+                    ((r0 as u16 * 7 + r1 as u16) / 8) as u8,
+                    ((g0 as u16 * 7 + g1 as u16) / 8) as u8,
+                    ((b0 as u16 * 7 + b1 as u16) / 8) as u8,
+                )
             };
             let border = if selected {
                 Color32::from_rgb(70, 125, 200)
@@ -3323,19 +3365,25 @@ impl EditorApp {
                 Color32::from_gray(58)
             };
 
-            painter.rect_filled(node_rect, 4.0 * z, bg);
+            painter.rect_filled(node_rect, 4.0 * z, blended_bg);
             painter.rect_stroke(
                 node_rect,
                 4.0 * z,
                 Stroke::new(1.0, border),
                 egui::StrokeKind::Inside,
             );
+            // Hover outline
+            if hovered && !selected {
+                painter.rect_stroke(
+                    node_rect,
+                    4.0 * z,
+                    Stroke::new(1.0, Color32::from_rgb(120, 140, 160)),
+                    egui::StrokeKind::Outside,
+                );
+            }
 
-            // Left color stripe
-            let step = &self.steps[idx];
-            let key = get_step_key(step);
-            let cat_color = category_color(step_key_category(key));
-            let stripe = Rect::from_min_size(node_rect.min, Vec2::new(4.0 * z, NODE_H * z));
+            // Left color stripe (widened)
+            let stripe = Rect::from_min_size(node_rect.min, Vec2::new(6.0 * z, NODE_H * z));
             painter.rect_filled(stripe, 0.0, cat_color);
 
             // Step index badge
@@ -3487,6 +3535,68 @@ impl eframe::App for EditorApp {
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.add_menu_open = false;
+        }
+        if !self.add_menu_open
+            && self.confirm_dialog.is_none()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F))
+        {
+            self.add_menu_open = true;
+            self.add_menu_just_opened = true;
+            self.add_filter.clear();
+        }
+        if !self.add_menu_open
+            && self.confirm_dialog.is_none()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::ArrowUp))
+        {
+            if let Some(i) = self.selected {
+                if i > 0 {
+                    self.push_undo();
+                    self.steps.swap(i, i - 1);
+                    self.multi_selected = self
+                        .multi_selected
+                        .iter()
+                        .map(|&x| {
+                            if x == i {
+                                i - 1
+                            } else if x == i - 1 {
+                                i
+                            } else {
+                                x
+                            }
+                        })
+                        .collect();
+                    self.selected = Some(i - 1);
+                    self.form_edit_buffers.clear();
+                    self.dirty = true;
+                }
+            }
+        }
+        if !self.add_menu_open
+            && self.confirm_dialog.is_none()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::ArrowDown))
+        {
+            if let Some(i) = self.selected {
+                if i + 1 < self.steps.len() {
+                    self.push_undo();
+                    self.steps.swap(i, i + 1);
+                    self.multi_selected = self
+                        .multi_selected
+                        .iter()
+                        .map(|&x| {
+                            if x == i {
+                                i + 1
+                            } else if x == i + 1 {
+                                i
+                            } else {
+                                x
+                            }
+                        })
+                        .collect();
+                    self.selected = Some(i + 1);
+                    self.form_edit_buffers.clear();
+                    self.dirty = true;
+                }
+            }
         }
         if !self.add_menu_open
             && self.confirm_dialog.is_none()
@@ -3764,6 +3874,7 @@ impl eframe::App for EditorApp {
                         .clicked()
                     {
                         self.view_mode = ViewMode::Flow;
+                        self.selected_child = None;
                         ui.close();
                     }
                     if ui
@@ -3771,6 +3882,7 @@ impl eframe::App for EditorApp {
                         .clicked()
                     {
                         self.view_mode = ViewMode::Canvas;
+                        self.selected_child = None;
                         self.ensure_canvas_layout();
                         ui.close();
                     }
@@ -3887,12 +3999,14 @@ impl eframe::App for EditorApp {
                     .selectable_value(&mut self.view_mode, ViewMode::Flow, s.menu_flow)
                     .clicked()
                 {
+                    self.selected_child = None;
                     self.scroll_to_selected = true;
                 }
                 if ui
                     .selectable_value(&mut self.view_mode, ViewMode::Canvas, s.menu_canvas)
                     .clicked()
                 {
+                    self.selected_child = None;
                     self.ensure_canvas_layout();
                 }
                 if self.view_mode == ViewMode::Canvas {
@@ -4113,10 +4227,20 @@ impl eframe::App for EditorApp {
                                         format!("{i}: {summary}")
                                     };
 
+                                    let drag_indices = if self.multi_selected.contains(&i)
+                                        && self.multi_selected.len() > 1
+                                    {
+                                        let mut v: Vec<usize> =
+                                            self.multi_selected.iter().copied().collect();
+                                        v.sort_unstable();
+                                        v
+                                    } else {
+                                        vec![i]
+                                    };
                                     let row_resp = ui
                                         .dnd_drag_source(
                                             drag_id,
-                                            DragPayload::ReorderStep(i),
+                                            DragPayload::ReorderStep(drag_indices),
                                             |ui| {
                                                 ui.horizontal(|ui| {
                                                     let bar_color = if is_running {
@@ -4327,30 +4451,77 @@ impl eframe::App for EditorApp {
                                 self.log_info("ノードをドロップしました");
                             }
                         }
-                        DragPayload::ReorderStep(from) => {
-                            if from != drop_insert_idx && from + 1 != drop_insert_idx {
-                                self.push_undo();
-                                let step = self.steps.remove(from);
-                                // After removal, indices shift for positions after `from`.
-                                let to = if drop_insert_idx > from {
-                                    drop_insert_idx - 1
-                                } else {
-                                    drop_insert_idx
-                                };
-                                self.steps.insert(to, step);
-                                // Canvas: shift positions to match
-                                Self::canvas_shift_positions(&mut self.canvas_positions, from, -1);
-                                Self::canvas_shift_positions(&mut self.canvas_positions, to, 1);
-                                // Update selection to follow the moved step.
-                                self.selected = Some(to);
-                                self.multi_selected.clear();
-                                self.multi_selected.insert(to);
-                                if let Some(s) = self.steps.get(to) {
-                                    self.edit_buf = serde_yml::to_string(s).unwrap_or_default();
+                        DragPayload::ReorderStep(from_indices) => {
+                            if from_indices.len() == 1 {
+                                let from = from_indices[0];
+                                if from != drop_insert_idx && from + 1 != drop_insert_idx {
+                                    self.push_undo();
+                                    let step = self.steps.remove(from);
+                                    let to = if drop_insert_idx > from {
+                                        drop_insert_idx - 1
+                                    } else {
+                                        drop_insert_idx
+                                    };
+                                    self.steps.insert(to, step);
+                                    Self::canvas_shift_positions(
+                                        &mut self.canvas_positions,
+                                        from,
+                                        -1,
+                                    );
+                                    Self::canvas_shift_positions(&mut self.canvas_positions, to, 1);
+                                    self.selected = Some(to);
+                                    self.multi_selected.clear();
+                                    self.multi_selected.insert(to);
+                                    if let Some(s) = self.steps.get(to) {
+                                        self.edit_buf = serde_yml::to_string(s).unwrap_or_default();
+                                    }
+                                    self.form_edit_buffers.clear();
+                                    self.dirty = true;
+                                    self.log_info("ステップを並び替えました");
                                 }
-                                self.form_edit_buffers.clear();
-                                self.dirty = true;
-                                self.log_info("ステップを並び替えました");
+                            } else {
+                                // Multi-select reorder: extract selected steps, insert at target
+                                let target = drop_insert_idx;
+                                let all_in_selection: bool =
+                                    from_indices.iter().all(|&x| x < self.steps.len());
+                                if all_in_selection {
+                                    self.push_undo();
+                                    // Collect steps in order
+                                    let mut extracted: Vec<serde_yml::Value> = from_indices
+                                        .iter()
+                                        .map(|&x| self.steps[x].clone())
+                                        .collect();
+                                    // Remove in reverse order to preserve indices
+                                    let mut sorted_from = from_indices.clone();
+                                    sorted_from.sort_unstable_by(|a, b| b.cmp(a));
+                                    for idx in &sorted_from {
+                                        self.steps.remove(*idx);
+                                    }
+                                    // Adjust insertion point after removals
+                                    let removed_before =
+                                        from_indices.iter().filter(|&&x| x < target).count();
+                                    let insert_at =
+                                        target.saturating_sub(removed_before).min(self.steps.len());
+                                    // Insert extracted steps at target
+                                    for (offset, step) in extracted.drain(..).enumerate() {
+                                        self.steps.insert(insert_at + offset, step);
+                                    }
+                                    // Reset canvas positions to be repopulated by ensure_canvas_layout
+                                    self.canvas_positions.clear();
+                                    // Update selection to follow first moved step
+                                    let new_sel = insert_at;
+                                    self.selected = Some(new_sel);
+                                    self.multi_selected.clear();
+                                    for offset in 0..from_indices.len() {
+                                        self.multi_selected.insert(insert_at + offset);
+                                    }
+                                    if let Some(s) = self.steps.get(new_sel) {
+                                        self.edit_buf = serde_yml::to_string(s).unwrap_or_default();
+                                    }
+                                    self.form_edit_buffers.clear();
+                                    self.dirty = true;
+                                    self.log_info("ステップを並び替えました");
+                                }
                             }
                         }
                     }
@@ -4649,6 +4820,43 @@ impl eframe::App for EditorApp {
                     });
                 });
             self.about_open = open;
+        }
+
+        // ── Toast notifications overlay ───────────────────────────────────
+        let now = std::time::Instant::now();
+        self.toasts.retain(|t| t.expires > now);
+        if !self.toasts.is_empty() {
+            ctx.request_repaint();
+            let screen = ctx.input(|i| i.viewport_rect());
+            let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::new("toasts"));
+            let painter = ctx.layer_painter(layer);
+            let mut y = screen.min.y + 48.0;
+            let x_right = screen.max.x - 12.0;
+            let font_id = egui::FontId::proportional(13.0);
+            let padding = egui::Vec2::new(10.0, 6.0);
+            let toast_width = 280.0_f32;
+            let toast_height = 30.0_f32;
+            for toast in &self.toasts {
+                let bg = match toast.level {
+                    LogLevel::Ok => egui::Color32::from_rgba_premultiplied(30, 100, 50, 220),
+                    LogLevel::Error => egui::Color32::from_rgba_premultiplied(120, 30, 30, 220),
+                    LogLevel::Info => egui::Color32::from_rgba_premultiplied(40, 60, 100, 220),
+                };
+                let text_color = egui::Color32::WHITE;
+                let rect = egui::Rect::from_min_size(
+                    egui::pos2(x_right - toast_width, y),
+                    egui::vec2(toast_width, toast_height),
+                );
+                painter.rect_filled(rect, 6.0, bg);
+                painter.text(
+                    rect.min + padding,
+                    egui::Align2::LEFT_TOP,
+                    &toast.message,
+                    font_id.clone(),
+                    text_color,
+                );
+                y += toast_height + 4.0;
+            }
         }
     }
 }
