@@ -2306,23 +2306,68 @@ impl EditorApp {
     }
 
     fn show_ai_panel(&mut self, ctx: &egui::Context) {
+        // Floating button at bottom-right corner
+        let screen = ctx.content_rect();
+        egui::Area::new(egui::Id::new("ai_fab"))
+            .fixed_pos(egui::pos2(screen.max.x - 60.0, screen.max.y - 60.0))
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                let (fill, label) = if self.ai_unread {
+                    (
+                        egui::Color32::from_rgb(220, 80, 40),
+                        egui::RichText::new("AI")
+                            .color(egui::Color32::WHITE)
+                            .strong(),
+                    )
+                } else {
+                    (
+                        egui::Color32::from_rgb(60, 100, 200),
+                        egui::RichText::new("AI")
+                            .color(egui::Color32::WHITE)
+                            .strong(),
+                    )
+                };
+                if ui
+                    .add(
+                        egui::Button::new(label)
+                            .min_size(egui::vec2(44.0, 44.0))
+                            .corner_radius(egui::CornerRadius::same(22))
+                            .fill(fill),
+                    )
+                    .on_hover_text("AI アシスタント")
+                    .clicked()
+                {
+                    self.ai_panel_open = !self.ai_panel_open;
+                    if self.ai_panel_open {
+                        self.ai_unread = false;
+                    }
+                }
+            });
+
         if !self.ai_panel_open {
             return;
         }
         self.ai_unread = false;
-        egui::SidePanel::right("ai_panel")
-            .min_width(360.0)
-            .max_width(480.0)
+
+        let default_pos = egui::pos2(screen.max.x - 390.0, screen.max.y - 490.0);
+        egui::Window::new("AI アシスタント")
+            .default_pos(default_pos)
+            .default_size([360.0, 440.0])
+            .min_size([280.0, 280.0])
+            .resizable(true)
+            .collapsible(false)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.strong("AI アシスタント");
-                    if ui.small_button("✕").clicked() {
-                        self.ai_panel_open = false;
-                    }
-                    if ui.small_button("🗑 クリア").clicked() {
-                        self.ai_messages.clear();
-                        self.md_cache = egui_commonmark::CommonMarkCache::default();
-                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("✕").clicked() {
+                            self.ai_panel_open = false;
+                        }
+                        if ui.small_button("クリア").clicked() {
+                            self.ai_messages.clear();
+                            self.md_cache = egui_commonmark::CommonMarkCache::default();
+                        }
+                    });
                 });
                 ui.separator();
 
@@ -3017,31 +3062,6 @@ impl eframe::App for EditorApp {
                         self.flow_pan = egui::Vec2::ZERO;
                     }
                     ui.label(format!("{:.0}%", self.flow_zoom * 100.0));
-                }
-                ui.separator();
-                {
-                    let ai_label = if self.ai_unread {
-                        egui::RichText::new("AI ●").color(egui::Color32::from_rgb(240, 120, 40))
-                    } else {
-                        egui::RichText::new("AI")
-                    };
-                    let hover = if self.ai_unread {
-                        "AIアシスタント (未読メッセージあり)"
-                    } else {
-                        "AIアシスタント"
-                    };
-                    if ui.button(ai_label).on_hover_text(hover).clicked() {
-                        self.ai_panel_open = !self.ai_panel_open;
-                        if self.ai_panel_open {
-                            self.ai_unread = false;
-                        }
-                    }
-                }
-                if ui.button("設定").clicked() {
-                    self.settings_open = true;
-                }
-                if ui.button("? マニュアル").clicked() {
-                    self.manual_open = !self.manual_open;
                 }
             });
             // Status bar row: last log entry right-aligned
