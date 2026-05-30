@@ -48,6 +48,7 @@ struct S {
     panel_steps: &'static str,
     panel_vars: &'static str,
     panel_log: &'static str,
+    tab_problems: &'static str,
     btn_add_step: &'static str,
     btn_expand_all: &'static str,
     btn_collapse_all: &'static str,
@@ -114,6 +115,7 @@ impl S {
                 panel_steps: "ステップ一覧",
                 panel_vars: "変数",
                 panel_log: "ログ",
+                tab_problems: "問題",
                 btn_add_step: "+ ステップ追加",
                 btn_expand_all: "開",
                 btn_collapse_all: "閉",
@@ -173,6 +175,7 @@ impl S {
                 panel_steps: "Steps",
                 panel_vars: "Variables",
                 panel_log: "Log",
+                tab_problems: "Problems",
                 btn_add_step: "+ Add Step",
                 btn_expand_all: "▾",
                 btn_collapse_all: "▸",
@@ -232,6 +235,7 @@ impl S {
                 panel_steps: "步骤列表",
                 panel_vars: "变量",
                 panel_log: "日志",
+                tab_problems: "问题",
                 btn_add_step: "+ 添加步骤",
                 btn_expand_all: "开",
                 btn_collapse_all: "闭",
@@ -519,6 +523,13 @@ enum BottomTab {
     Variables,
     #[default]
     Log,
+    Problems,
+}
+
+struct ValidationIssue {
+    step_idx: usize,
+    message: String,
+    level: LogLevel,
 }
 
 struct FlowNode {
@@ -1288,6 +1299,8 @@ struct EditorApp {
     canvas_zoom: f32,
     canvas_pan: egui::Vec2,
     canvas_dragging: Option<(usize, egui::Vec2)>,
+    /// When Some, step list rows referencing this variable name get an amber tint.
+    var_highlight: Option<String>,
 }
 
 impl Default for EditorApp {
@@ -1346,6 +1359,7 @@ impl Default for EditorApp {
             canvas_zoom: 1.0,
             canvas_pan: egui::Vec2::ZERO,
             canvas_dragging: None,
+            var_highlight: None,
         }
     }
 }
@@ -1869,6 +1883,77 @@ impl EditorApp {
         });
     }
 
+    fn collect_var_refs_from_value<F: FnMut(&str)>(val: &serde_yml::Value, cb: &mut F) {
+        match val {
+            serde_yml::Value::String(s) => {
+                let mut rest = s.as_str();
+                while let Some(start) = rest.find("{{") {
+                    rest = &rest[start + 2..];
+                    if let Some(end) = rest.find("}}") {
+                        let name = rest[..end].trim();
+                        if !name.is_empty() {
+                            cb(name);
+                        }
+                        rest = &rest[end + 2..];
+                    } else {
+                        break;
+                    }
+                }
+            }
+            serde_yml::Value::Sequence(seq) => {
+                for v in seq {
+                    Self::collect_var_refs_from_value(v, cb);
+                }
+            }
+            serde_yml::Value::Mapping(map) => {
+                for (k, v) in map {
+                    Self::collect_var_refs_from_value(k, cb);
+                    Self::collect_var_refs_from_value(v, cb);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn validate_scenario(&self) -> Vec<ValidationIssue> {
+        let mut issues = Vec::new();
+        let mut defined: HashSet<String> = HashSet::new();
+        for (k, _) in &self.scenario_vars {
+            if let Some(s) = k.as_str() {
+                defined.insert(s.to_owned());
+            }
+        }
+        for (step_idx, step) in self.steps.iter().enumerate() {
+            if let Some(map) = step.as_mapping() {
+                for (_, v) in map {
+                    if let Some(serde_yml::Value::String(save_as)) = map.get("save_as") {
+                        let _ = save_as;
+                    }
+                    let _ = v;
+                }
+                if let Some(serde_yml::Value::String(save_as)) = map.get("save_as") {
+                    defined.insert(save_as.clone());
+                }
+                for (_, v) in map {
+                    let mut refs = Vec::new();
+                    Self::collect_var_refs_from_value(v, &mut |name| {
+                        if name != "item" && !defined.contains(name) {
+                            refs.push(name.to_owned());
+                        }
+                    });
+                    for name in refs {
+                        issues.push(ValidationIssue {
+                            step_idx,
+                            message: format!("未定義の変数 '{{{{ {name} }}}}' を参照しています"),
+                            level: LogLevel::Error,
+                        });
+                    }
+                }
+            }
+        }
+        issues
+    }
+
     fn show_property_form(&mut self, ui: &mut egui::Ui, idx: usize) {
         const FILE_KEYS: &[&str] = &[
             "template", "file", "path", "src", "dest", "local", "remote", "sub",
@@ -2362,12 +2447,20 @@ impl EditorApp {
                                         ui.separator();
                                         let ck = get_step_key(&branch_steps[child_idx]);
                                         let col = category_color(step_key_category(ck));
-                                        ui.horizontal(|ui| {
-                                            ui.colored_label(col, "▌");
-                                            ui.strong(format!(
-                                                "ステップ {} ({}) > {} [{}]  —  {}",
-                                                idx + 1, outer_key, branch, child_idx, step_display_name(ck)
-                                            ));
+                                        let mut deselect_child = false;
+                                        ui.horizontal_wrapped(|ui| {
+                                            ui.colored_label(egui::Color32::from_rgb(120, 120, 120), format!("ステップ {}", idx + 1));
+                                            ui.colored_label(egui::Color32::from_rgb(120, 120, 120), "(");
+                                            ui.colored_label(col, outer_key);
+                                            ui.colored_label(egui::Color32::from_rgb(120, 120, 120), ")");
+                                            ui.colored_label(egui::Color32::from_rgb(160, 160, 160), "▶");
+                                            ui.colored_label(egui::Color32::from_rgb(100, 160, 220), branch.as_str());
+                                            ui.colored_label(egui::Color32::from_rgb(160, 160, 160), "▶");
+                                            ui.colored_label(egui::Color32::from_rgb(160, 160, 160), format!("[{}]", child_idx));
+                                            ui.colored_label(col, step_display_name(ck));
+                                            if ui.small_button("✕").clicked() {
+                                                deselect_child = true;
+                                            }
                                         });
                                         let resp = ui.add(
                                             egui::TextEdit::multiline(&mut self.child_edit_buf)
@@ -2393,6 +2486,10 @@ impl EditorApp {
                                                 egui::Color32::from_rgb(255, 100, 100),
                                                 format!("YAML エラー: {err}"),
                                             );
+                                        }
+                                        if deselect_child {
+                                            self.selected_child = None;
+                                            self.child_edit_buf.clear();
                                         }
                                     }
                                 }
@@ -3447,6 +3544,9 @@ fn layout_path(scenario_path: &std::path::Path) -> std::path::PathBuf {
 impl eframe::App for EditorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let s = S::for_lang(&self.settings.lang);
+        if self.bottom_tab != BottomTab::Variables {
+            self.var_highlight = None;
+        }
         // ── OS window close button ────────────────────────────────────────────
         if ctx.input(|i| i.viewport().close_requested())
             && self.dirty
@@ -4059,12 +4159,19 @@ impl eframe::App for EditorApp {
             .min_height(60.0)
             .default_height(160.0)
             .show(ctx, |ui| {
+                let problem_count = self.validate_scenario().len();
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.bottom_tab, BottomTab::Variables, s.panel_vars);
                     ui.selectable_value(&mut self.bottom_tab, BottomTab::Log, s.panel_log);
                     if self.bottom_tab == BottomTab::Log && ui.small_button(s.clear).clicked() {
                         self.log.clear();
                     }
+                    let problems_label = if problem_count > 0 {
+                        format!("{} ({})", s.tab_problems, problem_count)
+                    } else {
+                        s.tab_problems.to_owned()
+                    };
+                    ui.selectable_value(&mut self.bottom_tab, BottomTab::Problems, problems_label);
                     if let Some(ref p) = self.path {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.weak(p.display().to_string());
@@ -4113,7 +4220,16 @@ impl eframe::App for EditorApp {
                                                 )
                                             })
                                             .unwrap_or_default();
-                                        ui.label(&name_str);
+                                        let is_highlighted = self.var_highlight.as_deref()
+                                            == Some(name_str.as_str());
+                                        if ui.selectable_label(is_highlighted, &name_str).clicked()
+                                        {
+                                            if is_highlighted {
+                                                self.var_highlight = None;
+                                            } else {
+                                                self.var_highlight = Some(name_str.clone());
+                                            }
+                                        }
                                         ui.label(&val_str);
                                         ui.end_row();
                                     }
@@ -4123,6 +4239,33 @@ impl eframe::App for EditorApp {
                                     }
                                 });
                         });
+                    }
+                    BottomTab::Problems => {
+                        let issues = self.validate_scenario();
+                        let mut jump_to: Option<usize> = None;
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            if issues.is_empty() {
+                                ui.colored_label(
+                                    LogLevel::Ok.color(),
+                                    "問題は見つかりませんでした",
+                                );
+                            } else {
+                                for issue in &issues {
+                                    ui.horizontal(|ui| {
+                                        ui.colored_label(issue.level.color(), &issue.message);
+                                        if ui
+                                            .small_button(format!("→ ステップ {}", issue.step_idx))
+                                            .clicked()
+                                        {
+                                            jump_to = Some(issue.step_idx);
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                        if let Some(idx) = jump_to {
+                            self.select_step(idx);
+                        }
                     }
                 }
             });
@@ -4219,6 +4362,14 @@ impl eframe::App for EditorApp {
                                     let is_multi = self.multi_selected.contains(&i);
                                     let is_primary = self.selected == Some(i);
                                     let is_running = self.current_run_step == Some(i);
+                                    let is_var_match = if let Some(ref vh) = self.var_highlight {
+                                        let pattern = format!("{{{{ {vh} }}}}");
+                                        serde_yml::to_string(&self.steps[i])
+                                            .map(|y| y.contains(&pattern))
+                                            .unwrap_or(false)
+                                    } else {
+                                        false
+                                    };
 
                                     let drag_id = egui::Id::new(("step_drag", i));
                                     let label_text = if is_running {
@@ -4249,10 +4400,26 @@ impl eframe::App for EditorApp {
                                                         color
                                                     };
                                                     ui.colored_label(bar_color, "▌");
-                                                    // Highlight primary in full, multi-only in dimmed tint.
-                                                    let highlight = is_primary || is_multi;
-                                                    let resp =
-                                                        ui.selectable_label(highlight, &label_text);
+                                                    let resp = ui
+                                                        .selectable_label(is_primary, &label_text);
+                                                    if is_multi && !is_primary {
+                                                        ui.painter().rect_filled(
+                                                            resp.rect.expand2(egui::vec2(2.0, 1.0)),
+                                                            2.0,
+                                                            egui::Color32::from_rgba_premultiplied(
+                                                                60, 100, 200, 60,
+                                                            ),
+                                                        );
+                                                    }
+                                                    if is_var_match && !is_primary && !is_multi {
+                                                        ui.painter().rect_filled(
+                                                            resp.rect.expand2(egui::vec2(2.0, 1.0)),
+                                                            2.0,
+                                                            egui::Color32::from_rgba_premultiplied(
+                                                                180, 120, 20, 50,
+                                                            ),
+                                                        );
+                                                    }
                                                     if resp.clicked() {
                                                         let (ctrl, shift) = ui.input(|inp| {
                                                             (
@@ -4332,6 +4499,12 @@ impl eframe::App for EditorApp {
                     self.add_menu_open = true;
                     self.add_menu_just_opened = true;
                     self.add_filter.clear();
+                }
+                if self.multi_selected.len() > 1 {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(100, 140, 220),
+                        format!("{} 件選択中", self.multi_selected.len()),
+                    );
                 }
 
                 if let Some(act) = action {
