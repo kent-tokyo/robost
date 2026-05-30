@@ -1,5 +1,7 @@
 # robost
 
+[🇯🇵 日本語](https://kent-tokyo.github.io/robost/ja/) | [🇨🇳 中文](https://kent-tokyo.github.io/robost/zh/)
+
 Rust-based RPA automation tool with image recognition, OCR, and WASM plugins.
 
 ## What is robost?
