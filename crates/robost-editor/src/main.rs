@@ -3111,42 +3111,17 @@ impl eframe::App for EditorApp {
             egui::Window::new("ステップを追加")
                 .collapsible(false)
                 .resizable(true)
-                .default_size([340.0, 420.0])
+                .default_size([300.0, 500.0])
                 .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("絞り込み:");
-                        let filter_resp = ui.text_edit_singleline(&mut self.add_filter);
-                        if self.add_menu_just_opened {
-                            filter_resp.request_focus();
-                            self.add_menu_just_opened = false;
-                        }
-                    });
-                    // Category jump chips
-                    ui.horizontal_wrapped(|ui| {
-                        let mut seen = std::collections::HashSet::new();
-                        for t in STEP_TEMPLATES {
-                            if seen.insert(t.category) {
-                                let col = category_color(t.category);
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            egui::RichText::new(t.category).size(10.0),
-                                        )
-                                        .fill(egui::Color32::from_rgba_unmultiplied(
-                                            col.r(),
-                                            col.g(),
-                                            col.b(),
-                                            35,
-                                        ))
-                                        .min_size(egui::vec2(0.0, 18.0)),
-                                    )
-                                    .clicked()
-                                {
-                                    self.add_filter = t.category.to_owned();
-                                }
-                            }
-                        }
-                    });
+                    let filter_resp = ui.add(
+                        egui::TextEdit::singleline(&mut self.add_filter)
+                            .hint_text("検索…")
+                            .desired_width(f32::INFINITY),
+                    );
+                    if self.add_menu_just_opened {
+                        filter_resp.request_focus();
+                        self.add_menu_just_opened = false;
+                    }
                     ui.separator();
 
                     let filter = self.add_filter.to_lowercase();
@@ -3158,47 +3133,65 @@ impl eframe::App for EditorApp {
                     });
 
                     egui::ScrollArea::vertical()
-                        .max_height(340.0)
+                        .max_height(420.0)
                         .show(ui, |ui| {
-                            let mut last_cat = "";
-
-                            for t in STEP_TEMPLATES {
-                                if !filter.is_empty()
-                                    && !t.name.to_lowercase().contains(&filter)
-                                    && !t.display_name.to_lowercase().contains(&filter)
-                                    && !t.category.to_lowercase().contains(&filter)
-                                {
-                                    continue;
+                            if filter.is_empty() {
+                                // Tree view: one CollapsingHeader per category
+                                let mut cats: Vec<&str> = Vec::new();
+                                for t in STEP_TEMPLATES {
+                                    if !cats.contains(&t.category) {
+                                        cats.push(t.category);
+                                    }
                                 }
-                                if t.category != last_cat {
-                                    ui.add_space(4.0);
-                                    // Colored category header (ajisai palette section header)
-                                    let col = category_color(t.category);
-                                    ui.colored_label(
-                                        col,
-                                        egui::RichText::new(t.category).strong().size(12.0),
+                                for cat in cats {
+                                    let col = category_color(cat);
+                                    let hdr = egui::RichText::new(cat).color(col).strong();
+                                    egui::CollapsingHeader::new(hdr).default_open(true).show(
+                                        ui,
+                                        |ui| {
+                                            for t in
+                                                STEP_TEMPLATES.iter().filter(|t| t.category == cat)
+                                            {
+                                                let label = egui::RichText::new(format!(
+                                                    "  {} ({})",
+                                                    t.display_name, t.name
+                                                ))
+                                                .size(12.0);
+                                                if ui.selectable_label(false, label).clicked() {
+                                                    insert = Some(t.yaml);
+                                                    close = true;
+                                                }
+                                            }
+                                        },
                                     );
-                                    ui.separator();
-                                    last_cat = t.category;
                                 }
-
-                                let col = category_color(t.category);
-                                let label_text = format!("  {} ({})", t.display_name, t.name);
-                                let btn =
-                                    egui::Button::new(egui::RichText::new(label_text).size(12.0))
+                            } else {
+                                // Flat filtered list with category prefix
+                                for t in STEP_TEMPLATES {
+                                    if !t.name.to_lowercase().contains(&filter)
+                                        && !t.display_name.to_lowercase().contains(&filter)
+                                        && !t.category.to_lowercase().contains(&filter)
+                                    {
+                                        continue;
+                                    }
+                                    let col = category_color(t.category);
+                                    let label = egui::RichText::new(format!(
+                                        "{} / {} ({})",
+                                        t.category, t.display_name, t.name
+                                    ))
+                                    .size(12.0);
+                                    let btn = egui::Button::new(label)
+                                        .fill(egui::Color32::from_rgba_unmultiplied(
+                                            col.r(),
+                                            col.g(),
+                                            col.b(),
+                                            18,
+                                        ))
                                         .min_size(egui::vec2(250.0, 26.0));
-
-                                // Subtle tint matching category color
-                                let btn = btn.fill(egui::Color32::from_rgba_unmultiplied(
-                                    col.r(),
-                                    col.g(),
-                                    col.b(),
-                                    18,
-                                ));
-
-                                if ui.add(btn).clicked() {
-                                    insert = Some(t.yaml);
-                                    close = true;
+                                    if ui.add(btn).clicked() {
+                                        insert = Some(t.yaml);
+                                        close = true;
+                                    }
                                 }
                             }
                         });
@@ -3216,7 +3209,7 @@ impl eframe::App for EditorApp {
                         if ui.button("キャンセル").clicked() {
                             close = true;
                         }
-                        ui.weak("Esc でキャンセル / Enter で最初の候補を挿入");
+                        ui.weak("Esc / Enter で最初の候補を挿入");
                     });
                 });
 
@@ -3291,7 +3284,7 @@ fn setup_fonts(ctx: &egui::Context) {
         if let Ok(data) = std::fs::read(path) {
             fonts
                 .font_data
-                .insert("cjk".to_owned(), egui::FontData::from_owned(data));
+                .insert("cjk".to_owned(), egui::FontData::from_owned(data).into());
             fonts
                 .families
                 .entry(egui::FontFamily::Proportional)
