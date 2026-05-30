@@ -1,0 +1,28 @@
+[package]
+name = "robost-snip"
+description = "Template capture tray app for Rust RPA — freeze screen and crop image templates instantly"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "screenshot", "template", "gui"]
+categories = ["gui", "multimedia::images"]
+
+[dependencies]
+robost-template.workspace = true
+robost-capture.workspace = true
+robost-vision.workspace = true
+eframe.workspace = true
+egui.workspace = true
+tray-icon.workspace = true
+global-hotkey.workspace = true
+image.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde.workspace = true
+serde_yml.workspace = true
+tokio.workspace = true
+dirs.workspace = true
+xcap.workspace = true

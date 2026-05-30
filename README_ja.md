@@ -1,6 +1,24 @@
-# rust_rpa
+# robost
+
+**robost** = **robo**t (ロボット) + **ro**bu**st** (堅牢) + **Rust** (言語)
 
 Rust 製 OSS デスクトップ自動化 (RPA) ツール。
+
+## スクリーンショット
+
+| シナリオ YAML | 実行出力 |
+|:---:|:---:|
+| ![Scenario YAML](assets/screenshots/scenario_yaml.png) | ![Run Output](assets/screenshots/scenario_run.png) |
+
+## フローエディタ (開発中)
+
+| 概要 | ノード設定 |
+|:---:|:---:|
+| ![Flow Editor Overview](assets/screenshots/editor_overview.png) | ![Node Config](assets/screenshots/editor_node_config.png) |
+
+| ループ / 分岐フロー | テンプレートピッカー |
+|:---:|:---:|
+| ![Loop Flow](assets/screenshots/editor_flow_loop.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
 
 ## 差別化ポイント
 
@@ -10,27 +28,33 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 - **WASM プラグインによる拡張性** — 権限宣言付きサンドボックスコミュニティプラグイン
 - **リッチな YAML シナリオ形式** — 変数・フロー制御・データソース・インラインスクリプト・サブシナリオ対応
 
-## オープンソース自動化ツールとの比較
+## 自動化ツール比較
 
-| 機能 | **rust_rpa** | PyAutoGUI | SikuliX | Robot Framework |
-|---|---|---|---|---|
-| ライセンス | MIT / Apache-2.0 | MIT | MIT | Apache-2.0 |
-| 言語 | Rust (YAML シナリオ) | Python | Java (Jython スクリプト) | Python |
-| リモートデスクトップ (RDP/Citrix/VNC) | 対応 — エージェント不要 | 非対応 | 非対応 | 非対応 |
-| 画像認識 | 対応 — マルチスケール NCC | 非対応 | 対応 — ピクセル完全一致 | 非対応 (プラグイン経由) |
-| Transient UI キャプチャ (ドロップダウン・ツールチップ) | 対応 — フリーズ + オーバーレイ | 非対応 | 非対応 | 非対応 |
-| マルチスケール DPI 耐性 (125%/150%) | 対応 — ビルトイン | 非対応 | 非対応 | 非対応 |
-| プラグインサンドボックス | 対応 — WASM (メモリ安全) | 非対応 | 非対応 | 非対応 |
-| クロスプラットフォーム開発 | 対応 — macOS/Linux/Windows | 対応 | 対応 | 対応 |
-| シナリオのバージョン管理 | 対応 — プレーン YAML | 対応 — Python | 部分対応 — `.sikuli` ディレクトリ | 対応 — プレーンテキスト |
-| 起動オーバーヘッド | 約 10 ms (ネイティブバイナリ) | Python 起動コスト | JVM 起動 (約 2 秒) | Python 起動コスト |
-| インラインスクリプト | 対応 — Rhai (サンドボックス) | Python 本体 | Jython | Python |
-| OCR サポート | 対応 (Tesseract、オプション) | 非対応 | 部分対応 | 非対応 (プラグイン経由) |
+| 機能 | **robost** | WinActor | UiPath | PyAutoGUI | SikuliX | Robot Framework |
+|---|---|---|---|---|---|---|
+| ライセンス | MIT / Apache-2.0 | 商用 | 商用 | MIT | MIT | Apache-2.0 |
+| 言語 | Rust (YAML シナリオ) | 独自 GUI | 独自 GUI | Python | Java (Jython) | Python |
+| オープンソース | Yes | No | No | Yes | Yes | Yes |
+| リモートデスクトップ (RDP/Citrix/VNC) | Yes — エージェント不要 | Yes | Yes (エージェント必要) | No | No | No |
+| 画像認識 | Yes — マルチスケール NCC | Yes | Yes — AI 支援 | No | Yes — ピクセル完全一致 | No (プラグイン経由) |
+| Web ブラウザ自動化 | Yes — WebDriver | Yes | Yes | No | No | Yes (SeleniumLibrary) |
+| Excel 自動化 | Yes — セル/シート/数式 | Yes | Yes | No | No | No (プラグイン経由) |
+| Word / PowerPoint | ❌ Phase 2 | Yes | Yes | No | No | No |
+| SAP GUI 自動化 | ❌ Phase 2 | Yes | Yes | No | No | No |
+| シナリオ記録 | ❌ Phase 2 | Yes | Yes | No | No | No |
+| オーケストレーター (中央管理) | ❌ Phase 3 | Yes (限定的) | Yes | No | No | No |
+| 瞬間 UI キャプチャ (ドロップダウン等) | Yes — フリーズ + オーバーレイ | Yes | 部分的 | No | No | No |
+| マルチスケール DPI 対応 (125%/150%) | Yes — 内蔵 | 部分的 | 部分的 | No | No | No |
+| WASM プラグインサンドボックス | Yes — メモリ安全 | No | No | No | No | No |
+| インラインスクリプト | Yes — Rhai (サンドボックス) | 部分的 | VB.NET / C# | Python 本体 | Jython | Python |
+| シナリオのバージョン管理 | Yes — プレーン YAML | No | 部分的 | Yes — Python | 部分的 | Yes — プレーンテキスト |
+| 起動オーバーヘッド | 約 10 ms (ネイティブバイナリ) | 数秒 | 数秒 | Python 起動 | JVM 起動 (約 2 秒) | Python 起動 |
+| OCR サポート | Yes (Tesseract、オプション) | Yes | Yes | No | 部分的 | No (プラグイン経由) |
 
-## rust_rpa を使うメリット
+## robost を使うメリット
 
 **商用 RPA ツールから移行するチーム向け**
-rust_rpa は主要な商用 RPA 製品と共通するノード語彙 (click_image、wait_image、foreach、dialog_input など) を採用しているため、既存シナリオの移行が容易です。シナリオはプレーン YAML で管理でき、PR でレビュー可能、`git diff` で変更点が一目瞭然です。独自バイナリ形式のツールは不要です。
+robost は主要な商用 RPA 製品と共通するノード語彙 (click_image、wait_image、foreach、dialog_input など) を採用しているため、既存シナリオの移行が容易です。シナリオはプレーン YAML で管理でき、PR でレビュー可能、`git diff` で変更点が一目瞭然です。独自バイナリ形式のツールは不要です。
 
 **RDP / リモートデスクトップ自動化向け**
 ターゲットマシンへのエージェントインストールは不要です。ローカルマシン上で RDP ウィンドウをキャプチャし enigo で入力を送る方式のため、Citrix・VNC・任意のウィンドウセッションにも同じ仕組みで対応します。マルチスケール NCC マッチングで DPI スケーリング (100/125/150%) による座標ズレを自動補正します。
@@ -43,32 +67,32 @@ rust_rpa は主要な商用 RPA 製品と共通するノード語彙 (click_imag
 - **高速起動** — Rust ネイティブバイナリはミリ秒単位で起動します。JVM や .NET ランタイムのウォームアップは不要です。
 
 **オープンソースコントリビューター向け**
-WASM プラグインインタフェース (`rpa-plugin-api`) によりランナー本体とノード実装が分離されています。Rust、AssemblyScript、Go、C でビルドした `.wasm` をコアのフォークなしに統合できます。権限は `plugin.toml` で宣言され、ランタイムで強制されます。ドキュメントに書くだけで終わりません。
+WASM プラグインインタフェース (`robost-plugin-api`) によりランナー本体とノード実装が分離されています。Rust、AssemblyScript、Go、C でビルドした `.wasm` をコアのフォークなしに統合できます。権限は `plugin.toml` で宣言され、ランタイムで強制されます。ドキュメントに書くだけで終わりません。
 
 ## アーキテクチャ
 
 ```
 crates/
-├── rpa-capture/      # 画面/ウィンドウキャプチャ (xcap、DPI 対応)
-├── rpa-input/        # マウス/キー入力 + ウィンドウ前面化 (enigo)
-├── rpa-vision/       # テンプレマッチ (NCC)、OCR、ML 検出
-├── rpa-backend/      # Backend trait: ローカル / RDP / VNC を統一
-├── rpa-core/         # シナリオエンジン: YAML パース、ステップ実行、リトライ、フロー制御
-├── rpa-snip/         # テンプレート採取 GUI (tray app、ホットキー、オーバーレイ、日本語 UI)
-├── rpa-editor/       # ビジュアルシナリオエディタ (リストパネル + YAML、ダークテーマ、ログパネル)
-├── rpa-template/     # 共有座標・ジオメトリ型
-├── rpa-plugin-api/   # プラグイン作者向け公開 API (crates.io 公開候補)
-├── rpa-plugin-host/  # wasmtime ベースの WASM プラグインランナー (epoch タイムアウト付き)
-├── rpa-script/       # Rhai インラインスクリプト (サンドボックス)
-├── rpa-stdlib/       # ビルトインシナリオノード群
-└── rpa-cli/          # CLI バイナリ
+├── robost-capture/      # 画面/ウィンドウキャプチャ (xcap、DPI 対応)
+├── robost-input/        # マウス/キー入力 + ウィンドウ前面化 (enigo)
+├── robost-vision/       # テンプレマッチ (NCC)、OCR、ML 検出
+├── robost-backend/      # Backend trait: ローカル / RDP / VNC を統一
+├── robost-core/         # シナリオエンジン: YAML パース、ステップ実行、リトライ、フロー制御
+├── robost-snip/         # テンプレート採取 GUI (tray app、ホットキー、オーバーレイ、日本語 UI)
+├── robost-editor/       # ビジュアルシナリオエディタ (リストパネル + YAML、ダークテーマ、ログパネル)
+├── robost-template/     # 共有座標・ジオメトリ型
+├── robost-plugin-api/   # プラグイン作者向け公開 API (crates.io 公開候補)
+├── robost-plugin-host/  # wasmtime ベースの WASM プラグインランナー (epoch タイムアウト付き)
+├── robost-script/       # Rhai インラインスクリプト (サンドボックス)
+├── robost-stdlib/       # ビルトインシナリオノード群
+└── robost-cli/          # CLI バイナリ
 ```
 
 ## クイックスタート
 
 ```bash
 cargo build --workspace
-cargo run -p rpa-cli -- run scenario.yaml
+cargo run -p robost-cli -- run scenario.yaml
 ```
 
 ## シナリオ形式
@@ -164,20 +188,28 @@ steps:
   - log_write: { file: run.log, message: "ステップ {{ count }} 完了", level: info }  # info|warn|error|debug
 
   # ファイル操作
-  - file_exists:  { path: data.csv, save_as: exists }
-  - file_copy:    { src: a.txt, dst: b.txt }
-  - file_move:    { src: tmp.txt, dst: archive/tmp.txt }
-  - file_delete:  { path: old.txt }
-  - file_rename:  { path: a.txt, new_name: b.txt }
-  - file_list:    { pattern: "logs/*.log", save_as: files }
-  - file_read:    { path: notes.txt, save_as: content }
-  - file_write:   { path: out.txt, content: "{{ result }}", mode: overwrite }  # overwrite|append
-  - file_append:  { path: out.txt, content: "{{ line }}\n" }
+  - file_exists:      { path: data.csv, save_as: exists }
+  - file_copy:        { src: a.txt, dst: b.txt }
+  - file_move:        { src: tmp.txt, dst: archive/tmp.txt }
+  - file_delete:      { path: old.txt }
+  - file_rename:      { path: a.txt, name: b.txt }
+  - file_list:        { dir: "logs", pattern: "*.log", save_as: files }
+  - file_read:        { path: notes.txt, save_as: content }
+  - file_write:       { path: out.txt, content: "{{ result }}", mode: overwrite }  # overwrite|append
+  - file_append:      { path: out.txt, content: "{{ line }}\n" }
+  - file_size:        { path: data.xlsx, save_as: size_bytes }
+  - file_modified_at: { path: data.xlsx, format: "%Y-%m-%d %H:%M:%S", save_as: mtime }
+
+  # ディレクトリ操作
+  - dir_create: { path: "output/logs" }
+  - dir_delete: { path: "tmp", recursive: true, ignore_missing: true }
+  - dir_exists: { path: "output", save_as: exists }
 
   # プロセス操作
-  - process_start:  { name: notepad.exe, wait_ms: 500 }
+  - process_start:  { command: notepad.exe, wait_ms: 500 }
   - process_kill:   { name: notepad.exe }
   - process_exists: { name: notepad.exe, save_as: running }
+  - wait_process:   { name: notepad.exe, state: started, timeout_ms: 10000 }  # started|exited
 
   # 日付操作
   - date_format: { value: "{{ today }}", format: "%Y/%m/%d", save_as: formatted }
@@ -189,11 +221,23 @@ steps:
   - string_trim:      { value: "  hello  ", save_as: trimmed }
   - string_upper:     { value: "{{ text }}", save_as: upper }
   - string_lower:     { value: "{{ text }}", save_as: lower }
-  - string_substring: { value: "{{ text }}", start: 0, end: 5, save_as: sub }
+  - string_substring: { value: "{{ text }}", start: 0, length: 5, save_as: sub }
   - string_length:    { value: "{{ text }}", save_as: len }
-  - string_split:     { value: "a,b,c", sep: ",", save_as: parts }
-  - string_join:      { values: "{{ parts }}", sep: "、", save_as: joined }
+  - string_split:     { value: "a,b,c", delimiter: ",", save_as: parts }
+  - string_join:      { value: parts, separator: "、", save_as: joined }
   - string_regex:     { value: "{{ text }}", pattern: "\\d+", save_as: match }
+
+  # 文字列クエリ
+  - string_contains:    { value: "{{ text }}", search: "hello", save_as: found }
+  - string_starts_with: { value: "{{ text }}", search: "http", save_as: found }
+  - string_ends_with:   { value: "{{ text }}", search: ".xlsx", save_as: found }
+  - string_index_of:    { value: "{{ text }}", search: ":", save_as: pos }  # 0-based; 未発見は -1
+  - string_count:       { value: "hello world hello", search: "hello", save_as: n }
+
+  # 文字列フォーマット・Base64
+  - string_format: { format: "こんにちは {0}! ({1} 件)", args: [name, count], save_as: msg }
+  - base64_encode: { value: "{{ content }}", save_as: encoded }
+  - base64_decode: { value: "{{ encoded }}", save_as: decoded }
 
   # JSON / パス / 環境変数
   - json_parse:     { value: "{\"k\":1}", save_as: obj }
@@ -204,10 +248,12 @@ steps:
   - env_get:        { name: HOME, save_as: home_dir }
 
   # マウス座標操作
-  - mouse_move:     { x: 500, y: 300 }
-  - mouse_click_xy: { x: 500, y: 300, button: left }  # left|right|double
-  - mouse_drag:     { from_x: 100, from_y: 100, to_x: 400, to_y: 400, hold_ms: 100 }
-  - mouse_scroll:   { direction: down, amount: 3 }    # up|down|left|right
+  - mouse_move:      { x: 500, y: 300 }
+  - mouse_click_xy:  { x: 500, y: 300, button: left }  # left|right|double
+  - mouse_drag:      { from_x: 100, from_y: 100, to_x: 400, to_y: 400, hold_ms: 100 }
+  - mouse_scroll:    { direction: down, amount: 3 }    # up|down|left|right
+  - mouse_hover:     { x: 500, y: 300, hover_ms: 500 }
+  - click_in_window: { window: "メモ帳", x: 100, y: 50, action: left }  # left|right|double
 
   # キーコンビネーション
   - key_combo: { keys: [ctrl, c] }           # Ctrl+C (コピー)
@@ -218,15 +264,46 @@ steps:
   - csv_write: { path: out.csv, rows: "{{ rows }}", mode: overwrite }  # overwrite|append
 
   # HTTP (feature = "http" が必要)
-  - http_get:  { url: "https://api.example.com/items", save_as: resp }
-  - http_post: { url: "https://api.example.com/items", body: "{{ payload }}", save_as: resp }
-  - http_put:  { url: "https://api.example.com/items/1", body: "{{ payload }}", save_as: resp }
+  - http_get:    { url: "https://api.example.com/items", save_as: resp }
+  - http_post:   { url: "https://api.example.com/items", body: "{{ payload }}", save_as: resp }
+  - http_put:    { url: "https://api.example.com/items/1", body: "{{ payload }}", save_as: resp }
+  - http_delete: { url: "https://api.example.com/items/1", save_as: resp }
+  - http_patch:  { url: "https://api.example.com/items/1", body: "{{ patch }}", save_as: resp }
+  # 認証付き
+  - http_get:    { url: "https://api.example.com/secure", auth: { basic: { user: "u", password: "p" } }, save_as: resp }
+  - http_post:   { url: "https://api.example.com/secure", body: "{{ payload }}", auth: { bearer: { token: "{{ tok }}" } }, save_as: resp }
 
-  # Excel (feature = "excel-write" が必要)
-  - excel_read_cell:   { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, save_as: cell_val }
-  - excel_read_range:  { path: data.xlsx, sheet: Sheet1, start_row: 2, end_row: 10, save_as: range }
-  - excel_write_cell:  { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, value: "{{ result }}" }
-  - excel_write_range: { path: data.xlsx, sheet: Sheet1, start_cell: A2, data: "{{ rows }}" }
+  # Excel セル / 範囲 (書き込みは feature = "excel-write" が必要)
+  - excel_read_cell:   { file: data.xlsx, sheet: Sheet1, cell: A2, save_as: cell_val }
+  - excel_read_range:  { file: data.xlsx, sheet: Sheet1, range: "A2:Z10", save_as: table }
+  - excel_write_cell:  { file: data.xlsx, sheet: Sheet1, cell: A2, value: "{{ result }}" }
+  - excel_write_range: { file: data.xlsx, sheet: Sheet1, cell: A2, data: "{{ rows }}" }
+
+  # Excel シート管理 (feature = "excel-write" が必要)
+  - excel_add_sheet:    { file: data.xlsx, name: NewSheet }
+  - excel_delete_sheet: { file: data.xlsx, name: OldSheet }
+  - excel_rename_sheet: { file: data.xlsx, from_name: Sheet1, to_name: Data }
+  - excel_read_sheet:   { file: data.xlsx, sheet: Sheet1, has_header: true, save_as: rows }
+  - excel_get_dims:     { file: data.xlsx, sheet: Sheet1, save_as: dims }  # {rows, cols}
+  - excel_find_row:     { file: data.xlsx, col: A, value: "{{ search }}", save_as: row_num }  # 1-based or -1
+
+  # メール (IMAP 受信 / SMTP 送信)
+  - mail_receive:
+      host: "imap.example.com"
+      user: "{{ env_user }}"
+      password: "{{ env_pass }}"
+      folder: INBOX
+      count: 10
+      only_unseen: true
+      save_as: emails   # [{subject, from, date, body, seen}]
+  - mail_send:
+      host: "smtp.example.com"
+      user: "{{ env_user }}"
+      password: "{{ env_pass }}"
+      from: "bot@example.com"
+      to: "user@example.com"
+      subject: "週次報告"
+      body: "{{ report }}"
 
   # Webhook 通知
   - notify_slack: { url: "{{ SLACK_WEBHOOK }}", message: "{{ count }} 件処理しました" }
@@ -239,6 +316,67 @@ steps:
 
   # スケジューラー (rpa schedule CLI 参照)
   # シナリオは cron でトリガーされる — ステップ内記述は不要
+
+  # ピクセル / 色
+  - get_pixel_color: { x: 500, y: 300, save_as: col }       # {r, g, b, hex}
+  - wait_color:      { x: 500, y: 300, color: "#00FF00", tolerance: 10, timeout_ms: 10000 }
+
+  # UI Automation (Windows のみ)
+  - uia_get:          { by: { name: "ユーザー名" }, property: value, save_as: text }  # name|value|class|rect
+  - uia_set:          { by: { name: "ユーザー名" }, value: "user@example.com" }
+  - uia_click:        { by: { name: "OK" } }
+  - uia_find:         { by: { id: "btnSubmit" }, save_as: elem }   # {x, y, width, height, name}
+  - uia_wait:         { by: { name: "OK" }, state: enabled, timeout_ms: 10000 }  # exists|enabled|visible
+  - uia_select:       { by: { name: "国" }, item: "Japan" }
+  - uia_get_children: { by: { name: "ファイル" }, save_as: items }  # [{name, value, class}]
+  - uia_check:        { by: { name: "同意する" }, checked: true }
+
+  # Web ブラウザ自動化 (feature = "web" が必要; chromedriver/geckodriver を先に起動)
+  - web_open:             { url: "https://example.com", driver: "http://localhost:4444" }
+  - web_close: ~
+  - web_click:            { selector: "#submit", timeout_ms: 5000 }
+  - web_type:             { selector: "#username", text: "user", clear: true }
+  - web_get:              { selector: ".result", save_as: text }
+  - web_get:              { selector: ".result", attr: "href", save_as: link }
+  - web_wait:             { selector: "#spinner", timeout_ms: 10000 }
+  - web_wait_text:        { selector: "#status", text: "完了", timeout_ms: 10000 }
+  - web_screenshot:       { path: "screens/page.png" }
+  - web_select:           { selector: "#country", item: "Japan" }
+  - web_execute_js:       { script: "return document.title;", save_as: title }
+  - web_switch_frame:     { selector: "#iframe1" }
+  - web_switch_frame:     { index: 0 }
+  - web_switch_frame: ~                                              # トップに戻る
+  - web_scroll:           { y: 300 }                                 # ウィンドウスクロール
+  - web_scroll:           { selector: "#list", y: 100 }             # 要素スクロール
+  - web_alert:            { action: accept }                         # accept|dismiss|get_text
+  - web_navigate_back: ~
+  - web_navigate_forward: ~
+  - web_get_url:          { save_as: current_url }
+  - web_get_title:        { save_as: page_title }
+  - web_get_all:          { selector: ".item", save_as: items }      # 全要素のテキスト
+  - web_get_all:          { selector: "a", attr: "href", save_as: links }  # 全リンクの href
+
+  # 型変換
+  - to_number: { value: "42.5", save_as: n }
+  - to_string: { value: "{{ count }}", save_as: s }
+  - var_type:  { value: "{{ obj }}", save_as: type_name }  # "string"|"number"|"bool"|"array"|"object"|"null"
+
+  # リスト操作
+  - list_length:   { list: items, save_as: len }
+  - list_get:      { list: items, index: "0", save_as: first }
+  - list_push:     { list: items, value: "{{ new_item }}" }
+  - list_remove:   { list: items, index: "0" }
+  - list_contains: { list: items, value: "target", save_as: found }
+
+  # 乱数
+  - number_random: { min: 1, max: 100, integer: true, save_as: n }
+
+  # foreach インデックス変数
+  - foreach:
+      var: rows
+      index_var: i   # 省略可能な 0-based カウンタ
+      do:
+        - log_write: { file: run.log, message: "{{ i }}: {{ item }}" }
 
   # 変数永続化
   - import_vars: { path: params.xlsx, row: 2 }
@@ -267,12 +405,12 @@ steps:
 実行後のエクスポート:
 
 ```bash
-cargo run -p rpa-cli -- run scenario.yaml --export result.xlsx
+cargo run -p robost-cli -- run scenario.yaml --export result.xlsx
 ```
 
-## テンプレート採取 (rpa-snip)
+## テンプレート採取 (robost-snip)
 
-1. `cargo run -p rpa-snip` を起動 — tray app として常駐 (ウィンドウなし、フォーカス奪わない)
+1. `cargo run -p robost-snip` を起動 — tray app として常駐 (ウィンドウなし、フォーカス奪わない)
 2. 対象 UI (ドロップダウン、ダイアログ、ツールチップ等) を手動で表示
 3. **Ctrl+Shift+C** を押下 (またはトレイメニューから「キャプチャ開始」) — 画面が凍結されフルスクリーンオーバーレイ表示
 4. 矩形選択でテンプレート範囲を決定
@@ -289,10 +427,10 @@ cargo run -p rpa-cli -- run scenario.yaml --export result.xlsx
 cargo build -p my-plugin --target wasm32-wasip2
 
 # 権限確認付きインストール
-cargo run -p rpa-cli -- plugin install ./my-plugin.wasm
+cargo run -p robost-cli -- plugin install ./my-plugin.wasm
 
 # 確認スキップ
-cargo run -p rpa-cli -- plugin install ./my-plugin.wasm -y
+cargo run -p robost-cli -- plugin install ./my-plugin.wasm -y
 
 # シナリオでの使用
 # - library: { name: "my-plugin.function", inputs: { key: value }, save_as: result }
@@ -337,7 +475,7 @@ sudo apt install tesseract-ocr tesseract-ocr-jpn tesseract-ocr-eng
 `ocr` feature を有効にしてビルド:
 
 ```bash
-cargo build --features rpa-core/ocr
+cargo build --features robost-core/ocr
 ```
 
 ## 開発コマンド
@@ -348,16 +486,24 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 
-cargo run -p rpa-snip          # テンプレート採取ツール起動
-cargo run -p rpa-editor        # ビジュアルシナリオエディタ起動
+cargo run -p robost-snip          # テンプレート採取ツール起動
+cargo run -p robost-editor        # ビジュアルシナリオエディタ起動
 ```
 
 ## 公開済み Crate
 
 | Crate | バージョン | 説明 |
 |---|---|---|
-| [rpa-vision](https://crates.io/crates/rpa-vision) | 0.1.0 | デスクトップ自動化向けマルチスケール NCC テンプレマッチ + OCR |
+| [robost-vision](https://crates.io/crates/robost-vision) | 0.1.1 | デスクトップ自動化向けマルチスケール NCC テンプレマッチ + find_all + diff + async + OCR |
 
 ## ライセンス
 
 MIT OR Apache-2.0
+
+## ロードマップ
+
+| フェーズ | 状態 | 主要内容 |
+|---|---|---|
+| **Phase 1** | ✅ 完了 | 200+ シナリオノード · CLI · ビジュアルエディタ · スニップツール · Web/UIA/Excel/メール/OCR/スケジューラー |
+| **Phase 2** | 🚧 計画中 | シナリオ記録 · Word/SFTP/ML 検出/並列実行/レジストリ/M365 |
+| **Phase 3** | 💡 将来 | オーケストレーター · キューモデル · AI 支援シナリオ生成 |

@@ -1,0 +1,18 @@
+[package]
+name = "robost-backend"
+description = "Unified backend trait abstracting local, RDP, and VNC desktop automation targets"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "rdp", "vnc", "desktop"]
+categories = ["os"]
+
+[dependencies]
+robost-template.workspace = true
+robost-capture.workspace = true
+robost-input.workspace = true
+enigo.workspace = true
+image.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

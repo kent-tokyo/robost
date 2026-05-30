@@ -1,6 +1,24 @@
-# rust_rpa
+# robost
+
+**robost** = **robo**t + **ro**bu**st** + **Rust**
 
 A Rust-based OSS desktop automation (RPA) tool.
+
+## Screenshots
+
+| Scenario YAML | Run Output |
+|:---:|:---:|
+| ![Scenario YAML](assets/screenshots/scenario_yaml.png) | ![Run Output](assets/screenshots/scenario_run.png) |
+
+## Flow Editor (in development)
+
+| Overview | Node Configuration |
+|:---:|:---:|
+| ![Flow Editor Overview](assets/screenshots/editor_overview.png) | ![Node Config](assets/screenshots/editor_node_config.png) |
+
+| Loop / Branch Flow | Template Picker |
+|:---:|:---:|
+| ![Loop Flow](assets/screenshots/editor_flow_loop.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
 
 ## Key Features
 
@@ -10,30 +28,36 @@ A Rust-based OSS desktop automation (RPA) tool.
 - **WASM plugin extensibility** — sandboxed community plugins with explicit permission declarations
 - **Rich scenario format** — YAML with variables, flow control, data sources, inline scripts, sub-scenarios
 
-## Comparison with Other Open-Source Automation Tools
+## Comparison with Automation Tools
 
-| Feature | **rust_rpa** | PyAutoGUI | SikuliX | Robot Framework |
-|---|---|---|---|---|
-| License | MIT / Apache-2.0 | MIT | MIT | Apache-2.0 |
-| Language | Rust (YAML scenarios) | Python | Java (Jython scripts) | Python |
-| Remote desktop (RDP/Citrix/VNC) | Yes — no agent needed | No | No | No |
-| Image recognition | Yes — multi-scale NCC | No | Yes — pixel-exact | No (via plugins) |
-| Transient UI capture (dropdowns, tooltips) | Yes — freeze + overlay | No | No | No |
-| Multi-scale DPI resilience (125%/150%) | Yes — built-in | No | No | No |
-| Plugin sandbox | Yes — WASM (memory-safe) | No | No | No |
-| Cross-platform development | Yes — macOS/Linux/Windows | Yes | Yes | Yes |
-| Scenario version control | Yes — plain YAML | Yes — Python | Partial — `.sikuli` dirs | Yes — plain text |
-| Startup overhead | ~10 ms (native binary) | Python startup | JVM startup (~2 s) | Python startup |
-| Inline scripting | Yes — Rhai (sandboxed) | Python itself | Jython | Python |
-| OCR support | Yes (Tesseract, optional) | No | Partial | No (via plugins) |
+| Feature | **robost** | WinActor | UiPath | PyAutoGUI | SikuliX | Robot Framework |
+|---|---|---|---|---|---|---|
+| License | MIT / Apache-2.0 | Commercial | Commercial | MIT | MIT | Apache-2.0 |
+| Language | Rust (YAML scenarios) | Proprietary GUI | Proprietary GUI | Python | Java (Jython) | Python |
+| Open source | Yes | No | No | Yes | Yes | Yes |
+| Remote desktop (RDP/Citrix/VNC) | Yes — no agent needed | Yes | Yes (agent required) | No | No | No |
+| Image recognition | Yes — multi-scale NCC | Yes | Yes — AI-assisted | No | Yes — pixel-exact | No (via plugins) |
+| Web browser automation | Yes — WebDriver | Yes | Yes | No | No | Yes (via SeleniumLibrary) |
+| Excel automation | Yes — cell/sheet/formula | Yes | Yes | No | No | No (via plugins) |
+| Word / PowerPoint | ❌ Phase 2 | Yes | Yes | No | No | No |
+| SAP GUI automation | ❌ Phase 2 | Yes | Yes | No | No | No |
+| Scenario recorder | ❌ Phase 2 | Yes | Yes | No | No | No |
+| Orchestrator (central management) | ❌ Phase 3 | Yes (limited) | Yes | No | No | No |
+| Transient UI capture (dropdowns, tooltips) | Yes — freeze + overlay | Yes | Partial | No | No | No |
+| Multi-scale DPI resilience (125%/150%) | Yes — built-in | Partial | Partial | No | No | No |
+| WASM plugin sandbox | Yes — memory-safe | No | No | No | No | No |
+| Inline scripting | Yes — Rhai (sandboxed) | Partial | VB.NET / C# | Python itself | Jython | Python |
+| Scenario version control | Yes — plain YAML | No | Partial | Yes — Python | Partial — `.sikuli` dirs | Yes — plain text |
+| Startup overhead | ~10 ms (native binary) | Several seconds | Several seconds | Python startup | JVM startup (~2 s) | Python startup |
+| OCR support | Yes (Tesseract, optional) | Yes | Yes | No | Partial | No (via plugins) |
 
-## Why rust_rpa?
+## Why robost?
 
 **For teams migrating from commercial RPA tools**
-rust_rpa covers the same node vocabulary found in mainstream commercial RPA products (click_image, wait_image, foreach, dialog_input, …) making scenario migration straightforward. Scenarios are plain YAML — reviewable in PRs, diffable, and storable in Git without proprietary tooling.
+robost covers the same node vocabulary found in mainstream commercial RPA products (click_image, wait_image, foreach, dialog_input, …) making scenario migration straightforward. Scenarios are plain YAML — reviewable in PRs, diffable, and storable in Git without proprietary tooling.
 
 **For RDP / remote desktop automation**
-rust_rpa requires no agent installed on the remote machine. It operates by capturing the RDP window on the local machine and sending input via enigo — the same technique works for Citrix, VNC, and any windowed session. Multi-scale NCC matching handles DPI scaling (100/125/150%) that breaks pixel-perfect tools.
+robost requires no agent installed on the remote machine. It operates by capturing the RDP window on the local machine and sending input via enigo — the same technique works for Citrix, VNC, and any windowed session. Multi-scale NCC matching handles DPI scaling (100/125/150%) that breaks pixel-perfect tools.
 
 **For engineering teams**
 - **Zero license cost** — no per-bot or per-user fees. Run as many concurrent workers as needed.
@@ -43,32 +67,32 @@ rust_rpa requires no agent installed on the remote machine. It operates by captu
 - **Fast startup** — the Rust binary starts in milliseconds; no JVM or .NET runtime warm-up.
 
 **For open-source contributors**
-The WASM plugin interface (`rpa-plugin-api`) decouples the runner from node implementations. Community plugins written in Rust, AssemblyScript, Go, or C compile to `.wasm` and integrate without forking the core. Permissions are declared in `plugin.toml` and enforced at runtime — not just documented.
+The WASM plugin interface (`robost-plugin-api`) decouples the runner from node implementations. Community plugins written in Rust, AssemblyScript, Go, or C compile to `.wasm` and integrate without forking the core. Permissions are declared in `plugin.toml` and enforced at runtime — not just documented.
 
 ## Architecture
 
 ```
 crates/
-├── rpa-capture/      # Screen/window capture (xcap, DPI-aware)
-├── rpa-input/        # Mouse/keyboard input + window focus (enigo)
-├── rpa-vision/       # Template matching (NCC), OCR, ML detection
-├── rpa-backend/      # Backend trait: Local / RDP / VNC unified
-├── rpa-core/         # Scenario engine: YAML parsing, step execution, retry, flow control
-├── rpa-snip/         # Template capture GUI (tray app, hotkey, overlay, Japanese UI)
-├── rpa-editor/       # Visual scenario editor (step list + YAML, dark theme, log panel)
-├── rpa-template/     # Shared coordinate/geometry types
-├── rpa-plugin-api/   # Public plugin author API (crates.io publish candidate)
-├── rpa-plugin-host/  # wasmtime-based WASM plugin runner with epoch timeout
-├── rpa-script/       # Rhai inline scripting (sandboxed)
-├── rpa-stdlib/       # Built-in scenario node library
-└── rpa-cli/          # CLI binary
+├── robost-capture/      # Screen/window capture (xcap, DPI-aware)
+├── robost-input/        # Mouse/keyboard input + window focus (enigo)
+├── robost-vision/       # Template matching (NCC), OCR, ML detection
+├── robost-backend/      # Backend trait: Local / RDP / VNC unified
+├── robost-core/         # Scenario engine: YAML parsing, step execution, retry, flow control
+├── robost-snip/         # Template capture GUI (tray app, hotkey, overlay, Japanese UI)
+├── robost-editor/       # Visual scenario editor (step list + YAML, dark theme, log panel)
+├── robost-template/     # Shared coordinate/geometry types
+├── robost-plugin-api/   # Public plugin author API (crates.io publish candidate)
+├── robost-plugin-host/  # wasmtime-based WASM plugin runner with epoch timeout
+├── robost-script/       # Rhai inline scripting (sandboxed)
+├── robost-stdlib/       # Built-in scenario node library
+└── robost-cli/          # CLI binary
 ```
 
 ## Quick Start
 
 ```bash
 cargo build --workspace
-cargo run -p rpa-cli -- run scenario.yaml
+cargo run -p robost-cli -- run scenario.yaml
 ```
 
 ## Scenario Format
@@ -164,20 +188,28 @@ steps:
   - log_write: { file: run.log, message: "step {{ count }} done", level: info }  # info|warn|error|debug
 
   # File operations
-  - file_exists:  { path: data.csv, save_as: exists }
-  - file_copy:    { src: a.txt, dst: b.txt }
-  - file_move:    { src: tmp.txt, dst: archive/tmp.txt }
-  - file_delete:  { path: old.txt }
-  - file_rename:  { path: a.txt, new_name: b.txt }
-  - file_list:    { pattern: "logs/*.log", save_as: files }
-  - file_read:    { path: notes.txt, save_as: content }
-  - file_write:   { path: out.txt, content: "{{ result }}", mode: overwrite }  # overwrite|append
-  - file_append:  { path: out.txt, content: "{{ line }}\n" }
+  - file_exists:      { path: data.csv, save_as: exists }
+  - file_copy:        { src: a.txt, dst: b.txt }
+  - file_move:        { src: tmp.txt, dst: archive/tmp.txt }
+  - file_delete:      { path: old.txt }
+  - file_rename:      { path: a.txt, name: b.txt }
+  - file_list:        { dir: "logs", pattern: "*.log", save_as: files }
+  - file_read:        { path: notes.txt, save_as: content }
+  - file_write:       { path: out.txt, content: "{{ result }}", mode: overwrite }  # overwrite|append
+  - file_append:      { path: out.txt, content: "{{ line }}\n" }
+  - file_size:        { path: data.xlsx, save_as: size_bytes }
+  - file_modified_at: { path: data.xlsx, format: "%Y-%m-%d %H:%M:%S", save_as: mtime }
+
+  # Directory operations
+  - dir_create: { path: "output/logs" }
+  - dir_delete: { path: "tmp", recursive: true, ignore_missing: true }
+  - dir_exists: { path: "output", save_as: exists }
 
   # Process operations
-  - process_start:  { name: notepad.exe, wait_ms: 500 }
+  - process_start:  { command: notepad.exe, wait_ms: 500 }
   - process_kill:   { name: notepad.exe }
   - process_exists: { name: notepad.exe, save_as: running }
+  - wait_process:   { name: notepad.exe, state: started, timeout_ms: 10000 }  # started|exited
 
   # Date operations
   - date_format: { value: "{{ today }}", format: "%Y/%m/%d", save_as: formatted }
@@ -189,11 +221,23 @@ steps:
   - string_trim:      { value: "  hello  ", save_as: trimmed }
   - string_upper:     { value: "{{ text }}", save_as: upper }
   - string_lower:     { value: "{{ text }}", save_as: lower }
-  - string_substring: { value: "{{ text }}", start: 0, end: 5, save_as: sub }
+  - string_substring: { value: "{{ text }}", start: 0, length: 5, save_as: sub }
   - string_length:    { value: "{{ text }}", save_as: len }
-  - string_split:     { value: "a,b,c", sep: ",", save_as: parts }
-  - string_join:      { values: "{{ parts }}", sep: ", ", save_as: joined }
+  - string_split:     { value: "a,b,c", delimiter: ",", save_as: parts }
+  - string_join:      { value: parts, separator: ", ", save_as: joined }
   - string_regex:     { value: "{{ text }}", pattern: "\\d+", save_as: match }
+
+  # String query
+  - string_contains:    { value: "{{ text }}", search: "hello", save_as: found }
+  - string_starts_with: { value: "{{ text }}", search: "http", save_as: found }
+  - string_ends_with:   { value: "{{ text }}", search: ".xlsx", save_as: found }
+  - string_index_of:    { value: "{{ text }}", search: ":", save_as: pos }  # 0-based; -1 if not found
+  - string_count:       { value: "hello world hello", search: "hello", save_as: n }
+
+  # String format / base64
+  - string_format: { format: "Hello, {0}! ({1} items)", args: [name, count], save_as: msg }
+  - base64_encode: { value: "{{ content }}", save_as: encoded }
+  - base64_decode: { value: "{{ encoded }}", save_as: decoded }
 
   # JSON / Path / Env
   - json_parse:     { value: "{\"k\":1}", save_as: obj }
@@ -204,10 +248,12 @@ steps:
   - env_get:        { name: HOME, save_as: home_dir }
 
   # Mouse coordinate operations
-  - mouse_move:     { x: 500, y: 300 }
-  - mouse_click_xy: { x: 500, y: 300, button: left }  # left|right|double
-  - mouse_drag:     { from_x: 100, from_y: 100, to_x: 400, to_y: 400, hold_ms: 100 }
-  - mouse_scroll:   { direction: down, amount: 3 }    # up|down|left|right
+  - mouse_move:      { x: 500, y: 300 }
+  - mouse_click_xy:  { x: 500, y: 300, button: left }  # left|right|double
+  - mouse_drag:      { from_x: 100, from_y: 100, to_x: 400, to_y: 400, hold_ms: 100 }
+  - mouse_scroll:    { direction: down, amount: 3 }    # up|down|left|right
+  - mouse_hover:     { x: 500, y: 300, hover_ms: 500 }
+  - click_in_window: { window: "Notepad", x: 100, y: 50, action: left }  # left|right|double
 
   # Key combination
   - key_combo: { keys: [ctrl, c] }           # Ctrl+C
@@ -218,15 +264,46 @@ steps:
   - csv_write: { path: out.csv, rows: "{{ rows }}", mode: overwrite }  # overwrite|append
 
   # HTTP (requires feature = "http")
-  - http_get:  { url: "https://api.example.com/items", save_as: resp }
-  - http_post: { url: "https://api.example.com/items", body: "{{ payload }}", save_as: resp }
-  - http_put:  { url: "https://api.example.com/items/1", body: "{{ payload }}", save_as: resp }
+  - http_get:    { url: "https://api.example.com/items", save_as: resp }
+  - http_post:   { url: "https://api.example.com/items", body: "{{ payload }}", save_as: resp }
+  - http_put:    { url: "https://api.example.com/items/1", body: "{{ payload }}", save_as: resp }
+  - http_delete: { url: "https://api.example.com/items/1", save_as: resp }
+  - http_patch:  { url: "https://api.example.com/items/1", body: "{{ patch }}", save_as: resp }
+  # With authentication
+  - http_get:    { url: "https://api.example.com/secure", auth: { basic: { user: "u", password: "p" } }, save_as: resp }
+  - http_post:   { url: "https://api.example.com/secure", body: "{{ payload }}", auth: { bearer: { token: "{{ tok }}" } }, save_as: resp }
 
-  # Excel (requires feature = "excel-write")
-  - excel_read_cell:   { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, save_as: cell_val }
-  - excel_read_range:  { path: data.xlsx, sheet: Sheet1, start_row: 2, end_row: 10, save_as: range }
-  - excel_write_cell:  { path: data.xlsx, sheet: Sheet1, row: 2, col: 1, value: "{{ result }}" }
-  - excel_write_range: { path: data.xlsx, sheet: Sheet1, start_cell: A2, data: "{{ rows }}" }
+  # Excel cell / range (requires feature = "excel-write" for write ops)
+  - excel_read_cell:   { file: data.xlsx, sheet: Sheet1, cell: A2, save_as: cell_val }
+  - excel_read_range:  { file: data.xlsx, sheet: Sheet1, range: "A2:Z10", save_as: table }
+  - excel_write_cell:  { file: data.xlsx, sheet: Sheet1, cell: A2, value: "{{ result }}" }
+  - excel_write_range: { file: data.xlsx, sheet: Sheet1, cell: A2, data: "{{ rows }}" }
+
+  # Excel sheet management (requires feature = "excel-write")
+  - excel_add_sheet:    { file: data.xlsx, name: NewSheet }
+  - excel_delete_sheet: { file: data.xlsx, name: OldSheet }
+  - excel_rename_sheet: { file: data.xlsx, from_name: Sheet1, to_name: Data }
+  - excel_read_sheet:   { file: data.xlsx, sheet: Sheet1, has_header: true, save_as: rows }
+  - excel_get_dims:     { file: data.xlsx, sheet: Sheet1, save_as: dims }  # {rows, cols}
+  - excel_find_row:     { file: data.xlsx, col: A, value: "{{ search }}", save_as: row_num }  # 1-based or -1
+
+  # Mail (IMAP receive / SMTP send)
+  - mail_receive:
+      host: "imap.example.com"
+      user: "{{ env_user }}"
+      password: "{{ env_pass }}"
+      folder: INBOX
+      count: 10
+      only_unseen: true
+      save_as: emails   # [{subject, from, date, body, seen}]
+  - mail_send:
+      host: "smtp.example.com"
+      user: "{{ env_user }}"
+      password: "{{ env_pass }}"
+      from: "bot@example.com"
+      to: "user@example.com"
+      subject: "Weekly report"
+      body: "{{ report }}"
 
   # Webhook notifications
   - notify_slack: { url: "{{ SLACK_WEBHOOK }}", message: "{{ count }} rows processed" }
@@ -239,6 +316,67 @@ steps:
 
   # Scheduler (see `rpa schedule` CLI)
   # Scenarios are triggered via cron — no inline step needed
+
+  # Pixel / color
+  - get_pixel_color: { x: 500, y: 300, save_as: col }       # {r, g, b, hex}
+  - wait_color:      { x: 500, y: 300, color: "#00FF00", tolerance: 10, timeout_ms: 10000 }
+
+  # UI Automation (Windows only)
+  - uia_get:          { by: { name: "Username" }, property: value, save_as: text }  # name|value|class|rect
+  - uia_set:          { by: { name: "Username" }, value: "user@example.com" }
+  - uia_click:        { by: { name: "OK" } }
+  - uia_find:         { by: { id: "btnSubmit" }, save_as: elem }   # {x, y, width, height, name}
+  - uia_wait:         { by: { name: "OK" }, state: enabled, timeout_ms: 10000 }  # exists|enabled|visible
+  - uia_select:       { by: { name: "Country" }, item: "Japan" }
+  - uia_get_children: { by: { name: "Files" }, save_as: items }    # [{name, value, class}]
+  - uia_check:        { by: { name: "Accept terms" }, checked: true }
+
+  # Web browser automation (requires feature = "web"; start chromedriver/geckodriver first)
+  - web_open:             { url: "https://example.com", driver: "http://localhost:4444" }
+  - web_close: ~
+  - web_click:            { selector: "#submit", timeout_ms: 5000 }
+  - web_type:             { selector: "#username", text: "user", clear: true }
+  - web_get:              { selector: ".result", save_as: text }
+  - web_get:              { selector: ".result", attr: "href", save_as: link }
+  - web_wait:             { selector: "#spinner", timeout_ms: 10000 }
+  - web_wait_text:        { selector: "#status", text: "Done", timeout_ms: 10000 }
+  - web_screenshot:       { path: "screens/page.png" }
+  - web_select:           { selector: "#country", item: "Japan" }
+  - web_execute_js:       { script: "return document.title;", save_as: title }
+  - web_switch_frame:     { selector: "#iframe1" }
+  - web_switch_frame:     { index: 0 }
+  - web_switch_frame: ~                                              # back to top
+  - web_scroll:           { y: 300 }                                 # window scroll
+  - web_scroll:           { selector: "#list", y: 100 }             # element scroll
+  - web_alert:            { action: accept }                         # accept|dismiss|get_text
+  - web_navigate_back: ~
+  - web_navigate_forward: ~
+  - web_get_url:          { save_as: current_url }
+  - web_get_title:        { save_as: page_title }
+  - web_get_all:          { selector: ".item", save_as: items }      # all innerText
+  - web_get_all:          { selector: "a", attr: "href", save_as: links }  # all href
+
+  # Type conversion
+  - to_number: { value: "42.5", save_as: n }
+  - to_string: { value: "{{ count }}", save_as: s }
+  - var_type:  { value: "{{ obj }}", save_as: type_name }  # "string"|"number"|"bool"|"array"|"object"|"null"
+
+  # List operations
+  - list_length:   { list: items, save_as: len }
+  - list_get:      { list: items, index: "0", save_as: first }
+  - list_push:     { list: items, value: "{{ new_item }}" }
+  - list_remove:   { list: items, index: "0" }
+  - list_contains: { list: items, value: "target", save_as: found }
+
+  # Number
+  - number_random: { min: 1, max: 100, integer: true, save_as: n }
+
+  # foreach with index variable
+  - foreach:
+      var: rows
+      index_var: i   # optional 0-based counter
+      do:
+        - log_write: { file: run.log, message: "{{ i }}: {{ item }}" }
 
   # Variable persistence
   - import_vars: { path: params.xlsx, row: 2 }
@@ -267,12 +405,12 @@ steps:
 Export results after run:
 
 ```bash
-cargo run -p rpa-cli -- run scenario.yaml --export result.xlsx
+cargo run -p robost-cli -- run scenario.yaml --export result.xlsx
 ```
 
-## Template Capture (rpa-snip)
+## Template Capture (robost-snip)
 
-1. `cargo run -p rpa-snip` — starts as a tray app (no window, no focus steal)
+1. `cargo run -p robost-snip` — starts as a tray app (no window, no focus steal)
 2. Open the target UI (dropdown, dialog, tooltip, etc.)
 3. Press **Ctrl+Shift+C** (or use tray menu) — freezes the screen into a fullscreen overlay
 4. Drag to select the template region
@@ -289,10 +427,10 @@ Plugins are `.wasm` + `plugin.toml` pairs. They run in a WASM sandbox; permissio
 cargo build -p my-plugin --target wasm32-wasip2
 
 # Install with permission review
-cargo run -p rpa-cli -- plugin install ./my-plugin.wasm
+cargo run -p robost-cli -- plugin install ./my-plugin.wasm
 
 # Auto-approve
-cargo run -p rpa-cli -- plugin install ./my-plugin.wasm -y
+cargo run -p robost-cli -- plugin install ./my-plugin.wasm -y
 
 # Use in a scenario
 # - library: { name: "my-plugin.function", inputs: { key: value }, save_as: result }
@@ -337,7 +475,7 @@ sudo apt install tesseract-ocr tesseract-ocr-jpn tesseract-ocr-eng
 Build with the `ocr` feature:
 
 ```bash
-cargo build --features rpa-core/ocr
+cargo build --features robost-core/ocr
 ```
 
 ## Development Commands
@@ -348,16 +486,24 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 
-cargo run -p rpa-snip          # Template capture tool
-cargo run -p rpa-editor        # Visual scenario editor
+cargo run -p robost-snip          # Template capture tool
+cargo run -p robost-editor        # Visual scenario editor
 ```
 
 ## Published Crates
 
 | Crate | Version | Description |
 |---|---|---|
-| [rpa-vision](https://crates.io/crates/rpa-vision) | 0.1.0 | Multi-scale NCC template matching + OCR for desktop automation |
+| [robost-vision](https://crates.io/crates/robost-vision) | 0.1.1 | Multi-scale NCC template matching + find_all + diff + async + OCR for desktop automation |
 
 ## License
 
 MIT OR Apache-2.0
+
+## Roadmap
+
+| Phase | Status | Highlights |
+|---|---|---|
+| **Phase 1** | ✅ Complete | 200+ scenario nodes · CLI · visual editor · snip tool · Web/UIA/Excel/Mail/OCR/Scheduler |
+| **Phase 2** | 🚧 Planned | Scenario recorder · Word/SFTP/ML detection/Parallel execution/Registry/M365 |
+| **Phase 3** | 💡 Future | Orchestrator · queue model · AI-assisted scenario generation |

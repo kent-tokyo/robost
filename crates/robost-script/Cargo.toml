@@ -1,0 +1,17 @@
+[package]
+name = "robost-script"
+description = "Rhai inline scripting engine for Rust RPA scenario steps"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "scripting", "rhai", "embedded"]
+categories = ["development-tools"]
+
+[dependencies]
+rhai.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true

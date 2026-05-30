@@ -1,0 +1,13 @@
+[package]
+name = "robost-plugin-api"
+description = "Plugin author API for the Rust RPA automation framework (WASM extension interface)"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "plugin", "wasm", "extension"]
+categories = ["development-tools", "wasm"]
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true

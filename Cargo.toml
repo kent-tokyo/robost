@@ -1,44 +1,44 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/rpa-template",
-    "crates/rpa-capture",
-    "crates/rpa-input",
-    "crates/rpa-vision",
-    "crates/rpa-backend",
-    "crates/rpa-core",
-    "crates/rpa-snip",
-    "crates/rpa-editor",
-    "crates/rpa-plugin-api",
-    "crates/rpa-plugin-host",
-    "crates/rpa-script",
-    "crates/rpa-stdlib",
-    "crates/rpa-uia",
-    "crates/rpa-web",
-    "crates/rpa-cli",
+    "crates/robost-template",
+    "crates/robost-capture",
+    "crates/robost-input",
+    "crates/robost-vision",
+    "crates/robost-backend",
+    "crates/robost-core",
+    "crates/robost-snip",
+    "crates/robost-editor",
+    "crates/robost-plugin-api",
+    "crates/robost-plugin-host",
+    "crates/robost-script",
+    "crates/robost-stdlib",
+    "crates/robost-uia",
+    "crates/robost-web",
+    "crates/robost-cli",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/kent-tokyo/rust_rpa"
+repository = "https://github.com/kent-tokyo/robost"
 rust-version = "1.89"
 
 [workspace.dependencies]
 # Internal crates
-rpa-template   = { path = "crates/rpa-template" }
-rpa-capture    = { path = "crates/rpa-capture" }
-rpa-input      = { path = "crates/rpa-input" }
-rpa-vision     = { path = "crates/rpa-vision", version = "0.1.0" }
-rpa-backend    = { path = "crates/rpa-backend" }
-rpa-core       = { path = "crates/rpa-core" }
-rpa-plugin-api = { path = "crates/rpa-plugin-api" }
-rpa-plugin-host = { path = "crates/rpa-plugin-host" }
-rpa-script     = { path = "crates/rpa-script" }
-rpa-stdlib     = { path = "crates/rpa-stdlib" }
-rpa-uia        = { path = "crates/rpa-uia" }
-rpa-web        = { path = "crates/rpa-web" }
+robost-template   = { path = "crates/robost-template" }
+robost-capture    = { path = "crates/robost-capture" }
+robost-input      = { path = "crates/robost-input" }
+robost-vision     = { path = "crates/robost-vision", version = "0.1.0" }
+robost-backend    = { path = "crates/robost-backend" }
+robost-core       = { path = "crates/robost-core" }
+robost-plugin-api = { path = "crates/robost-plugin-api" }
+robost-plugin-host = { path = "crates/robost-plugin-host" }
+robost-script     = { path = "crates/robost-script" }
+robost-stdlib     = { path = "crates/robost-stdlib" }
+robost-uia        = { path = "crates/robost-uia" }
+robost-web        = { path = "crates/robost-web" }
 
 # Error handling
 thiserror = "2.0"
@@ -67,7 +67,7 @@ xcap = "0.9"
 # Input emulation
 enigo = "0.6"
 
-# GUI (rpa-snip)
+# GUI (robost-snip)
 eframe        = "0.33"
 egui          = "0.33"
 tray-icon     = "0.24"
@@ -102,12 +102,15 @@ arboard = "3"
 ureq   = { version = "2", features = ["json"] }
 base64 = "0.22"
 
+# Random number generation
+rand = "0.8"
+
 # Mail
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder"] }
 imap       = { version = "2", default-features = false, features = ["tls"] }
 native-tls = "0.2"
 
-# Database (rpa-stdlib db feature)
+# Database (robost-stdlib db feature)
 rusqlite = { version = "0.32", features = ["bundled"] }
 
 # Archive
@@ -115,6 +118,9 @@ zip = "2"
 
 # PDF text extraction
 pdf-extract = "0.7"
+
+# Platform directories (home, documents, etc.)
+dirs = "5"
 
 # URL open / desktop notification
 open         = "5"
@@ -128,3 +134,6 @@ croner = "2"
 
 # OS keychain credential storage
 keyring = "3"
+
+# FTP/FTPS client (robost-stdlib ftp feature)
+suppaftp = { version = "6", features = ["native-tls"] }

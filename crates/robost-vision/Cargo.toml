@@ -1,0 +1,34 @@
+[package]
+name = "robost-vision"
+description = "Multi-scale NCC template matching for desktop automation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["automation", "vision", "rpa", "template-matching", "ncc"]
+categories = ["algorithms", "computer-vision"]
+
+[package.metadata.docs.rs]
+features = ["template-match"]
+
+[features]
+default = ["template-match"]
+template-match = []
+async = ["dep:tokio"]
+ocr = ["dep:leptess"]
+ml  = ["dep:ort"]
+
+[dependencies]
+serde.workspace = true
+image.workspace = true
+imageproc.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio = { workspace = true, optional = true }
+
+leptess = { version = "0.14", optional = true }
+ort     = { version = "2.0.0-rc.12", optional = true }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true }

@@ -1,0 +1,34 @@
+[package]
+name = "robost-stdlib"
+description = "Built-in node library for Rust RPA: image matching, clipboard, Excel, HTTP, scheduling, and more"
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+keywords   = ["rpa", "automation", "stdlib", "workflow", "nodes"]
+categories = ["development-tools"]
+
+[features]
+db = ["dep:rusqlite"]
+ftp = ["dep:suppaftp"]
+
+[dependencies]
+robost-template.workspace = true
+robost-backend.workspace = true
+robost-vision.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+lettre.workspace = true
+imap.workspace       = true
+native-tls.workspace = true
+umya-spreadsheet.workspace = true
+rusqlite = { workspace = true, optional = true }
+suppaftp = { workspace = true, optional = true }
+zip.workspace = true
+pdf-extract.workspace = true
+keyring.workspace = true
+ureq.workspace = true
+base64.workspace = true
