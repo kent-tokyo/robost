@@ -1061,7 +1061,7 @@ fn call_anthropic(
         "messages": messages,
     });
     let resp_str = ureq::post("https://api.anthropic.com/v1/messages")
-        .set("x-api-key", &settings.api_key)
+        .set("x-api-key", settings.api_key.trim())
         .set("anthropic-version", "2023-06-01")
         .set("content-type", "application/json")
         .send_json(body)?
@@ -1096,7 +1096,10 @@ fn call_openai(
     msgs.push(serde_json::json!({ "role": "user", "content": input }));
     let body = serde_json::json!({ "model": settings.model, "messages": msgs });
     let resp_str = ureq::post("https://api.openai.com/v1/chat/completions")
-        .set("Authorization", &format!("Bearer {}", settings.api_key))
+        .set(
+            "Authorization",
+            &format!("Bearer {}", settings.api_key.trim()),
+        )
         .set("content-type", "application/json")
         .send_json(body)?
         .into_string()?;
@@ -1122,12 +1125,12 @@ fn test_ai_connection(settings: &AppSettings) -> (bool, String) {
                 "messages": [{ "role": "user", "content": "ping" }],
             });
             ureq::post("https://api.anthropic.com/v1/messages")
-                .set("x-api-key", &settings.api_key)
+                .set("x-api-key", settings.api_key.trim())
                 .set("anthropic-version", "2023-06-01")
                 .set("content-type", "application/json")
                 .send_json(body)
-                .map(|_| "接続成功".to_owned())
-                .map_err(|e| format!("{e}"))
+                .map(|_| "Connection OK".to_owned())
+                .map_err(friendly_api_error)
         }
         AiProvider::OpenAI => {
             let body = serde_json::json!({
@@ -1136,16 +1139,33 @@ fn test_ai_connection(settings: &AppSettings) -> (bool, String) {
                 "messages": [{ "role": "user", "content": "ping" }],
             });
             ureq::post("https://api.openai.com/v1/chat/completions")
-                .set("Authorization", &format!("Bearer {}", settings.api_key))
+                .set(
+                    "Authorization",
+                    &format!("Bearer {}", settings.api_key.trim()),
+                )
                 .set("content-type", "application/json")
                 .send_json(body)
-                .map(|_| "接続成功".to_owned())
-                .map_err(|e| format!("{e}"))
+                .map(|_| "Connection OK".to_owned())
+                .map_err(friendly_api_error)
         }
     };
     match result {
         Ok(msg) => (true, msg),
         Err(e) => (false, e),
+    }
+}
+
+fn friendly_api_error(e: ureq::Error) -> String {
+    let msg = e.to_string();
+    if msg.contains("401") {
+        "401 Unauthorized — API key is invalid or expired. Check your key at console.anthropic.com"
+            .to_owned()
+    } else if msg.contains("403") {
+        "403 Forbidden — API key lacks permission for this model".to_owned()
+    } else if msg.contains("429") {
+        "429 Rate limit exceeded — try again later".to_owned()
+    } else {
+        msg
     }
 }
 
@@ -1156,6 +1176,16 @@ struct EditorState {
     name: String,
     steps: Vec<serde_yml::Value>,
     selected: Option<usize>,
+}
+
+// ---- drag-and-drop payload ------------------------------------------------
+
+#[derive(Clone)]
+enum DragPayload {
+    /// YAML snippet from a StepTemplate — insert as a new step.
+    NewStep(&'static str),
+    /// Index of an existing step being reordered.
+    ReorderStep(usize),
 }
 
 // ---- app ------------------------------------------------------------------
@@ -1499,6 +1529,64 @@ impl EditorApp {
         self.run_child = None;
         self.run_progress_file = None;
         self.current_run_step = None;
+    }
+
+    fn run_selection(&mut self) {
+        if self.multi_selected.is_empty() {
+            self.log_err("実行するステップが選択されていません");
+            return;
+        }
+        self.flush_edit();
+        let mut indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
+        indices.sort_unstable();
+        let selected_steps: Vec<serde_yml::Value> = indices
+            .into_iter()
+            .filter_map(|i| self.steps.get(i).cloned())
+            .collect();
+        let tmp_path =
+            std::env::temp_dir().join(format!("robost_selection_{}.yaml", std::process::id()));
+        match build_scenario_yaml(&self.name, &serde_yml::Mapping::new(), &selected_steps) {
+            Ok(yaml) => {
+                if let Err(e) = std::fs::write(&tmp_path, &yaml) {
+                    self.log_err(format!("一時ファイル書き込み失敗: {e}"));
+                    return;
+                }
+            }
+            Err(e) => {
+                self.log_err(format!("YAML生成失敗: {e}"));
+                return;
+            }
+        }
+        let progress_file =
+            std::env::temp_dir().join(format!("robost_progress_{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&progress_file);
+        self.run_progress_file = Some(progress_file.clone());
+        self.current_run_step = None;
+        let rpa_bin = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join("rpa")))
+            .unwrap_or_else(|| std::path::PathBuf::from("rpa"));
+        match std::process::Command::new(&rpa_bin)
+            .args([
+                "run",
+                &tmp_path.to_string_lossy(),
+                "--progress",
+                &progress_file.to_string_lossy(),
+            ])
+            .spawn()
+        {
+            Ok(child) => {
+                self.run_child = Some(child);
+                self.log_ok(format!(
+                    "{}ステップを実行中 (選択範囲)",
+                    self.multi_selected.len()
+                ));
+            }
+            Err(e) => {
+                self.run_progress_file = None;
+                self.log_err(format!("起動に失敗しました: {e}"));
+            }
+        }
     }
 
     fn run_scenario(&mut self) {
@@ -3034,6 +3122,16 @@ impl eframe::App for EditorApp {
                 self.run_scenario();
             }
         }
+        if self.run_child.is_none()
+            && ctx.input_mut(|i| {
+                i.consume_key(
+                    egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+                    egui::Key::F5,
+                )
+            })
+        {
+            self.run_selection();
+        }
         if !self.add_menu_open
             && self.confirm_dialog.is_none()
             && self.prop_view != PropView::Yaml
@@ -3368,9 +3466,17 @@ impl eframe::App for EditorApp {
                             ui.close();
                             self.stop_run();
                         }
-                    } else if ui.button(s.menu_run).clicked() {
-                        ui.close();
-                        self.run_scenario();
+                    } else {
+                        if ui.button(s.menu_run).clicked() {
+                            ui.close();
+                            self.run_scenario();
+                        }
+                        ui.add_enabled_ui(!self.multi_selected.is_empty(), |ui| {
+                            if ui.button("Run Selection  Cmd+Shift+F5").clicked() {
+                                ui.close();
+                                self.run_selection();
+                            }
+                        });
                     }
                 });
                 ui.menu_button(s.menu_help, |ui| {
@@ -3614,7 +3720,14 @@ impl eframe::App for EditorApp {
                             .show(ui, |ui| {
                                 for t in STEP_TEMPLATES.iter().filter(|t| t.category == cat) {
                                     let label = egui::RichText::new(t.display_name).size(11.0);
-                                    let resp = ui.selectable_label(false, label);
+                                    let drag_id = egui::Id::new(("palette_drag", t.name));
+                                    let resp = ui
+                                        .dnd_drag_source(
+                                            drag_id,
+                                            DragPayload::NewStep(t.yaml),
+                                            |ui| ui.selectable_label(false, label),
+                                        )
+                                        .inner;
                                     if resp.double_clicked() {
                                         palette_insert = Some(t.yaml);
                                     }
@@ -3635,58 +3748,121 @@ impl eframe::App for EditorApp {
                 let mut action: Option<StepAction> = None;
                 let step_count = self.steps.len();
 
+                // Collect row rects for insertion-point computation (populated inside the loop).
+                let mut row_rects: Vec<egui::Rect> = Vec::with_capacity(step_count);
+                // Deferred drop handling (resolved after the closure).
+                let mut drop_payload: Option<DragPayload> = None;
+                // Insertion index computed from hover position while dragging.
+                let mut drop_insert_idx: usize = step_count;
+
                 egui::ScrollArea::vertical()
                     .id_salt("step_list")
                     .show(ui, |ui| {
-                        for i in 0..step_count {
-                            let key = get_step_key(&self.steps[i]);
-                            let cat = step_key_category(key);
-                            let color = category_color(cat);
-                            let summary = step_summary(&self.steps[i]);
-                            let is_multi = self.multi_selected.contains(&i);
-                            let is_primary = self.selected == Some(i);
-                            let is_running = self.current_run_step == Some(i);
+                        let (inner_resp, released_payload) =
+                            ui.dnd_drop_zone::<DragPayload, _>(egui::Frame::default(), |ui| {
+                                for i in 0..step_count {
+                                    let key = get_step_key(&self.steps[i]);
+                                    let cat = step_key_category(key);
+                                    let color = category_color(cat);
+                                    let summary = step_summary(&self.steps[i]);
+                                    let is_multi = self.multi_selected.contains(&i);
+                                    let is_primary = self.selected == Some(i);
+                                    let is_running = self.current_run_step == Some(i);
 
-                            ui.horizontal(|ui| {
-                                let bar_color = if is_running {
-                                    egui::Color32::from_rgb(249, 226, 175)
-                                } else {
-                                    color
-                                };
-                                ui.colored_label(bar_color, "▌");
-                                let label = if is_running {
-                                    format!("▶ {i}: {summary}")
-                                } else {
-                                    format!("{i}: {summary}")
-                                };
-                                // Highlight primary in full, multi-only in dimmed tint.
-                                let highlight = is_primary || is_multi;
-                                let resp = ui.selectable_label(highlight, label);
-                                if resp.clicked() {
-                                    let (ctrl, shift) = ui
-                                        .input(|inp| (inp.modifiers.command, inp.modifiers.shift));
-                                    if ctrl {
-                                        action = Some(StepAction::ToggleMulti(i));
-                                    } else if shift {
-                                        action = Some(StepAction::ShiftSelect(i));
+                                    let drag_id = egui::Id::new(("step_drag", i));
+                                    let label_text = if is_running {
+                                        format!("▶ {i}: {summary}")
                                     } else {
-                                        action = Some(StepAction::Select(i));
-                                    }
-                                }
-                                ui.add_enabled_ui(i > 0, |ui| {
-                                    if ui.small_button("↑").clicked() {
-                                        action = Some(StepAction::MoveUp(i));
-                                    }
-                                });
-                                ui.add_enabled_ui(i + 1 < step_count, |ui| {
-                                    if ui.small_button("↓").clicked() {
-                                        action = Some(StepAction::MoveDown(i));
-                                    }
-                                });
-                                if ui.small_button("✕").clicked() {
-                                    action = Some(StepAction::Delete(i));
+                                        format!("{i}: {summary}")
+                                    };
+
+                                    let row_resp = ui
+                                        .dnd_drag_source(
+                                            drag_id,
+                                            DragPayload::ReorderStep(i),
+                                            |ui| {
+                                                ui.horizontal(|ui| {
+                                                    let bar_color = if is_running {
+                                                        egui::Color32::from_rgb(249, 226, 175)
+                                                    } else {
+                                                        color
+                                                    };
+                                                    ui.colored_label(bar_color, "▌");
+                                                    // Highlight primary in full, multi-only in dimmed tint.
+                                                    let highlight = is_primary || is_multi;
+                                                    let resp =
+                                                        ui.selectable_label(highlight, &label_text);
+                                                    if resp.clicked() {
+                                                        let (ctrl, shift) = ui.input(|inp| {
+                                                            (
+                                                                inp.modifiers.command,
+                                                                inp.modifiers.shift,
+                                                            )
+                                                        });
+                                                        if ctrl {
+                                                            action =
+                                                                Some(StepAction::ToggleMulti(i));
+                                                        } else if shift {
+                                                            action =
+                                                                Some(StepAction::ShiftSelect(i));
+                                                        } else {
+                                                            action = Some(StepAction::Select(i));
+                                                        }
+                                                    }
+                                                    ui.add_enabled_ui(i > 0, |ui| {
+                                                        if ui.small_button("↑").clicked() {
+                                                            action = Some(StepAction::MoveUp(i));
+                                                        }
+                                                    });
+                                                    ui.add_enabled_ui(i + 1 < step_count, |ui| {
+                                                        if ui.small_button("↓").clicked() {
+                                                            action = Some(StepAction::MoveDown(i));
+                                                        }
+                                                    });
+                                                    if ui.small_button("✕").clicked() {
+                                                        action = Some(StepAction::Delete(i));
+                                                    }
+                                                })
+                                            },
+                                        )
+                                        .response;
+
+                                    row_rects.push(row_resp.rect);
                                 }
                             });
+
+                        // Compute insertion index from hover position while a drag is active.
+                        let is_dragging =
+                            egui::DragAndDrop::has_payload_of_type::<DragPayload>(ui.ctx());
+                        if is_dragging {
+                            if let Some(hover_pos) = ui.input(|i| i.pointer.hover_pos()) {
+                                drop_insert_idx = step_count; // default: append
+                                for (ri, rect) in row_rects.iter().enumerate() {
+                                    if hover_pos.y < rect.center().y {
+                                        drop_insert_idx = ri;
+                                        break;
+                                    }
+                                }
+                                // Draw insertion line
+                                let line_y = if drop_insert_idx < row_rects.len() {
+                                    row_rects[drop_insert_idx].top()
+                                } else {
+                                    row_rects
+                                        .last()
+                                        .map(|r| r.bottom())
+                                        .unwrap_or(inner_resp.response.rect.top())
+                                };
+                                let x_min = inner_resp.response.rect.left();
+                                let x_max = inner_resp.response.rect.right();
+                                ui.painter().line_segment(
+                                    [egui::pos2(x_min, line_y), egui::pos2(x_max, line_y)],
+                                    egui::Stroke::new(2.0, egui::Color32::from_rgb(100, 180, 255)),
+                                );
+                            }
+                        }
+
+                        if let Some(payload) = released_payload {
+                            drop_payload = Some((*payload).clone());
                         }
                     });
 
@@ -3775,6 +3951,43 @@ impl eframe::App for EditorApp {
                                 self.delete_selected_steps();
                             } else {
                                 self.confirm_dialog = Some(ConfirmAction::DeleteStep(i));
+                            }
+                        }
+                    }
+                }
+
+                // ── Handle drag-and-drop drops ───────────────────────────
+                if let Some(payload) = drop_payload {
+                    match payload {
+                        DragPayload::NewStep(yaml) => {
+                            if let Ok(v) = serde_yml::from_str::<serde_yml::Value>(yaml) {
+                                self.push_undo();
+                                self.steps.insert(drop_insert_idx, v);
+                                self.select_step(drop_insert_idx);
+                                self.log_info("ノードをドロップしました");
+                            }
+                        }
+                        DragPayload::ReorderStep(from) => {
+                            if from != drop_insert_idx && from + 1 != drop_insert_idx {
+                                self.push_undo();
+                                let step = self.steps.remove(from);
+                                // After removal, indices shift for positions after `from`.
+                                let to = if drop_insert_idx > from {
+                                    drop_insert_idx - 1
+                                } else {
+                                    drop_insert_idx
+                                };
+                                self.steps.insert(to, step);
+                                // Update selection to follow the moved step.
+                                self.selected = Some(to);
+                                self.multi_selected.clear();
+                                self.multi_selected.insert(to);
+                                if let Some(s) = self.steps.get(to) {
+                                    self.edit_buf = serde_yml::to_string(s).unwrap_or_default();
+                                }
+                                self.form_edit_buffers.clear();
+                                self.dirty = true;
+                                self.log_info("ステップを並び替えました");
                             }
                         }
                     }

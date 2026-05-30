@@ -1,0 +1,63 @@
+site_name: robost docs
+site_url: https://kent-tokyo.github.io/robost/
+repo_url: https://github.com/kent-tokyo/robost
+repo_name: kent-tokyo/robost
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - attr_list
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: guides/install.md
+    - Quick Start: guides/quickstart.md
+    - Scenario Format: guides/scenario.md
+  - Step Reference:
+    - Control Flow: steps/control_flow.md
+    - Image Operations: steps/image.md
+    - Input Operations: steps/input.md
+    - Wait: steps/wait.md
+    - Variables: steps/variables.md
+    - Clipboard: steps/clipboard.md
+    - Dialogs: steps/dialogs.md
+    - Scripts: steps/scripts.md
+    - Files: steps/files.md
+    - Excel: steps/excel.md
+    - Web: steps/web.md
+    - Mail: steps/mail.md
+    - Database: steps/db.md
+    - UIA (Windows): steps/uia.md
+    - Notifications: steps/notify.md
+    - Archives: steps/archive.md
