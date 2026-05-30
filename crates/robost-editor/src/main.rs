@@ -959,6 +959,8 @@ struct EditorApp {
     multi_selected: HashSet<usize>,
     /// Internal clipboard for copy/cut/paste of steps.
     step_clipboard: Vec<serde_yml::Value>,
+    /// When Some, forces all node-palette categories open (true) or closed (false) for one frame.
+    palette_force_open: Option<bool>,
 }
 
 impl Default for EditorApp {
@@ -1011,6 +1013,7 @@ impl Default for EditorApp {
             bottom_tab: BottomTab::default(),
             multi_selected: HashSet::new(),
             step_clipboard: Vec::new(),
+            palette_force_open: None,
         }
     }
 }
@@ -3296,8 +3299,19 @@ impl eframe::App for EditorApp {
             .default_width(200.0)
             .min_width(140.0)
             .show(ctx, |ui| {
-                ui.heading("ノード");
+                ui.horizontal(|ui| {
+                    ui.heading("ノード");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("閉").on_hover_text("全て閉じる").clicked() {
+                            self.palette_force_open = Some(false);
+                        }
+                        if ui.small_button("開").on_hover_text("全て展開").clicked() {
+                            self.palette_force_open = Some(true);
+                        }
+                    });
+                });
                 ui.separator();
+                let force = self.palette_force_open.take();
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     let mut cats: Vec<&str> = Vec::new();
                     for t in STEP_TEMPLATES {
@@ -3310,6 +3324,7 @@ impl eframe::App for EditorApp {
                         let hdr = egui::RichText::new(cat).color(col).strong().size(11.0);
                         egui::CollapsingHeader::new(hdr)
                             .default_open(true)
+                            .open(force)
                             .show(ui, |ui| {
                                 for t in STEP_TEMPLATES.iter().filter(|t| t.category == cat) {
                                     let label = egui::RichText::new(t.display_name).size(11.0);
@@ -3760,11 +3775,6 @@ impl eframe::App for EditorApp {
                                 ui.label("ライセンス");
                                 ui.label("MIT OR Apache-2.0");
                                 ui.end_row();
-                                ui.label("ソースコード");
-                                ui.hyperlink_to(
-                                    "github.com/kent-tokyo/robost",
-                                    "https://github.com/kent-tokyo/robost",
-                                );
                                 ui.end_row();
                             });
                         ui.add_space(8.0);
