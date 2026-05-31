@@ -3484,6 +3484,62 @@ impl EditorApp {
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let origin = resp.rect.min;
         let z = self.canvas_zoom;
+        let n = self.steps.len();
+
+        // ── Minimap layout constants (precomputed to gate input before the node loop) ──
+        const MM_W: f32 = 160.0;
+        const MM_H: f32 = 100.0;
+        const MM_MARGIN: f32 = 8.0;
+        const MM_PAD: f32 = 5.0;
+        let mm_rect = egui::Rect::from_min_size(
+            resp.rect.max - egui::vec2(MM_W + MM_MARGIN, MM_H + MM_MARGIN),
+            egui::vec2(MM_W, MM_H),
+        );
+        let minimap_active = n >= 15;
+        let (mm_scale, mm_offset, mm_content_min) = if minimap_active {
+            let mut min_cx = f32::MAX;
+            let mut min_cy = f32::MAX;
+            let mut max_cx = f32::MIN;
+            let mut max_cy = f32::MIN;
+            for i in 0..n {
+                let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
+                    (i % 5) as f32 * 340.0 + 40.0,
+                    (i / 5) as f32 * 132.0 + 40.0,
+                ));
+                min_cx = min_cx.min(p.x);
+                min_cy = min_cy.min(p.y);
+                max_cx = max_cx.max(p.x + NODE_W);
+                max_cy = max_cy.max(p.y + NODE_H);
+            }
+            let content_w = (max_cx - min_cx).max(1.0);
+            let content_h = (max_cy - min_cy).max(1.0);
+            let mm_inner = mm_rect.shrink(MM_PAD);
+            let sx = mm_inner.width() / content_w;
+            let sy = mm_inner.height() / content_h;
+            let s = sx.min(sy);
+            let ox = mm_inner.min.x + (mm_inner.width() - content_w * s) / 2.0;
+            let oy = mm_inner.min.y + (mm_inner.height() - content_h * s) / 2.0;
+            (s, egui::pos2(ox, oy), egui::pos2(min_cx, min_cy))
+        } else {
+            (1.0, egui::Pos2::ZERO, egui::Pos2::ZERO)
+        };
+        let to_mm = move |p: egui::Pos2| -> egui::Pos2 {
+            egui::pos2(
+                mm_offset.x + (p.x - mm_content_min.x) * mm_scale,
+                mm_offset.y + (p.y - mm_content_min.y) * mm_scale,
+            )
+        };
+        let from_mm = move |p: egui::Pos2| -> egui::Pos2 {
+            egui::pos2(
+                (p.x - mm_offset.x) / mm_scale + mm_content_min.x,
+                (p.y - mm_offset.y) / mm_scale + mm_content_min.y,
+            )
+        };
+        let cursor_over_minimap = minimap_active
+            && ui
+                .input(|i| i.pointer.hover_pos())
+                .map(|p| mm_rect.contains(p))
+                .unwrap_or(false);
 
         // Dark canvas background
         painter.rect_filled(resp.rect, 0.0, egui::Color32::from_rgb(26, 27, 30));
@@ -3509,11 +3565,17 @@ impl EditorApp {
         }
 
         // ── zoom / pan ─────────────────────────────────────────────────────
-        if resp.hovered() {
-            let (scroll, ctrl) = ui.input(|i| (i.smooth_scroll_delta, i.modifiers.command));
+        if resp.hovered() && !cursor_over_minimap {
+            let (scroll, ctrl, shift) =
+                ui.input(|i| (i.smooth_scroll_delta, i.modifiers.command, i.modifiers.shift));
             if ctrl && scroll.y != 0.0 {
-                let factor = 1.0 + scroll.y * 0.001;
-                self.canvas_zoom = (self.canvas_zoom * factor).clamp(0.25, 2.0);
+                let z_old = self.canvas_zoom;
+                let z_new = (z_old * (1.0 + scroll.y * 0.001)).clamp(0.25, 2.0);
+                // Keep the canvas point under the cursor fixed: pan += cursor_offset * (1/z_new - 1/z_old)
+                if let Some(cursor) = ui.input(|i| i.pointer.hover_pos()) {
+                    self.canvas_pan += (cursor - origin) * (1.0 / z_new - 1.0 / z_old);
+                }
+                self.canvas_zoom = z_new;
             } else {
                 if scroll.y != 0.0 {
                     self.canvas_pan.y += scroll.y;
@@ -3522,20 +3584,30 @@ impl EditorApp {
                     self.canvas_pan.x += scroll.x;
                 }
             }
+            // Visual cue: crosshair cursor when Shift is held (lasso mode ready)
+            if shift && self.canvas_dragging.is_none() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
         }
-        // Click on empty background clears selection
-        if resp.clicked() && self.canvas_dragging.is_none() {
+        // Click on empty background clears selection (not when clicking minimap)
+        if resp.clicked() && self.canvas_dragging.is_none() && !cursor_over_minimap {
             self.selected = None;
             self.multi_selected.clear();
         }
-        // Lasso start: shift+primary drag on background
-        if resp.drag_started() && self.canvas_dragging.is_none() && ui.input(|i| i.modifiers.shift)
+        // Lasso start: shift+primary drag on background (not over minimap)
+        if resp.drag_started()
+            && self.canvas_dragging.is_none()
+            && !cursor_over_minimap
+            && ui.input(|i| i.modifiers.shift)
         {
             let start = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
             self.canvas_lasso = Some((start, start));
         }
-        // Pan on background drag, or update lasso end point
-        if resp.dragged_by(egui::PointerButton::Primary) && self.canvas_dragging.is_none() {
+        // Pan on background drag, or update lasso end point (not over minimap)
+        if resp.dragged_by(egui::PointerButton::Primary)
+            && self.canvas_dragging.is_none()
+            && !cursor_over_minimap
+        {
             if let Some((start, _)) = self.canvas_lasso {
                 let cursor = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
                 self.canvas_lasso = Some((start, cursor));
@@ -3543,8 +3615,6 @@ impl EditorApp {
                 self.canvas_pan += resp.drag_delta();
             }
         }
-
-        let n = self.steps.len();
 
         // Collect node screen positions
         let screen_positions: Vec<egui::Pos2> = (0..n)
@@ -3984,61 +4054,26 @@ impl EditorApp {
             }
         }
 
-        // Minimap (shown when there are 15+ steps)
-        if n >= 15 {
-            const MM_W: f32 = 160.0;
-            const MM_H: f32 = 100.0;
-            const MM_MARGIN: f32 = 8.0;
-            const MM_PAD: f32 = 5.0;
-
-            let mm_rect = egui::Rect::from_min_size(
-                resp.rect.max - egui::vec2(MM_W + MM_MARGIN, MM_H + MM_MARGIN),
-                egui::vec2(MM_W, MM_H),
-            );
-            painter.rect_filled(
-                mm_rect,
-                4.0,
-                Color32::from_rgba_premultiplied(18, 18, 22, 220),
-            );
+        // Minimap (shown when there are 15+ steps; layout data precomputed above)
+        if minimap_active {
+            let mm_inner = mm_rect.shrink(MM_PAD);
+            painter.rect_filled(mm_rect, 4.0, Color32::from_rgba_premultiplied(18, 18, 22, 220));
             painter.rect_stroke(
                 mm_rect,
                 4.0,
                 Stroke::new(1.0, Color32::from_gray(55)),
                 egui::StrokeKind::Inside,
             );
+            // "MAP" label
+            painter.text(
+                mm_rect.left_top() + egui::vec2(4.0, 2.0),
+                Align2::LEFT_TOP,
+                "MAP",
+                FontId::proportional(7.0),
+                Color32::from_gray(70),
+            );
 
-            // Bounding box of all nodes in canvas space
-            let mut min_cx = f32::MAX;
-            let mut min_cy = f32::MAX;
-            let mut max_cx = f32::MIN;
-            let mut max_cy = f32::MIN;
-            for i in 0..n {
-                let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
-                    (i % 5) as f32 * 340.0 + 40.0,
-                    (i / 5) as f32 * 132.0 + 40.0,
-                ));
-                min_cx = min_cx.min(p.x);
-                min_cy = min_cy.min(p.y);
-                max_cx = max_cx.max(p.x + NODE_W);
-                max_cy = max_cy.max(p.y + NODE_H);
-            }
-            let content_w = (max_cx - min_cx).max(1.0);
-            let content_h = (max_cy - min_cy).max(1.0);
-            let mm_inner = mm_rect.shrink(MM_PAD);
-            let scale_x = mm_inner.width() / content_w;
-            let scale_y = mm_inner.height() / content_h;
-            let mm_scale = scale_x.min(scale_y);
-            let mm_offset_x = mm_inner.min.x + (mm_inner.width() - content_w * mm_scale) / 2.0;
-            let mm_offset_y = mm_inner.min.y + (mm_inner.height() - content_h * mm_scale) / 2.0;
-
-            let to_mm = |p: egui::Pos2| -> egui::Pos2 {
-                egui::pos2(
-                    mm_offset_x + (p.x - min_cx) * mm_scale,
-                    mm_offset_y + (p.y - min_cy) * mm_scale,
-                )
-            };
-
-            // Draw nodes as small rects
+            // Draw nodes as small rects (reuse precomputed to_mm)
             for i in 0..n {
                 let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
                     (i % 5) as f32 * 340.0 + 40.0,
@@ -4081,6 +4116,17 @@ impl EditorApp {
                     Stroke::new(1.0, Color32::from_rgba_premultiplied(200, 210, 255, 160)),
                     egui::StrokeKind::Inside,
                 );
+            }
+
+            // Click or drag inside the minimap → pan to center clicked canvas point
+            if let Some(ptr) = resp.interact_pointer_pos() {
+                if mm_rect.contains(ptr)
+                    && (resp.clicked()
+                        || resp.dragged_by(egui::PointerButton::Primary))
+                {
+                    let canvas_pt = from_mm(ptr);
+                    self.canvas_pan = resp.rect.size() / 2.0 / z - canvas_pt.to_vec2();
+                }
             }
         }
 
