@@ -1274,6 +1274,9 @@ struct EditorState {
     steps: Vec<serde_yml::Value>,
     selected: Option<usize>,
     selected_child: Option<(String, usize)>,
+    canvas_positions: Vec<(usize, [f32; 2])>,
+    canvas_zoom: f32,
+    canvas_pan: [f32; 2],
 }
 
 // ---- drag-and-drop payload ------------------------------------------------
@@ -1375,6 +1378,8 @@ struct EditorApp {
     canvas_search: String,
     /// Whether the canvas search bar is visible.
     canvas_search_open: bool,
+    /// Whether the canvas keyboard shortcut help overlay is visible.
+    canvas_help_open: bool,
 }
 
 impl Default for EditorApp {
@@ -1448,6 +1453,7 @@ impl Default for EditorApp {
             canvas_edge_drag: None,
             canvas_search: String::new(),
             canvas_search_open: false,
+            canvas_help_open: false,
         }
     }
 }
@@ -1652,10 +1658,18 @@ impl EditorApp {
             .max()
             .map(|i| i + 1)
             .unwrap_or(self.steps.len());
+        let z = self.canvas_zoom;
+        let vp = self.canvas_viewport_size;
+        let pan = self.canvas_pan;
         for (j, step) in self.step_clipboard.iter().enumerate() {
             self.steps.insert(at + j, step.clone());
             Self::canvas_shift_positions(&mut self.canvas_positions, at + j, 1);
             Self::form_edit_buffers_shift(&mut self.form_edit_buffers, at + j, 1);
+            let paste_pos = egui::pos2(
+                vp.x / 2.0 / z - pan.x - 130.0 + j as f32 * 40.0,
+                vp.y / 2.0 / z - pan.y - 36.0 + j as f32 * 40.0,
+            );
+            self.canvas_positions.insert(at + j, paste_pos);
         }
         // Select the newly pasted range.
         let end = at + self.step_clipboard.len() - 1;
@@ -1833,6 +1847,13 @@ impl EditorApp {
             steps: self.steps.clone(),
             selected: self.selected,
             selected_child: self.selected_child.clone(),
+            canvas_positions: self
+                .canvas_positions
+                .iter()
+                .map(|(&k, &v)| (k, [v.x, v.y]))
+                .collect(),
+            canvas_zoom: self.canvas_zoom,
+            canvas_pan: [self.canvas_pan.x, self.canvas_pan.y],
         }
     }
 
@@ -1841,6 +1862,13 @@ impl EditorApp {
         self.steps = state.steps;
         self.selected = state.selected;
         self.selected_child = state.selected_child;
+        self.canvas_positions = state
+            .canvas_positions
+            .into_iter()
+            .map(|(k, [x, y])| (k, egui::pos2(x, y)))
+            .collect();
+        self.canvas_zoom = state.canvas_zoom;
+        self.canvas_pan = egui::vec2(state.canvas_pan[0], state.canvas_pan[1]);
         self.child_edit_buf.clear();
         self.edit_buf = self
             .selected
@@ -1852,12 +1880,21 @@ impl EditorApp {
     }
 
     fn push_undo(&mut self) {
+        self.push_undo_impl(false);
+    }
+
+    fn push_undo_forced(&mut self) {
+        self.push_undo_impl(true);
+    }
+
+    fn push_undo_impl(&mut self, force: bool) {
         let snap = self.snapshot();
-        let changed = self
-            .undo_stack
-            .back()
-            .map(|s| s.steps != snap.steps || s.name != snap.name)
-            .unwrap_or(true);
+        let changed = force
+            || self
+                .undo_stack
+                .back()
+                .map(|s| s.steps != snap.steps || s.name != snap.name)
+                .unwrap_or(true);
         if changed {
             self.undo_stack.push_back(snap);
             if self.undo_stack.len() > 50 {
@@ -4037,6 +4074,7 @@ impl EditorApp {
             .collect();
 
         // ── Draw edges (behind nodes) ──────────────────────────────────────
+        let mut insert_after_idx: Option<usize> = None;
         for i in 0..n.saturating_sub(1) {
             let step_key = get_step_key(&self.steps[i]);
             let is_compound = matches!(
@@ -4092,6 +4130,46 @@ impl EditorApp {
                 Vec2::new(0.0, 5.0 * z),
                 Stroke::new(stroke_width, stroke_color),
             );
+            // Midpoint "+" insertion button (visible only on hover over edge area, z >= 0.6)
+            if z >= 0.6 {
+                let mid = from.lerp(to, 0.5);
+                let btn_size = 14.0 * z;
+                let btn_rect = egui::Rect::from_center_size(mid, egui::vec2(btn_size, btn_size));
+                let btn_resp = ui.allocate_rect(btn_rect, Sense::click());
+                if btn_resp.hovered() || btn_resp.clicked() {
+                    painter.circle_filled(mid, btn_size / 2.0, Color32::from_rgb(50, 90, 160));
+                    painter.text(
+                        mid,
+                        Align2::CENTER_CENTER,
+                        "+",
+                        FontId::proportional(10.0 * z),
+                        Color32::WHITE,
+                    );
+                    if btn_resp.clicked() {
+                        insert_after_idx = Some(i);
+                    }
+                } else {
+                    painter.circle_filled(
+                        mid,
+                        btn_size / 2.0,
+                        Color32::from_rgba_premultiplied(50, 80, 140, 50),
+                    );
+                    painter.text(
+                        mid,
+                        Align2::CENTER_CENTER,
+                        "+",
+                        FontId::proportional(10.0 * z),
+                        Color32::from_rgba_premultiplied(180, 180, 200, 80),
+                    );
+                }
+            }
+        }
+
+        if let Some(ins_idx) = insert_after_idx {
+            self.select_step(ins_idx);
+            self.add_menu_open = true;
+            self.add_menu_just_opened = true;
+            self.add_filter.clear();
         }
 
         // Draw active edge-drag line (pending connection preview)
@@ -4514,23 +4592,36 @@ impl EditorApp {
                 );
             }
 
-            // Output port circle (bottom center) — always visible, brightens on hover
+            // Drag-handle at bottom-center — communicates reorder, not graph connection
             let port_center = node_rect.min + Vec2::new(NODE_W * z / 2.0, NODE_H * z);
             let port_hovered = ui
                 .input(|i| i.pointer.hover_pos())
                 .map(|p| p.distance(port_center) <= 10.0 * z)
                 .unwrap_or(false);
             let in_edge_drag = self.canvas_edge_drag.is_some();
-            {
-                let port_color = if port_hovered && !in_edge_drag {
-                    Color32::from_rgb(100, 180, 255)
+            if z >= 0.5 {
+                let handle_color = if port_hovered && !in_edge_drag {
+                    Color32::from_rgb(180, 180, 200)
                 } else if in_edge_drag {
-                    Color32::from_rgb(70, 130, 200)
+                    Color32::from_rgb(100, 180, 255)
                 } else {
-                    Color32::from_rgba_premultiplied(80, 120, 180, 70)
+                    Color32::from_rgba_premultiplied(140, 140, 160, 90)
                 };
-                painter.circle_filled(port_center, 5.0 * z, Color32::from_gray(20));
-                painter.circle_stroke(port_center, 5.0 * z, Stroke::new(1.5 * z, port_color));
+                painter.text(
+                    port_center,
+                    Align2::CENTER_CENTER,
+                    "⠿",
+                    FontId::proportional(11.0 * z),
+                    handle_color,
+                );
+                if port_hovered && !in_edge_drag {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                    // Allocate a tiny invisible rect to show tooltip via egui
+                    let tip_rect =
+                        egui::Rect::from_center_size(port_center, egui::vec2(20.0 * z, 12.0 * z));
+                    let tip_resp = ui.allocate_rect(tip_rect, Sense::hover());
+                    tip_resp.on_hover_text("ドラッグして並び替え");
+                }
             }
             // Input port highlight when an edge drag is hovering over this node
             if in_edge_drag {
@@ -4636,7 +4727,7 @@ impl EditorApp {
         }
         if let Some((idx, canvas_pos)) = drag_delta_node {
             if !self.undo_pushed_for_current_drag {
-                self.push_undo();
+                self.push_undo_forced();
                 self.undo_pushed_for_current_drag = true;
             }
             // Apply snap during drag for single-node moves; for multi-select, compute
@@ -4835,7 +4926,7 @@ impl EditorApp {
                     "Cmd+N で新規シナリオ / Cmd+O で開く",
                 )
             } else {
-                (s.empty_no_steps, "Cmd+F でステップを追加")
+                (s.empty_no_steps, "Cmd+Shift+A でステップを追加")
             };
             let center = resp.rect.center();
             painter.text(
@@ -5113,6 +5204,65 @@ impl EditorApp {
             self.canvas_search = search_text;
         }
 
+        // Zoom level indicator at bottom-left of canvas
+        {
+            let zoom_text = format!("{:.0}%", self.canvas_zoom * 100.0);
+            let zoom_pos = egui::pos2(resp.rect.min.x + 8.0, resp.rect.max.y - 10.0);
+            painter.text(
+                zoom_pos,
+                Align2::LEFT_BOTTOM,
+                &zoom_text,
+                FontId::proportional(10.0),
+                Color32::from_gray(80),
+            );
+        }
+
+        // Canvas keyboard shortcut help overlay (toggled by `?`)
+        if self.canvas_help_open {
+            egui::Window::new("キャンバス ショートカット")
+                .id(egui::Id::new("canvas_help_window"))
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+                .show(ui.ctx(), |ui| {
+                    egui::Grid::new("canvas_help_overlay_grid")
+                        .num_columns(2)
+                        .spacing([16.0, 4.0])
+                        .show(ui, |ui| {
+                            let rows: &[(&str, &str)] = &[
+                                ("Ctrl+スクロール / ピンチ", "ズーム"),
+                                ("Cmd+0", "全体表示 (fit to view)"),
+                                ("Cmd+1", "100% ズーム + 中央"),
+                                ("背景ドラッグ", "パン"),
+                                ("Shift+背景ドラッグ", "ラッソ選択"),
+                                ("クリック", "選択"),
+                                ("Cmd+クリック", "選択をトグル"),
+                                ("Shift+クリック", "範囲選択"),
+                                ("Cmd+A", "全選択"),
+                                ("↑ / ↓", "前/次ノードへ移動"),
+                                ("Cmd+↑ / Cmd+↓", "ステップを前後に移動"),
+                                ("Delete / Backspace", "選択ステップを削除"),
+                                ("Cmd+C / X / V / D", "コピー/カット/貼付/複製"),
+                                ("Cmd+Z / Shift+Z", "アンドゥ / リドゥ"),
+                                ("Cmd+G", "ノード検索"),
+                                ("Cmd+Shift+A", "ステップ追加メニュー"),
+                                ("ダブルクリック", "List ビューで開く"),
+                                ("右クリック", "コンテキストメニュー"),
+                                ("ドラッグハンドル", "ステップを並び替え"),
+                                ("?", "このヘルプを閉じる"),
+                            ];
+                            for (key, desc) in rows {
+                                ui.strong(*key);
+                                ui.label(*desc);
+                                ui.end_row();
+                            }
+                        });
+                    if ui.button("閉じる").clicked() {
+                        self.canvas_help_open = false;
+                    }
+                });
+        }
+
         self.canvas_viewport_size = resp.rect.size();
     }
 }
@@ -5241,7 +5391,9 @@ impl eframe::App for EditorApp {
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.add_menu_open = false;
             if self.view_mode == ViewMode::Canvas {
-                if self.canvas_search_open {
+                if self.canvas_help_open {
+                    self.canvas_help_open = false;
+                } else if self.canvas_search_open {
                     self.canvas_search_open = false;
                     self.canvas_search.clear();
                 } else {
@@ -5270,6 +5422,12 @@ impl eframe::App for EditorApp {
             } else {
                 self.canvas_search_open = true;
             }
+        }
+        // `?` key toggles the canvas help overlay
+        if self.view_mode == ViewMode::Canvas
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Questionmark))
+        {
+            self.canvas_help_open = !self.canvas_help_open;
         }
         if self.view_mode == ViewMode::Canvas
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Num0))
@@ -6059,11 +6217,14 @@ impl eframe::App for EditorApp {
                                 .num_columns(2)
                                 .spacing([12.0, 4.0])
                                 .show(ui, |ui| {
-                                    ui.label("Ctrl+スクロール");
+                                    ui.label("Ctrl+スクロール / ピンチ");
                                     ui.label("ズーム (カーソル固定)");
                                     ui.end_row();
                                     ui.label("Cmd+0");
-                                    ui.label("ズーム 100% にリセット");
+                                    ui.label("全体表示 (fit to view)");
+                                    ui.end_row();
+                                    ui.label("Cmd+1");
+                                    ui.label("100% ズーム + 中央");
                                     ui.end_row();
                                     ui.label("スクロール");
                                     ui.label("上下パン");
@@ -6112,6 +6273,21 @@ impl eframe::App for EditorApp {
                                     ui.end_row();
                                     ui.label("ミニマップドラッグ");
                                     ui.label("連続ナビゲーション");
+                                    ui.end_row();
+                                    ui.label("↑ / ↓");
+                                    ui.label("前/次ノードを選択 + ビュースクロール");
+                                    ui.end_row();
+                                    ui.label("Cmd+↑ / Cmd+↓");
+                                    ui.label("選択ステップを前後に移動");
+                                    ui.end_row();
+                                    ui.label("Cmd+G");
+                                    ui.label("ノード検索バーを開く");
+                                    ui.end_row();
+                                    ui.label("Cmd+Shift+A");
+                                    ui.label("ステップ追加メニュー");
+                                    ui.end_row();
+                                    ui.label("?");
+                                    ui.label("このヘルプを表示");
                                     ui.end_row();
                                 });
                         });
