@@ -4089,14 +4089,16 @@ impl EditorApp {
                 _ => None,
             };
             if let Some(lbl) = arrow_label {
-                let mid = from.lerp(to, 0.5);
-                painter.text(
-                    mid + Vec2::new(8.0 * z, 0.0),
-                    Align2::LEFT_CENTER,
-                    lbl,
-                    FontId::proportional(9.0 * z),
-                    Color32::from_rgb(150, 130, 80),
-                );
+                if z >= 0.7 {
+                    let mid = from.lerp(to, 0.5);
+                    painter.text(
+                        mid + Vec2::new(8.0 * z, 0.0),
+                        Align2::LEFT_CENTER,
+                        lbl,
+                        FontId::proportional(9.0 * z),
+                        Color32::from_rgb(150, 130, 80),
+                    );
+                }
             }
         }
 
@@ -4127,6 +4129,7 @@ impl EditorApp {
         let mut double_clicked_node: Option<usize> = None;
         let mut canvas_ctx_action: Option<CanvasContextAction> = None;
         let mut badge_toggle_idx: Option<usize> = None;
+        let mut panel_click_step: Option<usize> = None;
         let mut edge_drag_start_idx: Option<usize> = None;
         let mut edge_drag_done = false;
         let mut edge_drag_pos_update: Option<egui::Pos2> = None;
@@ -4442,13 +4445,33 @@ impl EditorApp {
                         );
                         for (row, (label, steps_vec)) in branches.iter().take(MAX_ROWS).enumerate() {
                             let row_y = panel_rect.min.y + 3.0 * z + row as f32 * row_h;
+                            let row_rect = Rect::from_min_size(
+                                egui::Pos2::new(node_rect.min.x, row_y),
+                                Vec2::new(NODE_W * z, row_h),
+                            );
+                            let row_resp = ui.allocate_rect(row_rect, Sense::click());
+                            if row_resp.hovered() {
+                                painter.rect_filled(
+                                    row_rect,
+                                    2.0 * z,
+                                    Color32::from_rgba_premultiplied(255, 255, 255, 18),
+                                );
+                            }
+                            if row_resp.clicked() {
+                                panel_click_step = Some(idx);
+                            }
+                            let text_color = if row_resp.hovered() {
+                                Color32::from_rgb(220, 210, 180)
+                            } else {
+                                Color32::from_rgb(180, 170, 150)
+                            };
                             let text = format!("▸ {}  {} steps", label, steps_vec.len());
                             painter.text(
                                 egui::Pos2::new(node_rect.min.x + 8.0 * z, row_y + row_h * 0.5),
                                 Align2::LEFT_CENTER,
                                 &text,
                                 FontId::proportional(9.5 * z),
-                                Color32::from_rgb(180, 170, 150),
+                                text_color,
                             );
                         }
                         if has_more {
@@ -4482,18 +4505,20 @@ impl EditorApp {
                 );
             }
 
-            // Output port circle (bottom center) — visible on hover or during edge drag
+            // Output port circle (bottom center) — always visible, brightens on hover
             let port_center = node_rect.min + Vec2::new(NODE_W * z / 2.0, NODE_H * z);
             let port_hovered = ui
                 .input(|i| i.pointer.hover_pos())
                 .map(|p| p.distance(port_center) <= 10.0 * z)
                 .unwrap_or(false);
             let in_edge_drag = self.canvas_edge_drag.is_some();
-            if port_hovered || in_edge_drag {
+            {
                 let port_color = if port_hovered && !in_edge_drag {
                     Color32::from_rgb(100, 180, 255)
-                } else {
+                } else if in_edge_drag {
                     Color32::from_rgb(70, 130, 200)
+                } else {
+                    Color32::from_rgba_premultiplied(80, 120, 180, 70)
                 };
                 painter.circle_filled(port_center, 5.0 * z, Color32::from_gray(20));
                 painter.circle_stroke(
@@ -4518,18 +4543,20 @@ impl EditorApp {
                 }
             }
             // Search filter overlay: highlight matches, dim non-matches
+            // Error/running nodes are never dimmed (state priority: error > running > search)
             if search_active {
                 let label = step_summary(step);
                 let key = get_step_key(step);
                 let is_match = label.to_lowercase().contains(&search_query)
                     || key.to_lowercase().contains(&search_query);
-                if !is_match {
+                let is_special = is_running || self.canvas_error_step == Some(idx);
+                if !is_match && !is_special {
                     painter.rect_filled(
                         node_rect,
                         4.0 * z,
                         Color32::from_rgba_premultiplied(0, 0, 0, 155),
                     );
-                } else {
+                } else if is_match {
                     painter.rect_stroke(
                         node_rect.expand(3.0 * z),
                         4.0 * z,
@@ -4679,6 +4706,12 @@ impl EditorApp {
             } else {
                 self.expanded_steps.insert(idx);
             }
+        }
+        if let Some(idx) = panel_click_step {
+            self.select_step(idx);
+            self.view_mode = ViewMode::List;
+            self.selected_child = None;
+            self.scroll_to_selected = true;
         }
 
         // Background right-click menu (shown when clicking empty canvas space, not on a node)
@@ -4965,6 +4998,31 @@ impl EditorApp {
                             });
                         });
                 });
+            // Enter → pan to first matching node
+            if !search_text.is_empty()
+                && ui.input(|i| i.key_pressed(egui::Key::Enter))
+            {
+                let q = search_text.to_lowercase();
+                if let Some(match_idx) = self.steps.iter().position(|s| {
+                    step_summary(s).to_lowercase().contains(&q)
+                        || get_step_key(s).to_lowercase().contains(&q)
+                }) {
+                    let cols = default_canvas_cols(self.steps.len());
+                    let pos = self.canvas_positions.get(&match_idx).copied().unwrap_or_else(|| {
+                        egui::pos2(
+                            (match_idx % cols) as f32 * 340.0 + 40.0,
+                            (match_idx / cols) as f32 * 132.0 + 40.0,
+                        )
+                    });
+                    let z = self.canvas_zoom;
+                    let vp = resp.rect.size();
+                    self.canvas_pan = egui::vec2(
+                        vp.x / 2.0 / z - pos.x - 130.0,
+                        vp.y / 2.0 / z - pos.y - 36.0,
+                    );
+                    self.select_step(match_idx);
+                }
+            }
             self.canvas_search = search_text;
         }
 
@@ -5182,7 +5240,28 @@ impl eframe::App for EditorApp {
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::ArrowUp))
         {
-            if let Some(i) = self.selected {
+            if self.multi_selected.len() > 1 {
+                let mut sorted: Vec<usize> = self.multi_selected.iter().cloned().collect();
+                sorted.sort_unstable();
+                let min_sel = sorted[0];
+                let max_sel = *sorted.last().unwrap();
+                if min_sel > 0 {
+                    self.push_undo();
+                    // Move the step just above the block to below the block
+                    let above_pos = self.canvas_positions.remove(&(min_sel - 1));
+                    let step = self.steps.remove(min_sel - 1);
+                    let insert_at = max_sel; // block shifts to [min-1..max-1], insert after = max
+                    Self::canvas_shift_positions(&mut self.canvas_positions, min_sel - 1, -1);
+                    Self::canvas_shift_positions(&mut self.canvas_positions, insert_at, 1);
+                    self.steps.insert(insert_at, step);
+                    if let Some(p) = above_pos {
+                        self.canvas_positions.insert(insert_at, p);
+                    }
+                    self.multi_selected = self.multi_selected.iter().map(|&i| i - 1).collect();
+                    self.selected = self.selected.map(|i| i.saturating_sub(1));
+                    self.dirty = true;
+                }
+            } else if let Some(i) = self.selected {
                 if i > 0 {
                     self.push_undo();
                     self.steps.swap(i, i - 1);
@@ -5198,13 +5277,7 @@ impl eframe::App for EditorApp {
                         .multi_selected
                         .iter()
                         .map(|&x| {
-                            if x == i {
-                                i - 1
-                            } else if x == i - 1 {
-                                i
-                            } else {
-                                x
-                            }
+                            if x == i { i - 1 } else if x == i - 1 { i } else { x }
                         })
                         .collect();
                     self.selected = Some(i - 1);
@@ -5217,7 +5290,28 @@ impl eframe::App for EditorApp {
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::ArrowDown))
         {
-            if let Some(i) = self.selected {
+            if self.multi_selected.len() > 1 {
+                let mut sorted: Vec<usize> = self.multi_selected.iter().cloned().collect();
+                sorted.sort_unstable();
+                let min_sel = sorted[0];
+                let max_sel = *sorted.last().unwrap();
+                if max_sel + 1 < self.steps.len() {
+                    self.push_undo();
+                    // Move the step just below the block to above the block
+                    let below_pos = self.canvas_positions.remove(&(max_sel + 1));
+                    let step = self.steps.remove(max_sel + 1);
+                    let insert_at = min_sel; // block stays, insert before it
+                    Self::canvas_shift_positions(&mut self.canvas_positions, max_sel + 1, -1);
+                    Self::canvas_shift_positions(&mut self.canvas_positions, insert_at, 1);
+                    self.steps.insert(insert_at, step);
+                    if let Some(p) = below_pos {
+                        self.canvas_positions.insert(insert_at, p);
+                    }
+                    self.multi_selected = self.multi_selected.iter().map(|&i| i + 1).collect();
+                    self.selected = self.selected.map(|i| (i + 1).min(self.steps.len() - 1));
+                    self.dirty = true;
+                }
+            } else if let Some(i) = self.selected {
                 if i + 1 < self.steps.len() {
                     self.push_undo();
                     self.steps.swap(i, i + 1);
@@ -5233,13 +5327,7 @@ impl eframe::App for EditorApp {
                         .multi_selected
                         .iter()
                         .map(|&x| {
-                            if x == i {
-                                i + 1
-                            } else if x == i + 1 {
-                                i
-                            } else {
-                                x
-                            }
+                            if x == i { i + 1 } else if x == i + 1 { i } else { x }
                         })
                         .collect();
                     self.selected = Some(i + 1);
