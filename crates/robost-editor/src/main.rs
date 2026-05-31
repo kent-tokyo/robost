@@ -1032,6 +1032,15 @@ fn step_summary(v: &serde_yml::Value) -> String {
     }
 }
 
+fn step_matches(step: &serde_yml::Value, query: &str) -> bool {
+    step_summary(step).to_lowercase().contains(query)
+        || get_step_key(step).to_lowercase().contains(query)
+        || serde_yml::to_string(step)
+            .unwrap_or_default()
+            .to_lowercase()
+            .contains(query)
+}
+
 fn parse_scenario_steps(text: &str) -> Result<(String, serde_yml::Mapping, Vec<serde_yml::Value>)> {
     let doc: serde_yml::Value = serde_yml::from_str(text)?;
     let name = doc
@@ -3136,6 +3145,7 @@ impl EditorApp {
                     }
                 }
                 self.dirty = true;
+                self.ensure_canvas_layout();
                 self.log.push(LogEntry {
                     message: format!("✅ {}ステップを{}番目の後に挿入しました", count, at),
                     level: LogLevel::Ok,
@@ -4058,7 +4068,7 @@ impl EditorApp {
                 let cursor = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
                 self.canvas_lasso = Some((start, cursor));
             } else {
-                self.canvas_pan += resp.drag_delta();
+                self.canvas_pan += resp.drag_delta() / z;
             }
         }
 
@@ -4372,9 +4382,9 @@ impl EditorApp {
                 )
             };
             let (border, border_w) = if selected {
-                (Color32::from_rgb(90, 150, 230), 1.5 * z)
+                (Color32::from_rgb(90, 150, 230), (1.5 * z).max(1.0))
             } else if is_multi_only {
-                (Color32::from_rgb(75, 115, 215), 1.5 * z)
+                (Color32::from_rgb(75, 115, 215), (1.5 * z).max(1.0))
             } else {
                 (Color32::from_gray(68), 1.0)
             };
@@ -4579,15 +4589,15 @@ impl EditorApp {
                 painter.rect_stroke(
                     node_rect.expand(2.0 * z),
                     4.0 * z,
-                    egui::Stroke::new(2.0 * z, egui::Color32::from_rgb(249, 226, 175)),
+                    egui::Stroke::new((2.0 * z).max(1.0), egui::Color32::from_rgb(249, 226, 175)),
                     egui::StrokeKind::Outside,
                 );
             }
             if self.canvas_error_steps.contains_key(&idx) {
                 painter.rect_stroke(
-                    node_rect.expand(2.0 * z),
+                    node_rect.expand((2.0 * z).max(1.0)),
                     4.0 * z,
-                    egui::Stroke::new(2.0 * z, egui::Color32::from_rgb(220, 60, 60)),
+                    egui::Stroke::new((2.0 * z).max(1.0), egui::Color32::from_rgb(220, 60, 60)),
                     egui::StrokeKind::Outside,
                 );
             }
@@ -4657,10 +4667,7 @@ impl EditorApp {
             // Search filter overlay: highlight matches, dim non-matches
             // Error/running nodes are never dimmed (state priority: error > running > search)
             if search_active {
-                let label = step_summary(step);
-                let key = get_step_key(step);
-                let is_match = label.to_lowercase().contains(&search_query)
-                    || key.to_lowercase().contains(&search_query);
+                let is_match = step_matches(step, &search_query);
                 let is_special = is_running || self.canvas_error_steps.contains_key(&idx);
                 if !is_match && !is_special {
                     painter.rect_filled(
@@ -4787,12 +4794,13 @@ impl EditorApp {
         }
         if let Some((idx, shift, cmd)) = canvas_click_modifier {
             if cmd {
-                // Toggle selection; anchor follows the toggled node
+                // Toggle selection; anchor only moves when adding to selection
                 if self.multi_selected.contains(&idx) {
                     self.multi_selected.remove(&idx);
                     if self.selected == Some(idx) {
                         self.selected = self.multi_selected.iter().next().cloned();
                     }
+                    // Do not move anchor on deselect — keep existing anchor for next Shift+click
                 } else {
                     self.push_undo();
                     self.flush_edit();
@@ -4802,8 +4810,8 @@ impl EditorApp {
                     if let Some(step) = self.steps.get(idx) {
                         self.edit_buf = serde_yml::to_string(step).unwrap_or_default();
                     }
+                    self.canvas_selection_anchor = Some(idx);
                 }
-                self.canvas_selection_anchor = Some(idx);
             } else if shift {
                 // Use persistent anchor so range-select still works after background clear
                 let anchor = self.canvas_selection_anchor.unwrap_or(idx);
@@ -4975,6 +4983,7 @@ impl EditorApp {
                     }
                     if !self.multi_selected.is_empty() {
                         self.selected = self.multi_selected.iter().min().cloned();
+                        self.canvas_selection_anchor = self.selected;
                     }
                 }
             }
@@ -5091,14 +5100,7 @@ impl EditorApp {
                 self.steps
                     .iter()
                     .enumerate()
-                    .filter(|(_, s)| {
-                        step_summary(s).to_lowercase().contains(&q)
-                            || get_step_key(s).to_lowercase().contains(&q)
-                            || serde_yml::to_string(s)
-                                .unwrap_or_default()
-                                .to_lowercase()
-                                .contains(&q)
-                    })
+                    .filter(|(_, s)| step_matches(s, &q))
                     .map(|(i, _)| i)
                     .collect()
             };
