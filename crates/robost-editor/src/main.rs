@@ -305,6 +305,8 @@ struct AppSettings {
     lang: Lang,
     #[serde(default)]
     canvas_snap: bool,
+    #[serde(default)]
+    minimap_show: bool,
 }
 
 impl Default for AppSettings {
@@ -315,6 +317,7 @@ impl Default for AppSettings {
             model: "claude-haiku-4-5-20251001".to_owned(),
             lang: Lang::default(),
             canvas_snap: false,
+            minimap_show: false,
         }
     }
 }
@@ -1364,10 +1367,8 @@ struct EditorApp {
     ai_step_rx: Option<(usize, std::sync::mpsc::Receiver<anyhow::Result<String>>)>,
     /// Per-step error from the most recent ai_create generation attempt.
     ai_step_error: Option<(usize, String)>,
-    /// Index of the step that failed most recently during canvas execution.
-    canvas_error_step: Option<usize>,
-    /// Error message from the most recent canvas execution failure.
-    canvas_error_msg: String,
+    /// Steps that failed during canvas execution, mapped to their error messages.
+    canvas_error_steps: HashMap<usize, String>,
     /// Active edge-drag: (source step index, current pointer screen position).
     canvas_edge_drag: Option<(usize, egui::Pos2)>,
     /// Current canvas node search query.
@@ -1443,8 +1444,7 @@ impl Default for EditorApp {
             undo_limit_warned_at: None,
             ai_step_rx: None,
             ai_step_error: None,
-            canvas_error_step: None,
-            canvas_error_msg: String::new(),
+            canvas_error_steps: HashMap::new(),
             canvas_edge_drag: None,
             canvas_search: String::new(),
             canvas_search_open: false,
@@ -1746,8 +1746,7 @@ impl EditorApp {
         let _ = std::fs::remove_file(&progress_file);
         self.run_progress_file = Some(progress_file.clone());
         self.current_run_step = None;
-        self.canvas_error_step = None;
-        self.canvas_error_msg.clear();
+        self.canvas_error_steps.clear();
         let rpa_bin = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|d| d.join("rpa")))
@@ -1790,8 +1789,7 @@ impl EditorApp {
         let _ = std::fs::remove_file(&progress_file);
         self.run_progress_file = Some(progress_file.clone());
         self.current_run_step = None;
-        self.canvas_error_step = None;
-        self.canvas_error_msg.clear();
+        self.canvas_error_steps.clear();
         // Prefer the `rpa` binary in the same directory as this editor to avoid PATH hijacking.
         let rpa_bin = std::env::current_exe()
             .ok()
@@ -3604,7 +3602,10 @@ impl EditorApp {
         let cols = default_canvas_cols(n);
         let pos_of = |i: usize| {
             self.canvas_positions.get(&i).copied().unwrap_or_else(|| {
-                egui::pos2((i % cols) as f32 * 340.0 + 40.0, (i / cols) as f32 * 132.0 + 40.0)
+                egui::pos2(
+                    (i % cols) as f32 * 340.0 + 40.0,
+                    (i / cols) as f32 * 132.0 + 40.0,
+                )
             })
         };
         let min_x = (0..n).map(|i| pos_of(i).x).fold(f32::INFINITY, f32::min);
@@ -3868,7 +3869,7 @@ impl EditorApp {
             resp.rect.max - egui::vec2(MM_W + MM_MARGIN, MM_H + MM_MARGIN),
             egui::vec2(MM_W, MM_H),
         );
-        let minimap_active = n >= 15;
+        let minimap_active = n > 0 && (n >= 15 || self.settings.minimap_show);
         let (mm_scale, mm_offset, mm_content_min) = if minimap_active {
             let mut min_cx = f32::MAX;
             let mut min_cy = f32::MAX;
@@ -3963,6 +3964,16 @@ impl EditorApp {
                 if scroll.x != 0.0 {
                     self.canvas_pan.x += scroll.x / z;
                 }
+            }
+            // Pinch-to-zoom (macOS trackpad)
+            let pinch = ui.input(|i| i.zoom_delta());
+            if pinch != 1.0 {
+                let z_old = self.canvas_zoom;
+                let z_new = (z_old * pinch).clamp(0.25, 2.0);
+                if let Some(cursor) = ui.input(|i| i.pointer.hover_pos()) {
+                    self.canvas_pan += (cursor - origin) * (1.0 / z_new - 1.0 / z_old);
+                }
+                self.canvas_zoom = z_new;
             }
             // Visual cue: crosshair cursor when Shift is held over background (lasso mode ready).
             // Suppressed when the pointer is over a node — Shift+click on a node is range-select.
@@ -4081,25 +4092,6 @@ impl EditorApp {
                 Vec2::new(0.0, 5.0 * z),
                 Stroke::new(stroke_width, stroke_color),
             );
-            let arrow_label = match step_key {
-                "if" => Some("then"),
-                "foreach" | "while" | "do_while" | "repeat" => Some("do"),
-                "try_catch" => Some("try"),
-                "group" => Some("steps"),
-                _ => None,
-            };
-            if let Some(lbl) = arrow_label {
-                if z >= 0.7 {
-                    let mid = from.lerp(to, 0.5);
-                    painter.text(
-                        mid + Vec2::new(8.0 * z, 0.0),
-                        Align2::LEFT_CENTER,
-                        lbl,
-                        FontId::proportional(9.0 * z),
-                        Color32::from_rgb(150, 130, 80),
-                    );
-                }
-            }
         }
 
         // Draw active edge-drag line (pending connection preview)
@@ -4118,6 +4110,15 @@ impl EditorApp {
                 ));
                 painter.circle_filled(from_p, 5.0 * z, Color32::from_rgb(100, 180, 255));
                 painter.circle_filled(end_pos, 5.0 * z, Color32::from_rgb(100, 180, 255));
+                // Show "→ ここに移動" label at midpoint of the drag line
+                let mid = from_p.lerp(end_pos, 0.5);
+                painter.text(
+                    mid + egui::Vec2::new(8.0 * z, -10.0 * z),
+                    egui::Align2::LEFT_CENTER,
+                    "→ ここに移動",
+                    egui::FontId::proportional(10.0 * z),
+                    egui::Color32::from_rgb(100, 200, 255),
+                );
             }
         }
 
@@ -4252,14 +4253,17 @@ impl EditorApp {
             let full_label = step_summary(step);
 
             // Show full label as tooltip on hover when text is truncated (before culling)
-            if hovered && self.canvas_error_step == Some(idx) && !self.canvas_error_msg.is_empty() {
-                node_resp.show_tooltip_ui(|ui| {
-                    ui.colored_label(egui::Color32::from_rgb(220, 80, 80), &self.canvas_error_msg);
-                });
-            } else if hovered && full_label.chars().count() > 32 {
-                node_resp.show_tooltip_ui(|ui| {
-                    ui.label(&full_label);
-                });
+            if hovered {
+                if let Some(err_msg) = self.canvas_error_steps.get(&idx) {
+                    let msg = err_msg.clone();
+                    node_resp.show_tooltip_ui(|ui| {
+                        ui.colored_label(egui::Color32::from_rgb(220, 80, 80), &msg);
+                    });
+                } else if full_label.chars().count() > 32 {
+                    node_resp.show_tooltip_ui(|ui| {
+                        ui.label(&full_label);
+                    });
+                }
             }
 
             // ── Draw (skip nodes fully outside the viewport) ────────────────
@@ -4440,18 +4444,15 @@ impl EditorApp {
                             egui::Pos2::new(node_rect.min.x, panel_y),
                             Vec2::new(NODE_W * z, panel_h),
                         );
-                        painter.rect_filled(
-                            panel_rect,
-                            4.0 * z,
-                            Color32::from_rgb(28, 28, 32),
-                        );
+                        painter.rect_filled(panel_rect, 4.0 * z, Color32::from_rgb(28, 28, 32));
                         painter.rect_stroke(
                             panel_rect,
                             4.0 * z,
                             Stroke::new(1.0 * z, Color32::from_rgb(60, 60, 80)),
                             egui::StrokeKind::Outside,
                         );
-                        for (row, (label, steps_vec)) in branches.iter().take(MAX_ROWS).enumerate() {
+                        for (row, (label, steps_vec)) in branches.iter().take(MAX_ROWS).enumerate()
+                        {
                             let row_y = panel_rect.min.y + 3.0 * z + row as f32 * row_h;
                             let row_rect = Rect::from_min_size(
                                 egui::Pos2::new(node_rect.min.x, row_y),
@@ -4504,7 +4505,7 @@ impl EditorApp {
                     egui::StrokeKind::Outside,
                 );
             }
-            if self.canvas_error_step == Some(idx) {
+            if self.canvas_error_steps.contains_key(&idx) {
                 painter.rect_stroke(
                     node_rect.expand(2.0 * z),
                     4.0 * z,
@@ -4529,11 +4530,7 @@ impl EditorApp {
                     Color32::from_rgba_premultiplied(80, 120, 180, 70)
                 };
                 painter.circle_filled(port_center, 5.0 * z, Color32::from_gray(20));
-                painter.circle_stroke(
-                    port_center,
-                    5.0 * z,
-                    Stroke::new(1.5 * z, port_color),
-                );
+                painter.circle_stroke(port_center, 5.0 * z, Stroke::new(1.5 * z, port_color));
             }
             // Input port highlight when an edge drag is hovering over this node
             if in_edge_drag {
@@ -4542,12 +4539,28 @@ impl EditorApp {
                     .map(|p| node_rect.contains(p))
                     .unwrap_or(false);
                 if hover_over && self.canvas_edge_drag.map(|(i, _)| i) != Some(idx) {
-                    painter.rect_stroke(
-                        node_rect,
-                        4.0 * z,
-                        Stroke::new(2.0 * z, Color32::from_rgb(80, 200, 120)),
-                        egui::StrokeKind::Outside,
+                    // Horizontal "insert before" indicator line across the top of the target node
+                    let line_y = node_rect.min.y - 3.0 * z;
+                    painter.line_segment(
+                        [
+                            egui::pos2(node_rect.min.x, line_y),
+                            egui::pos2(node_rect.max.x, line_y),
+                        ],
+                        egui::Stroke::new(2.5 * z, egui::Color32::from_rgb(80, 200, 120)),
                     );
+                    // Small diamond at the left end
+                    let d = 4.0 * z;
+                    let cx = node_rect.min.x;
+                    painter.add(egui::Shape::convex_polygon(
+                        vec![
+                            egui::pos2(cx, line_y - d),
+                            egui::pos2(cx + d, line_y),
+                            egui::pos2(cx, line_y + d),
+                            egui::pos2(cx - d, line_y),
+                        ],
+                        egui::Color32::from_rgb(80, 200, 120),
+                        egui::Stroke::NONE,
+                    ));
                 }
             }
             // Search filter overlay: highlight matches, dim non-matches
@@ -4557,7 +4570,7 @@ impl EditorApp {
                 let key = get_step_key(step);
                 let is_match = label.to_lowercase().contains(&search_query)
                     || key.to_lowercase().contains(&search_query);
-                let is_special = is_running || self.canvas_error_step == Some(idx);
+                let is_special = is_running || self.canvas_error_steps.contains_key(&idx);
                 if !is_match && !is_special {
                     painter.rect_filled(
                         node_rect,
@@ -4600,7 +4613,11 @@ impl EditorApp {
                     self.push_undo();
                     let src_pos = self.canvas_positions.get(&src_idx).copied();
                     let step = self.steps.remove(src_idx);
-                    let insert_at = if tgt_idx > src_idx { tgt_idx - 1 } else { tgt_idx };
+                    let insert_at = if tgt_idx > src_idx {
+                        tgt_idx - 1
+                    } else {
+                        tgt_idx
+                    };
                     Self::canvas_shift_positions(&mut self.canvas_positions, src_idx, -1);
                     Self::canvas_shift_positions(&mut self.canvas_positions, insert_at, 1);
                     if let Some(pos) = src_pos {
@@ -4622,8 +4639,18 @@ impl EditorApp {
                 self.push_undo();
                 self.undo_pushed_for_current_drag = true;
             }
-            // No snap during drag: compute delta from unsnapped positions so relative
-            // offsets are preserved exactly. Snap is applied once at drag_stopped.
+            // Apply snap during drag for single-node moves; for multi-select, compute
+            // delta from unsnapped positions so relative offsets are preserved exactly.
+            // Snap is also applied once at drag_stopped for the final position.
+            let snapped_pos = if self.settings.canvas_snap {
+                const SNAP: f32 = 40.0;
+                egui::pos2(
+                    (canvas_pos.x / SNAP).round() * SNAP,
+                    (canvas_pos.y / SNAP).round() * SNAP,
+                )
+            } else {
+                canvas_pos
+            };
             if self.multi_selected.len() > 1 && self.multi_selected.contains(&idx) {
                 let old_pos = self
                     .canvas_positions
@@ -4638,7 +4665,7 @@ impl EditorApp {
                     }
                 }
             } else {
-                self.canvas_positions.insert(idx, canvas_pos);
+                self.canvas_positions.insert(idx, snapped_pos);
             }
         }
         if drag_ended {
@@ -4646,7 +4673,7 @@ impl EditorApp {
             // Only if the drag actually moved (undo_pushed_for_current_drag is set by
             // drag_delta_node) — a press-and-release click must not mutate positions.
             if self.settings.canvas_snap && self.undo_pushed_for_current_drag {
-                const SNAP: f32 = 20.0;
+                const SNAP: f32 = 40.0;
                 let snap_pos = |p: egui::Pos2| {
                     egui::pos2((p.x / SNAP).round() * SNAP, (p.y / SNAP).round() * SNAP)
                 };
@@ -4717,9 +4744,7 @@ impl EditorApp {
         }
         if let Some(idx) = panel_click_step {
             self.select_step(idx);
-            self.view_mode = ViewMode::List;
-            self.selected_child = None;
-            self.scroll_to_selected = true;
+            // Stay in canvas; just select the node (don't force List view)
         }
 
         // Background right-click menu (shown when clicking empty canvas space, not on a node)
@@ -4853,7 +4878,7 @@ impl EditorApp {
                     self.multi_selected.clear();
                     for (i, &sp) in screen_positions.iter().enumerate() {
                         let nr = egui::Rect::from_min_size(sp, Vec2::new(NODE_W * z, NODE_H * z));
-                        if lasso_rect.intersects(nr) {
+                        if lasso_rect.contains_rect(nr) {
                             self.multi_selected.insert(i);
                         }
                     }
@@ -4978,6 +5003,10 @@ impl EditorApp {
                     .filter(|(_, s)| {
                         step_summary(s).to_lowercase().contains(&q)
                             || get_step_key(s).to_lowercase().contains(&q)
+                            || serde_yml::to_string(s)
+                                .unwrap_or_default()
+                                .to_lowercase()
+                                .contains(&q)
                     })
                     .map(|(i, _)| i)
                     .collect()
@@ -4987,6 +5016,8 @@ impl EditorApp {
             // Show "cur/total" if the selected node is in the match list
             let count_label = if q.is_empty() {
                 format!("{total}")
+            } else if matched_count == 0 {
+                "一致なし".to_string()
             } else {
                 let cur_pos = self
                     .selected
@@ -5015,10 +5046,13 @@ impl EditorApp {
                                 if !te.has_focus() {
                                     te.request_focus();
                                 }
+                                let count_color = if !q.is_empty() && matched_count == 0 {
+                                    egui::Color32::from_rgb(220, 80, 80)
+                                } else {
+                                    egui::Color32::from_gray(150)
+                                };
                                 ui.label(
-                                    egui::RichText::new(&count_label)
-                                        .color(egui::Color32::from_gray(150))
-                                        .small(),
+                                    egui::RichText::new(&count_label).color(count_color).small(),
                                 );
                                 // Clear button
                                 if !search_text.is_empty()
@@ -5036,10 +5070,10 @@ impl EditorApp {
                         });
                 });
             // Enter → next match after selected; Shift+Enter → previous match
-            let shift_enter = ui
-                .input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Enter));
-            let plain_enter = ui
-                .input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+            let shift_enter =
+                ui.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Enter));
+            let plain_enter =
+                ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
             if !search_text.is_empty() && !matches.is_empty() {
                 let jump_to = if plain_enter {
                     let cur = self.selected.unwrap_or(0);
@@ -5240,8 +5274,12 @@ impl eframe::App for EditorApp {
         if self.view_mode == ViewMode::Canvas
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Num0))
         {
+            self.canvas_fit_view(self.canvas_viewport_size);
+        }
+        if self.view_mode == ViewMode::Canvas
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Num1))
+        {
             self.canvas_zoom = 1.0;
-            // Center pan on content bounding box at the new zoom level
             let n = self.steps.len();
             if n > 0 {
                 const NODE_W: f32 = 260.0;
@@ -5267,7 +5305,6 @@ impl eframe::App for EditorApp {
                     .fold(f32::NEG_INFINITY, f32::max)
                     + NODE_H;
                 let vp = self.canvas_viewport_size;
-                // Same minimap exclusion as canvas_fit_view: visible width shrinks when n>=15
                 const MM_W_0: f32 = 160.0;
                 const MM_MARGIN_0: f32 = 8.0;
                 let vis_w = if n >= 15 {
@@ -5330,7 +5367,13 @@ impl eframe::App for EditorApp {
                         .multi_selected
                         .iter()
                         .map(|&x| {
-                            if x == i { i - 1 } else if x == i - 1 { i } else { x }
+                            if x == i {
+                                i - 1
+                            } else if x == i - 1 {
+                                i
+                            } else {
+                                x
+                            }
                         })
                         .collect();
                     self.selected = Some(i - 1);
@@ -5380,12 +5423,77 @@ impl eframe::App for EditorApp {
                         .multi_selected
                         .iter()
                         .map(|&x| {
-                            if x == i { i + 1 } else if x == i + 1 { i } else { x }
+                            if x == i {
+                                i + 1
+                            } else if x == i + 1 {
+                                i
+                            } else {
+                                x
+                            }
                         })
                         .collect();
                     self.selected = Some(i + 1);
                     self.form_edit_buffers.clear();
                     self.dirty = true;
+                }
+            }
+        }
+        // Bare ↑/↓ in Canvas view: move selection to prev/next node without reordering
+        if self.view_mode == ViewMode::Canvas
+            && !self.canvas_search_open
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp))
+        {
+            if let Some(sel) = self.selected {
+                if sel > 0 {
+                    let new_sel = sel - 1;
+                    self.select_step(new_sel);
+                    // Auto-scroll viewport to keep node visible
+                    let cols = default_canvas_cols(self.steps.len());
+                    let pos = self
+                        .canvas_positions
+                        .get(&new_sel)
+                        .copied()
+                        .unwrap_or_else(|| {
+                            egui::pos2(
+                                (new_sel % cols) as f32 * 340.0 + 40.0,
+                                (new_sel / cols) as f32 * 132.0 + 40.0,
+                            )
+                        });
+                    let z = self.canvas_zoom;
+                    let vp = self.canvas_viewport_size;
+                    self.canvas_pan = egui::vec2(
+                        vp.x / 2.0 / z - pos.x - 130.0,
+                        vp.y / 2.0 / z - pos.y - 36.0,
+                    );
+                }
+            }
+        }
+        if self.view_mode == ViewMode::Canvas
+            && !self.canvas_search_open
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown))
+        {
+            let n = self.steps.len();
+            if let Some(sel) = self.selected {
+                if sel + 1 < n {
+                    let new_sel = sel + 1;
+                    self.select_step(new_sel);
+                    let cols = default_canvas_cols(n);
+                    let pos = self
+                        .canvas_positions
+                        .get(&new_sel)
+                        .copied()
+                        .unwrap_or_else(|| {
+                            egui::pos2(
+                                (new_sel % cols) as f32 * 340.0 + 40.0,
+                                (new_sel / cols) as f32 * 132.0 + 40.0,
+                            )
+                        });
+                    let z = self.canvas_zoom;
+                    let vp = self.canvas_viewport_size;
+                    self.canvas_pan = egui::vec2(
+                        vp.x / 2.0 / z - pos.x - 130.0,
+                        vp.y / 2.0 / z - pos.y - 36.0,
+                    );
                 }
             }
         }
@@ -5527,8 +5635,10 @@ impl eframe::App for EditorApp {
                 self.log_ok("実行が完了しました");
             } else {
                 let code = status.code().unwrap_or(-1);
-                self.canvas_error_step = last_run_step;
-                self.canvas_error_msg = format!("終了コード: {code}");
+                if let Some(step_idx) = last_run_step {
+                    self.canvas_error_steps
+                        .insert(step_idx, format!("終了コード: {code}"));
+                }
                 self.log_err(format!("実行に失敗しました (終了コード: {code})"));
             }
         }
@@ -5927,6 +6037,14 @@ impl eframe::App for EditorApp {
                         .clicked()
                     {
                         self.settings.canvas_snap = !self.settings.canvas_snap;
+                        save_settings(&self.settings);
+                    }
+                    if ui
+                        .selectable_label(self.settings.minimap_show, "ミニマップ")
+                        .on_hover_text("ミニマップの表示/非表示")
+                        .clicked()
+                    {
+                        self.settings.minimap_show = !self.settings.minimap_show;
                         save_settings(&self.settings);
                     }
                     ui.label(format!("{:.0}%", self.canvas_zoom * 100.0));
