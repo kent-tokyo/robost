@@ -536,6 +536,7 @@ enum CanvasContextAction {
     AlignTop,
     DistributeH,
     DistributeV,
+    SelectAll,
 }
 
 #[derive(PartialEq, Clone, Copy, Default)]
@@ -1337,6 +1338,7 @@ struct EditorApp {
     canvas_dragging: Option<(usize, egui::Vec2)>,
     undo_pushed_for_current_drag: bool,
     canvas_lasso: Option<(egui::Pos2, egui::Pos2)>,
+    minimap_dragging: bool,
     canvas_viewport_size: egui::Vec2,
     /// When Some, step list rows referencing this variable name get an amber tint.
     var_highlight: Option<String>,
@@ -1405,6 +1407,7 @@ impl Default for EditorApp {
             canvas_dragging: None,
             undo_pushed_for_current_drag: false,
             canvas_lasso: None,
+            minimap_dragging: false,
             canvas_viewport_size: egui::Vec2::new(800.0, 600.0),
             var_highlight: None,
             manual_category_filter: None,
@@ -3539,7 +3542,12 @@ impl EditorApp {
             .get(indices.last().unwrap())
             .map(|p| p.x)
             .unwrap_or(NODE_W);
-        let step = (right_x - left_x) / (indices.len() - 1) as f32;
+        // Fallback: if all nodes share the same x, space them out by NODE_W + 20px gap
+        let step = if (right_x - left_x).abs() < 1.0 {
+            NODE_W + 20.0
+        } else {
+            (right_x - left_x) / (indices.len() - 1) as f32
+        };
         for (rank, &i) in indices.iter().enumerate() {
             if let Some(p) = self.canvas_positions.get_mut(&i) {
                 p.x = left_x + rank as f32 * step;
@@ -3552,6 +3560,7 @@ impl EditorApp {
         if self.multi_selected.len() < 3 {
             return;
         }
+        const NODE_H: f32 = 72.0;
         self.push_undo();
         let mut indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
         indices.sort_by(|&a, &b| {
@@ -3568,8 +3577,13 @@ impl EditorApp {
             .canvas_positions
             .get(indices.last().unwrap())
             .map(|p| p.y)
-            .unwrap_or(72.0);
-        let step = (bottom_y - top_y) / (indices.len() - 1) as f32;
+            .unwrap_or(NODE_H);
+        // Fallback: if all nodes share the same y, space them out by NODE_H + 20px gap
+        let step = if (bottom_y - top_y).abs() < 1.0 {
+            NODE_H + 20.0
+        } else {
+            (bottom_y - top_y) / (indices.len() - 1) as f32
+        };
         for (rank, &i) in indices.iter().enumerate() {
             if let Some(p) = self.canvas_positions.get_mut(&i) {
                 p.y = top_y + rank as f32 * step;
@@ -3638,11 +3652,13 @@ impl EditorApp {
                 (p.y - mm_offset.y) / mm_scale + mm_content_min.y,
             )
         };
+        // self.minimap_dragging persists across frames so drag-exit doesn't drop the latch
         let cursor_over_minimap = minimap_active
-            && ui
-                .input(|i| i.pointer.hover_pos())
-                .map(|p| mm_rect.contains(p))
-                .unwrap_or(false);
+            && (self.minimap_dragging
+                || ui
+                    .input(|i| i.pointer.hover_pos())
+                    .map(|p| mm_rect.contains(p))
+                    .unwrap_or(false));
 
         // Dark canvas background
         painter.rect_filled(resp.rect, 0.0, egui::Color32::from_rgb(26, 27, 30));
@@ -3687,9 +3703,25 @@ impl EditorApp {
                     self.canvas_pan.x += scroll.x;
                 }
             }
-            // Visual cue: crosshair cursor when Shift is held (lasso mode ready)
+            // Visual cue: crosshair cursor when Shift is held over background (lasso mode ready).
+            // Suppressed when the pointer is over a node — Shift+click on a node is range-select.
             if shift && self.canvas_dragging.is_none() {
-                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+                let over_node = ui.input(|i| i.pointer.hover_pos()).map(|cursor| {
+                    (0..n).any(|i| {
+                        let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
+                            (i % 5) as f32 * 340.0 + 40.0,
+                            (i / 5) as f32 * 132.0 + 40.0,
+                        ));
+                        egui::Rect::from_min_size(
+                            origin + (p.to_vec2() + self.canvas_pan) * z,
+                            egui::vec2(NODE_W * z, NODE_H * z),
+                        )
+                        .contains(cursor)
+                    })
+                }).unwrap_or(false);
+                if !over_node {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+                }
             }
         }
         // Click on empty background clears selection (not when clicking minimap)
@@ -4105,7 +4137,37 @@ impl EditorApp {
             self.scroll_to_selected = true;
         }
 
-        // Handle context menu actions from the node loop
+        // Background right-click menu (shown when clicking empty canvas space, not on a node)
+        resp.context_menu(|ui| {
+            if ui.button("全選択").clicked() {
+                canvas_ctx_action = Some(CanvasContextAction::SelectAll);
+                ui.close();
+            }
+            if self.multi_selected.len() >= 2 {
+                ui.separator();
+                ui.weak(format!("整列 ({} 選択)", self.multi_selected.len()));
+                if ui.button("← 左揃え").clicked() {
+                    canvas_ctx_action = Some(CanvasContextAction::AlignLeft);
+                    ui.close();
+                }
+                if ui.button("↑ 上揃え").clicked() {
+                    canvas_ctx_action = Some(CanvasContextAction::AlignTop);
+                    ui.close();
+                }
+                if self.multi_selected.len() >= 3 {
+                    if ui.button("↔ 水平等間隔").clicked() {
+                        canvas_ctx_action = Some(CanvasContextAction::DistributeH);
+                        ui.close();
+                    }
+                    if ui.button("↕ 垂直等間隔").clicked() {
+                        canvas_ctx_action = Some(CanvasContextAction::DistributeV);
+                        ui.close();
+                    }
+                }
+            }
+        });
+
+        // Handle context menu actions from the node loop and background menu
         if let Some(act) = canvas_ctx_action {
             match act {
                 CanvasContextAction::Delete(idx) => {
@@ -4152,6 +4214,10 @@ impl EditorApp {
                 CanvasContextAction::AlignTop => self.canvas_align_top(),
                 CanvasContextAction::DistributeH => self.canvas_distribute_h(),
                 CanvasContextAction::DistributeV => self.canvas_distribute_v(),
+                CanvasContextAction::SelectAll => {
+                    self.multi_selected = (0..self.steps.len()).collect();
+                    self.selected = self.multi_selected.iter().min().cloned();
+                }
             }
         }
 
@@ -4271,12 +4337,23 @@ impl EditorApp {
                 );
             }
 
-            // Click or drag inside the minimap → pan to center clicked canvas point
+            // Latch minimap drag so pointer can exit the rect without losing input
+            if resp.drag_started() {
+                if let Some(ptr) = resp.interact_pointer_pos() {
+                    if mm_rect.contains(ptr) {
+                        self.minimap_dragging = true;
+                    }
+                }
+            }
+            if resp.drag_stopped() {
+                self.minimap_dragging = false;
+            }
+            // Navigate: click inside rect OR latched drag (works even after pointer exits)
             if let Some(ptr) = resp.interact_pointer_pos() {
-                if mm_rect.contains(ptr)
-                    && (resp.clicked()
-                        || resp.dragged_by(egui::PointerButton::Primary))
-                {
+                let mm_click = resp.clicked() && mm_rect.contains(ptr);
+                let mm_drag =
+                    self.minimap_dragging && resp.dragged_by(egui::PointerButton::Primary);
+                if mm_click || mm_drag {
                     let canvas_pt = from_mm(ptr);
                     self.canvas_pan = resp.rect.size() / 2.0 / z - canvas_pt.to_vec2();
                 }
@@ -4963,11 +5040,23 @@ impl eframe::App for EditorApp {
                                     ui.label("ダブルクリック");
                                     ui.label("List ビューで開く");
                                     ui.end_row();
-                                    ui.label("右クリック");
-                                    ui.label("コンテキストメニュー");
+                                    ui.label("右クリック (ノード)");
+                                    ui.label("削除 / 複製 / 整列");
+                                    ui.end_row();
+                                    ui.label("右クリック (背景)");
+                                    ui.label("全選択 / 整列");
+                                    ui.end_row();
+                                    ui.label("2+選択→右クリック");
+                                    ui.label("左揃え / 上揃え");
+                                    ui.end_row();
+                                    ui.label("3+選択→右クリック");
+                                    ui.label("水平/垂直等間隔");
                                     ui.end_row();
                                     ui.label("ミニマップクリック");
                                     ui.label("その位置へジャンプ");
+                                    ui.end_row();
+                                    ui.label("ミニマップドラッグ");
+                                    ui.label("連続ナビゲーション");
                                     ui.end_row();
                                 });
                         });
