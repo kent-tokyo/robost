@@ -2482,7 +2482,82 @@ impl ScenarioEngine {
 
     // ── OCR node ────────────────────────────────────────────────────────────
 
+    #[cfg(feature = "llm-ocr")]
+    fn llm_ocr_extract(
+        png_bytes: &[u8],
+        config: &crate::scenario::LlmOcrConfig,
+        api_key: &str,
+    ) -> anyhow::Result<String> {
+        use crate::scenario::LlmProvider;
+        use base64::prelude::{Engine as _, BASE64_STANDARD};
+
+        const DEFAULT_PROMPT: &str =
+            "Extract all visible text from this image. Output only the raw text, no commentary.";
+        let b64 = BASE64_STANDARD.encode(png_bytes);
+        let prompt = config.prompt.as_deref().unwrap_or(DEFAULT_PROMPT);
+
+        match &config.provider {
+            LlmProvider::Anthropic => {
+                let model = config
+                    .model
+                    .as_deref()
+                    .unwrap_or("claude-3-5-haiku-20241022");
+                let body = serde_json::json!({
+                    "model": model, "max_tokens": 1024,
+                    "messages": [{ "role": "user", "content": [
+                        { "type": "image",
+                          "source": { "type": "base64", "media_type": "image/png", "data": b64 } },
+                        { "type": "text", "text": prompt }
+                    ]}]
+                });
+                let resp = ureq::post("https://api.anthropic.com/v1/messages")
+                    .timeout(std::time::Duration::from_secs(30))
+                    .set("x-api-key", api_key)
+                    .set("anthropic-version", "2023-06-01")
+                    .set("content-type", "application/json")
+                    .send_json(body)
+                    .map_err(|e| anyhow::anyhow!("anthropic request failed: {e}"))?;
+                let json: serde_json::Value = resp
+                    .into_json()
+                    .map_err(|e| anyhow::anyhow!("anthropic response parse: {e}"))?;
+                json["content"][0]["text"]
+                    .as_str()
+                    .map(|s| s.trim().to_owned())
+                    .ok_or_else(|| anyhow::anyhow!("anthropic: unexpected response: {json}"))
+            }
+            LlmProvider::Openai => {
+                let model = config.model.as_deref().unwrap_or("gpt-4o-mini");
+                let body = serde_json::json!({
+                    "model": model, "max_tokens": 1024,
+                    "messages": [{ "role": "user", "content": [
+                        { "type": "image_url",
+                          "image_url": { "url": format!("data:image/png;base64,{b64}") } },
+                        { "type": "text", "text": prompt }
+                    ]}]
+                });
+                let resp = ureq::post("https://api.openai.com/v1/chat/completions")
+                    .timeout(std::time::Duration::from_secs(30))
+                    .set("Authorization", &format!("Bearer {api_key}"))
+                    .set("content-type", "application/json")
+                    .send_json(body)
+                    .map_err(|e| anyhow::anyhow!("openai request failed: {e}"))?;
+                let json: serde_json::Value = resp
+                    .into_json()
+                    .map_err(|e| anyhow::anyhow!("openai response parse: {e}"))?;
+                json["choices"][0]["message"]["content"]
+                    .as_str()
+                    .map(|s| s.trim().to_owned())
+                    .ok_or_else(|| anyhow::anyhow!("openai: unexpected response: {json}"))
+            }
+        }
+    }
+
     async fn ocr_match(&self, step: &OcrMatchStep, vars: &mut Variables) -> Result<()> {
+        #[cfg(feature = "llm-ocr")]
+        if let Some(crate::scenario::OcrEngineKind::Llm(cfg)) = &step.engine {
+            return self.ocr_match_llm(step, cfg, vars).await;
+        }
+
         #[cfg(not(feature = "ocr"))]
         {
             let _ = step;
@@ -2556,6 +2631,90 @@ impl ScenarioEngine {
                     }
                     Err(e) => return Err(e),
                 }
+            }
+        }
+    }
+
+    #[cfg(feature = "llm-ocr")]
+    async fn ocr_match_llm(
+        &self,
+        step: &OcrMatchStep,
+        llm_config: &crate::scenario::LlmOcrConfig,
+        vars: &mut Variables,
+    ) -> Result<()> {
+        use crate::scenario::LlmProvider;
+
+        let api_key = match &llm_config.provider {
+            LlmProvider::Anthropic => std::env::var("ANTHROPIC_API_KEY")
+                .map_err(|_| EngineError::Other("llm-ocr: ANTHROPIC_API_KEY not set".to_owned()))?,
+            LlmProvider::Openai => std::env::var("OPENAI_API_KEY")
+                .map_err(|_| EngineError::Other("llm-ocr: OPENAI_API_KEY not set".to_owned()))?,
+        };
+
+        let target = Self::capture_target(&step.window);
+        let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
+        let contains = step.contains.clone();
+        let region = step.region;
+
+        loop {
+            let backend = Arc::clone(&self.backend);
+            let tgt = target.clone();
+            let cfg = llm_config.clone();
+            let key = api_key.clone();
+
+            let text_result: Result<String> = tokio::task::spawn_blocking(move || {
+                let (img, _origin) = backend.capture_with_origin(&tgt)?;
+                let ocr_img = if let Some(r) = region {
+                    let x0 = r.x.max(0) as u32;
+                    let y0 = r.y.max(0) as u32;
+                    let x1 = (r.x + r.width as i32).min(img.width() as i32) as u32;
+                    let y1 = (r.y + r.height as i32).min(img.height() as i32) as u32;
+                    image::imageops::crop_imm(&img, x0, y0, x1 - x0, y1 - y0).to_image()
+                } else {
+                    img
+                };
+                let mut png_buf = Vec::new();
+                image::DynamicImage::ImageRgba8(ocr_img)
+                    .write_to(
+                        &mut std::io::Cursor::new(&mut png_buf),
+                        image::ImageFormat::Png,
+                    )
+                    .map_err(|e| EngineError::Other(format!("ocr_match: png encode: {e}")))?;
+                Self::llm_ocr_extract(&png_buf, &cfg, &key)
+                    .map_err(|e| EngineError::Other(format!("ocr_match[llm]: {e}")))
+            })
+            .await
+            .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+
+            match text_result {
+                Ok(text) => {
+                    let found = contains
+                        .as_ref()
+                        .is_none_or(|pat| text.contains(pat.as_str()));
+                    info!(found, text_len = text.len(), "ocr_match[llm]");
+                    if found {
+                        if let Some(save_as) = &step.save_as {
+                            vars.set(
+                                save_as.clone(),
+                                serde_json::json!({ "found": true, "text": text }),
+                            );
+                        }
+                        return Ok(());
+                    }
+                    if Instant::now() >= deadline {
+                        if let Some(save_as) = &step.save_as {
+                            vars.set(
+                                save_as.clone(),
+                                serde_json::json!({ "found": false, "text": text }),
+                            );
+                            return Ok(());
+                        }
+                        return Err(EngineError::Timeout(format!("ocr_match: {:?}", contains)));
+                    }
+                    self.check_cancelled()?;
+                    sleep(Duration::from_millis(step.retry_interval_ms)).await;
+                }
+                Err(e) => return Err(e),
             }
         }
     }

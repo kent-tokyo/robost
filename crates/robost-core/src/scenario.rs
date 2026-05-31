@@ -741,6 +741,36 @@ pub struct WindowControlStep {
 
 // ── OCR step type ─────────────────────────────────────────────────────────
 
+#[cfg(feature = "llm-ocr")]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmProvider {
+    #[default]
+    Anthropic,
+    Openai,
+}
+
+#[cfg(feature = "llm-ocr")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmOcrConfig {
+    #[serde(default)]
+    pub provider: LlmProvider,
+    /// Override the default model. Defaults: anthropic=`claude-3-5-haiku-20241022`, openai=`gpt-4o-mini`.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Override the text extraction prompt.
+    #[serde(default)]
+    pub prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OcrEngineKind {
+    Tesseract,
+    #[cfg(feature = "llm-ocr")]
+    Llm(LlmOcrConfig),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OcrMatchStep {
     /// Restrict OCR to this screen-global rectangle. `None` = full capture area.
@@ -752,7 +782,7 @@ pub struct OcrMatchStep {
     /// Text substring the OCR result must contain. `None` = any text passes.
     #[serde(default)]
     pub contains: Option<String>,
-    /// Tesseract language code(s): `"eng"`, `"jpn"`, `"jpn+eng"`, etc.
+    /// Tesseract language code(s): `"eng"`, `"jpn"`, `"jpn+eng"`, etc. Ignored for llm engine.
     #[serde(default = "default_ocr_lang")]
     pub lang: String,
     #[serde(default = "default_timeout_ms")]
@@ -761,6 +791,9 @@ pub struct OcrMatchStep {
     pub retry_interval_ms: u64,
     /// Stores `{found: bool, text: str}`. If absent and text doesn't match, returns an error.
     pub save_as: Option<String>,
+    /// OCR engine to use. Absent = Tesseract (backward compatible).
+    #[serde(default)]
+    pub engine: Option<OcrEngineKind>,
 }
 
 // ── ML detection step type ────────────────────────────────────────────────
