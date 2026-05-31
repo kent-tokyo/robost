@@ -2150,7 +2150,10 @@ impl EditorApp {
 
         // ── ai_create: special prompt + generate button ─────────────────────
         if outer_key == "ai_create" {
-            ui.label(egui::RichText::new("AI に指示を書くと、自動でステップを生成して置き換えます。").weak());
+            ui.label(
+                egui::RichText::new("AI に指示を書くと、自動でステップを生成して置き換えます。")
+                    .weak(),
+            );
             ui.add_space(6.0);
             let buf_key = format!("ai_prompt@{idx}");
             let prompt_text = self
@@ -2196,7 +2199,10 @@ impl EditorApp {
                     if current_prompt.trim().is_empty() {
                         self.ai_step_error = Some((idx, "指示を入力してください。".into()));
                     } else if self.settings.api_key.trim().is_empty() {
-                        self.ai_step_error = Some((idx, "APIキーが設定されていません。「設定」から入力してください。".into()));
+                        self.ai_step_error = Some((
+                            idx,
+                            "APIキーが設定されていません。「設定」から入力してください。".into(),
+                        ));
                     } else {
                         const AI_CREATE_SYSTEM: &str = "\
 あなたはRPAシナリオ作成アシスタントです。ユーザーの指示をRPAのYAMLステップに変換してください。\n\
@@ -2221,7 +2227,8 @@ impl EditorApp {
                         let settings = self.settings.clone();
                         let prompt_to_send = current_prompt.clone();
                         std::thread::spawn(move || {
-                            let result = call_ai_api(&settings, &[], &prompt_to_send, AI_CREATE_SYSTEM);
+                            let result =
+                                call_ai_api(&settings, &[], &prompt_to_send, AI_CREATE_SYSTEM);
                             let _ = tx.send(result);
                         });
                         self.ai_step_rx = Some((idx, rx));
@@ -3573,10 +3580,7 @@ impl EditorApp {
         // position (e.g. freshly loaded scenarios) are included in the bounding box.
         let pos_of = |i: usize| {
             self.canvas_positions.get(&i).copied().unwrap_or_else(|| {
-                egui::pos2(
-                    (i % 5) as f32 * 340.0 + 40.0,
-                    (i / 5) as f32 * 132.0 + 40.0,
-                )
+                egui::pos2((i % 5) as f32 * 340.0 + 40.0, (i / 5) as f32 * 132.0 + 40.0)
             })
         };
         let min_x = (0..n).map(|i| pos_of(i).x).fold(f32::INFINITY, f32::min);
@@ -3625,11 +3629,7 @@ impl EditorApp {
 
     /// Shift `@N` numeric suffixes in form_edit_buffers when steps are inserted (delta>0)
     /// or removed (delta<0) at position `at`. Mirrors canvas_shift_positions behaviour.
-    fn form_edit_buffers_shift(
-        buffers: &mut HashMap<String, String>,
-        at: usize,
-        delta: isize,
-    ) {
+    fn form_edit_buffers_shift(buffers: &mut HashMap<String, String>, at: usize, delta: isize) {
         let keys: Vec<String> = buffers.keys().cloned().collect();
         let mut to_move: Vec<(String, usize)> = keys
             .iter()
@@ -3675,10 +3675,12 @@ impl EditorApp {
             .filter_map(|i| self.canvas_positions.get(i))
             .map(|p| p.x)
             .fold(f32::INFINITY, f32::min);
-        let any_change = self
-            .multi_selected
-            .iter()
-            .any(|i| self.canvas_positions.get(i).map(|p| p.x != min_x).unwrap_or(false));
+        let any_change = self.multi_selected.iter().any(|i| {
+            self.canvas_positions
+                .get(i)
+                .map(|p| p.x != min_x)
+                .unwrap_or(false)
+        });
         if !any_change {
             return;
         }
@@ -3701,10 +3703,12 @@ impl EditorApp {
             .filter_map(|i| self.canvas_positions.get(i))
             .map(|p| p.y)
             .fold(f32::INFINITY, f32::min);
-        let any_change = self
-            .multi_selected
-            .iter()
-            .any(|i| self.canvas_positions.get(i).map(|p| p.y != min_y).unwrap_or(false));
+        let any_change = self.multi_selected.iter().any(|i| {
+            self.canvas_positions
+                .get(i)
+                .map(|p| p.y != min_y)
+                .unwrap_or(false)
+        });
         if !any_change {
             return;
         }
@@ -3908,8 +3912,13 @@ impl EditorApp {
 
         // ── zoom / pan ─────────────────────────────────────────────────────
         if resp.hovered() && !cursor_over_minimap {
-            let (scroll, ctrl, shift) =
-                ui.input(|i| (i.smooth_scroll_delta, i.modifiers.command, i.modifiers.shift));
+            let (scroll, ctrl, shift) = ui.input(|i| {
+                (
+                    i.smooth_scroll_delta,
+                    i.modifiers.command,
+                    i.modifiers.shift,
+                )
+            });
             if ctrl && scroll.y != 0.0 {
                 let z_old = self.canvas_zoom;
                 let z_new = (z_old * (1.0 + scroll.y * 0.001)).clamp(0.25, 2.0);
@@ -3929,19 +3938,22 @@ impl EditorApp {
             // Visual cue: crosshair cursor when Shift is held over background (lasso mode ready).
             // Suppressed when the pointer is over a node — Shift+click on a node is range-select.
             if shift && self.canvas_dragging.is_none() {
-                let over_node = ui.input(|i| i.pointer.hover_pos()).map(|cursor| {
-                    (0..n).any(|i| {
-                        let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
-                            (i % 5) as f32 * 340.0 + 40.0,
-                            (i / 5) as f32 * 132.0 + 40.0,
-                        ));
-                        egui::Rect::from_min_size(
-                            origin + (p.to_vec2() + self.canvas_pan) * z,
-                            egui::vec2(NODE_W * z, NODE_H * z),
-                        )
-                        .contains(cursor)
+                let over_node = ui
+                    .input(|i| i.pointer.hover_pos())
+                    .map(|cursor| {
+                        (0..n).any(|i| {
+                            let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
+                                (i % 5) as f32 * 340.0 + 40.0,
+                                (i / 5) as f32 * 132.0 + 40.0,
+                            ));
+                            egui::Rect::from_min_size(
+                                origin + (p.to_vec2() + self.canvas_pan) * z,
+                                egui::vec2(NODE_W * z, NODE_H * z),
+                            )
+                            .contains(cursor)
+                        })
                     })
-                }).unwrap_or(false);
+                    .unwrap_or(false);
                 if !over_node {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
                 }
@@ -4329,8 +4341,9 @@ impl EditorApp {
             // drag_delta_node) — a press-and-release click must not mutate positions.
             if self.settings.canvas_snap && self.undo_pushed_for_current_drag {
                 const SNAP: f32 = 20.0;
-                let snap_pos =
-                    |p: egui::Pos2| egui::pos2((p.x / SNAP).round() * SNAP, (p.y / SNAP).round() * SNAP);
+                let snap_pos = |p: egui::Pos2| {
+                    egui::pos2((p.x / SNAP).round() * SNAP, (p.y / SNAP).round() * SNAP)
+                };
                 let snap_indices: Vec<usize> = if self.multi_selected.len() > 1 {
                     self.multi_selected.iter().cloned().collect()
                 } else if let Some((di, _)) = self.canvas_dragging {
@@ -4473,7 +4486,10 @@ impl EditorApp {
         if n == 0 {
             let s = S::for_lang(&self.settings.lang);
             let (msg, cta) = if self.path.is_none() {
-                (s.empty_canvas_no_file, "Cmd+N で新規シナリオ / Cmd+O で開く")
+                (
+                    s.empty_canvas_no_file,
+                    "Cmd+N で新規シナリオ / Cmd+O で開く",
+                )
             } else {
                 (s.empty_no_steps, "Cmd+F でステップを追加")
             };
@@ -4532,7 +4548,11 @@ impl EditorApp {
         // Minimap (shown when there are 15+ steps; layout data precomputed above)
         if minimap_active {
             let mm_inner = mm_rect.shrink(MM_PAD);
-            painter.rect_filled(mm_rect, 4.0, Color32::from_rgba_premultiplied(18, 18, 22, 220));
+            painter.rect_filled(
+                mm_rect,
+                4.0,
+                Color32::from_rgba_premultiplied(18, 18, 22, 220),
+            );
             painter.rect_stroke(
                 mm_rect,
                 4.0,
@@ -4782,8 +4802,14 @@ impl eframe::App for EditorApp {
                 };
                 let min_x = (0..n).map(|i| pos_of(i).x).fold(f32::INFINITY, f32::min);
                 let min_y = (0..n).map(|i| pos_of(i).y).fold(f32::INFINITY, f32::min);
-                let max_x = (0..n).map(|i| pos_of(i).x).fold(f32::NEG_INFINITY, f32::max) + NODE_W;
-                let max_y = (0..n).map(|i| pos_of(i).y).fold(f32::NEG_INFINITY, f32::max) + NODE_H;
+                let max_x = (0..n)
+                    .map(|i| pos_of(i).x)
+                    .fold(f32::NEG_INFINITY, f32::max)
+                    + NODE_W;
+                let max_y = (0..n)
+                    .map(|i| pos_of(i).y)
+                    .fold(f32::NEG_INFINITY, f32::max)
+                    + NODE_H;
                 let vp = self.canvas_viewport_size;
                 // Same minimap exclusion as canvas_fit_view: visible width shrinks when n>=15
                 const MM_W_0: f32 = 160.0;
