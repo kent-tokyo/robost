@@ -398,6 +398,7 @@ enum ConfirmAction {
     OpenFile,
     NewFile,
     DeleteStep(usize),
+    DeleteSteps(usize), // bulk delete — carries the count for the confirm message
     Quit,
 }
 
@@ -3484,7 +3485,16 @@ impl EditorApp {
         let content_w = max_x - min_x + margin * 2.0;
         let content_h = max_y - min_y + margin * 2.0;
 
-        let zoom_x = viewport_size.x / content_w;
+        // When the minimap is visible (n >= 15), shrink effective width so fit-view
+        // does not place content behind the minimap overlay.
+        const MM_W: f32 = 160.0;
+        const MM_MARGIN: f32 = 8.0;
+        let effective_w = if n >= 15 {
+            (viewport_size.x - MM_W - MM_MARGIN * 2.0).max(viewport_size.x * 0.5)
+        } else {
+            viewport_size.x
+        };
+        let zoom_x = effective_w / content_w;
         let zoom_y = viewport_size.y / content_h;
         self.canvas_zoom = zoom_x.min(zoom_y).clamp(0.25, 2.0);
 
@@ -4048,7 +4058,13 @@ impl EditorApp {
                     FontId::proportional(9.0 * z),
                     Color32::from_gray(140),
                 );
-                let label: String = full_label.chars().take(32).collect();
+                const MAX_LABEL_CHARS: usize = 32;
+                let label = if full_label.chars().count() > MAX_LABEL_CHARS {
+                    let s: String = full_label.chars().take(MAX_LABEL_CHARS - 1).collect();
+                    format!("{}…", s)
+                } else {
+                    full_label.clone()
+                };
                 painter.text(
                     node_rect.min + Vec2::new(10.0 * z, label_y),
                     Align2::LEFT_CENTER,
@@ -4232,7 +4248,8 @@ impl EditorApp {
             match act {
                 CanvasContextAction::Delete(idx) => {
                     if self.multi_selected.len() > 1 && self.multi_selected.contains(&idx) {
-                        self.delete_selected_steps();
+                        let count = self.multi_selected.len();
+                        self.confirm_dialog = Some(ConfirmAction::DeleteSteps(count));
                     } else if idx < self.steps.len() {
                         self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
                     }
@@ -4273,18 +4290,29 @@ impl EditorApp {
         // Empty state hint
         if n == 0 {
             let s = S::for_lang(&self.settings.lang);
-            let msg = if self.path.is_none() {
-                s.empty_canvas_no_file
+            let (msg, show_add_hint) = if self.path.is_none() {
+                (s.empty_canvas_no_file, false)
             } else {
-                s.empty_no_steps
+                (s.empty_no_steps, true)
             };
+            let center = resp.rect.center();
+            let offset = if show_add_hint { egui::vec2(0.0, -10.0) } else { egui::Vec2::ZERO };
             painter.text(
-                resp.rect.center(),
+                center + offset,
                 Align2::CENTER_CENTER,
                 msg,
                 FontId::proportional(13.0),
                 Color32::from_gray(100),
             );
+            if show_add_hint {
+                painter.text(
+                    center + egui::vec2(0.0, 14.0),
+                    Align2::CENTER_CENTER,
+                    "Cmd+F でステップを追加",
+                    FontId::proportional(11.0),
+                    Color32::from_gray(65),
+                );
+            }
         }
 
         // Draw active lasso rectangle
@@ -4476,7 +4504,7 @@ impl eframe::App for EditorApp {
         {
             self.run_selection();
         }
-        // Canvas-mode Delete/Backspace: delete selected node(s) without confirm
+        // Canvas-mode Delete/Backspace: route through confirm for both single and bulk
         if self.view_mode == ViewMode::Canvas
             && !self.add_menu_open
             && self.confirm_dialog.is_none()
@@ -4486,7 +4514,8 @@ impl eframe::App for EditorApp {
             })
         {
             if self.multi_selected.len() > 1 {
-                self.delete_selected_steps();
+                let count = self.multi_selected.len();
+                self.confirm_dialog = Some(ConfirmAction::DeleteSteps(count));
             } else if let Some(idx) = self.selected {
                 if idx < self.steps.len() {
                     self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
@@ -4499,7 +4528,8 @@ impl eframe::App for EditorApp {
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete))
         {
             if self.multi_selected.len() > 1 {
-                self.delete_selected_steps();
+                let count = self.multi_selected.len();
+                self.confirm_dialog = Some(ConfirmAction::DeleteSteps(count));
             } else if let Some(idx) = self.selected {
                 if idx < self.steps.len() {
                     self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
@@ -4553,6 +4583,27 @@ impl eframe::App for EditorApp {
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Num0))
         {
             self.canvas_zoom = 1.0;
+            // Center pan on content bounding box at the new zoom level
+            let n = self.steps.len();
+            if n > 0 {
+                const NODE_W: f32 = 260.0;
+                const NODE_H: f32 = 72.0;
+                let positions = &self.canvas_positions;
+                let pos_of = |i: usize| {
+                    positions.get(&i).copied().unwrap_or_else(|| {
+                        egui::pos2((i % 5) as f32 * 340.0 + 40.0, (i / 5) as f32 * 132.0 + 40.0)
+                    })
+                };
+                let min_x = (0..n).map(|i| pos_of(i).x).fold(f32::INFINITY, f32::min);
+                let min_y = (0..n).map(|i| pos_of(i).y).fold(f32::INFINITY, f32::min);
+                let max_x = (0..n).map(|i| pos_of(i).x).fold(f32::NEG_INFINITY, f32::max) + NODE_W;
+                let max_y = (0..n).map(|i| pos_of(i).y).fold(f32::NEG_INFINITY, f32::max) + NODE_H;
+                let vp = self.canvas_viewport_size;
+                self.canvas_pan = egui::vec2(
+                    vp.x / 2.0 - (min_x + max_x) / 2.0,
+                    vp.y / 2.0 - (min_y + max_y) / 2.0,
+                );
+            }
         }
         if !self.add_menu_open
             && self.confirm_dialog.is_none()
@@ -4679,6 +4730,10 @@ impl eframe::App for EditorApp {
                         "選択中のステップを削除しますか？"
                     }
                 }
+                ConfirmAction::DeleteSteps(count) => {
+                    delete_msg_buf = format!("選択中の {} ステップをまとめて削除しますか？", count);
+                    &delete_msg_buf
+                }
                 ConfirmAction::Quit => "変更が保存されていません。保存せずに終了しますか？",
             };
             let mut yes = false;
@@ -4726,6 +4781,9 @@ impl eframe::App for EditorApp {
                             self.form_edit_buffers.retain(|k, _| !k.ends_with(&suffix));
                             self.dirty = true;
                         }
+                    }
+                    ConfirmAction::DeleteSteps(_) => {
+                        self.delete_selected_steps();
                     }
                     ConfirmAction::Quit => {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -4897,7 +4955,8 @@ impl eframe::App for EditorApp {
                         if ui.button(s.menu_delete_step).clicked() {
                             ui.close();
                             if self.multi_selected.len() > 1 {
-                                self.delete_selected_steps();
+                                let count = self.multi_selected.len();
+                                self.confirm_dialog = Some(ConfirmAction::DeleteSteps(count));
                             } else if let Some(idx) = self.selected {
                                 self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
                             }
@@ -5622,7 +5681,8 @@ impl eframe::App for EditorApp {
                         }
                         StepAction::Delete(i) => {
                             if self.multi_selected.len() > 1 {
-                                self.delete_selected_steps();
+                                let count = self.multi_selected.len();
+                                self.confirm_dialog = Some(ConfirmAction::DeleteSteps(count));
                             } else {
                                 self.confirm_dialog = Some(ConfirmAction::DeleteStep(i));
                             }
