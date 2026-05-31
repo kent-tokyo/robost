@@ -532,6 +532,10 @@ enum CanvasContextAction {
     Delete(usize),
     Duplicate(usize),
     OpenInList(usize),
+    AlignLeft,
+    AlignTop,
+    DistributeH,
+    DistributeV,
 }
 
 #[derive(PartialEq, Clone, Copy, Default)]
@@ -3475,6 +3479,105 @@ impl EditorApp {
         );
     }
 
+    fn canvas_align_left(&mut self) {
+        if self.multi_selected.len() < 2 {
+            return;
+        }
+        self.push_undo();
+        let min_x = self
+            .multi_selected
+            .iter()
+            .filter_map(|i| self.canvas_positions.get(i))
+            .map(|p| p.x)
+            .fold(f32::INFINITY, f32::min);
+        for &i in &self.multi_selected {
+            if let Some(p) = self.canvas_positions.get_mut(&i) {
+                p.x = min_x;
+            }
+        }
+        self.save_canvas_layout();
+    }
+
+    fn canvas_align_top(&mut self) {
+        if self.multi_selected.len() < 2 {
+            return;
+        }
+        self.push_undo();
+        let min_y = self
+            .multi_selected
+            .iter()
+            .filter_map(|i| self.canvas_positions.get(i))
+            .map(|p| p.y)
+            .fold(f32::INFINITY, f32::min);
+        for &i in &self.multi_selected {
+            if let Some(p) = self.canvas_positions.get_mut(&i) {
+                p.y = min_y;
+            }
+        }
+        self.save_canvas_layout();
+    }
+
+    fn canvas_distribute_h(&mut self) {
+        if self.multi_selected.len() < 3 {
+            return;
+        }
+        const NODE_W: f32 = 260.0;
+        self.push_undo();
+        let mut indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
+        indices.sort_by(|&a, &b| {
+            let ax = self.canvas_positions.get(&a).map(|p| p.x).unwrap_or(0.0);
+            let bx = self.canvas_positions.get(&b).map(|p| p.x).unwrap_or(0.0);
+            ax.partial_cmp(&bx).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let left_x = self
+            .canvas_positions
+            .get(&indices[0])
+            .map(|p| p.x)
+            .unwrap_or(0.0);
+        let right_x = self
+            .canvas_positions
+            .get(indices.last().unwrap())
+            .map(|p| p.x)
+            .unwrap_or(NODE_W);
+        let step = (right_x - left_x) / (indices.len() - 1) as f32;
+        for (rank, &i) in indices.iter().enumerate() {
+            if let Some(p) = self.canvas_positions.get_mut(&i) {
+                p.x = left_x + rank as f32 * step;
+            }
+        }
+        self.save_canvas_layout();
+    }
+
+    fn canvas_distribute_v(&mut self) {
+        if self.multi_selected.len() < 3 {
+            return;
+        }
+        self.push_undo();
+        let mut indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
+        indices.sort_by(|&a, &b| {
+            let ay = self.canvas_positions.get(&a).map(|p| p.y).unwrap_or(0.0);
+            let by_ = self.canvas_positions.get(&b).map(|p| p.y).unwrap_or(0.0);
+            ay.partial_cmp(&by_).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let top_y = self
+            .canvas_positions
+            .get(&indices[0])
+            .map(|p| p.y)
+            .unwrap_or(0.0);
+        let bottom_y = self
+            .canvas_positions
+            .get(indices.last().unwrap())
+            .map(|p| p.y)
+            .unwrap_or(72.0);
+        let step = (bottom_y - top_y) / (indices.len() - 1) as f32;
+        for (rank, &i) in indices.iter().enumerate() {
+            if let Some(p) = self.canvas_positions.get_mut(&i) {
+                p.y = top_y + rank as f32 * step;
+            }
+        }
+        self.save_canvas_layout();
+    }
+
     fn show_canvas(&mut self, ui: &mut egui::Ui) {
         use egui::{epaint::CubicBezierShape, Align2, Color32, FontId, Rect, Sense, Stroke, Vec2};
 
@@ -3733,6 +3836,28 @@ impl EditorApp {
                 if ui.button("List ビューで開く").clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::OpenInList(idx));
                     ui.close();
+                }
+                if self.multi_selected.len() >= 2 {
+                    ui.separator();
+                    ui.weak(format!("整列 ({} 選択)", self.multi_selected.len()));
+                    if ui.button("← 左揃え").clicked() {
+                        canvas_ctx_action = Some(CanvasContextAction::AlignLeft);
+                        ui.close();
+                    }
+                    if ui.button("↑ 上揃え").clicked() {
+                        canvas_ctx_action = Some(CanvasContextAction::AlignTop);
+                        ui.close();
+                    }
+                    if self.multi_selected.len() >= 3 {
+                        if ui.button("↔ 水平等間隔").clicked() {
+                            canvas_ctx_action = Some(CanvasContextAction::DistributeH);
+                            ui.close();
+                        }
+                        if ui.button("↕ 垂直等間隔").clicked() {
+                            canvas_ctx_action = Some(CanvasContextAction::DistributeV);
+                            ui.close();
+                        }
+                    }
                 }
             });
 
@@ -4023,6 +4148,10 @@ impl EditorApp {
                     self.scroll_to_selected = true;
                     self.selected_child = None;
                 }
+                CanvasContextAction::AlignLeft => self.canvas_align_left(),
+                CanvasContextAction::AlignTop => self.canvas_align_top(),
+                CanvasContextAction::DistributeH => self.canvas_distribute_h(),
+                CanvasContextAction::DistributeV => self.canvas_distribute_v(),
             }
         }
 
