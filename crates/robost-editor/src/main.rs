@@ -4108,16 +4108,13 @@ impl EditorApp {
         if let Some((idx, offset)) = drag_started_node {
             self.canvas_dragging = Some((idx, offset));
         }
-        if let Some((idx, mut canvas_pos)) = drag_delta_node {
+        if let Some((idx, canvas_pos)) = drag_delta_node {
             if !self.undo_pushed_for_current_drag {
                 self.push_undo();
                 self.undo_pushed_for_current_drag = true;
             }
-            if self.settings.canvas_snap {
-                const SNAP: f32 = 20.0;
-                canvas_pos.x = (canvas_pos.x / SNAP).round() * SNAP;
-                canvas_pos.y = (canvas_pos.y / SNAP).round() * SNAP;
-            }
+            // No snap during drag: compute delta from unsnapped positions so relative
+            // offsets are preserved exactly. Snap is applied once at drag_stopped.
             if self.multi_selected.len() > 1 && self.multi_selected.contains(&idx) {
                 let old_pos = self
                     .canvas_positions
@@ -4125,19 +4122,10 @@ impl EditorApp {
                     .copied()
                     .unwrap_or(canvas_pos);
                 let delta = canvas_pos - old_pos;
-                let snap_on = self.settings.canvas_snap;
                 let selected_indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
                 for sel_idx in selected_indices {
                     if let Some(pos) = self.canvas_positions.get(&sel_idx).copied() {
-                        let mut new_pos = pos + delta;
-                        // Snap each follower node individually so relative positions are
-                        // preserved on-grid and group drift does not accumulate.
-                        if snap_on {
-                            const SNAP: f32 = 20.0;
-                            new_pos.x = (new_pos.x / SNAP).round() * SNAP;
-                            new_pos.y = (new_pos.y / SNAP).round() * SNAP;
-                        }
-                        self.canvas_positions.insert(sel_idx, new_pos);
+                        self.canvas_positions.insert(sel_idx, pos + delta);
                     }
                 }
             } else {
@@ -4145,6 +4133,24 @@ impl EditorApp {
             }
         }
         if drag_ended {
+            // Apply snap once at drag release so delta math stays exact during the drag.
+            if self.settings.canvas_snap {
+                const SNAP: f32 = 20.0;
+                let snap_pos =
+                    |p: egui::Pos2| egui::pos2((p.x / SNAP).round() * SNAP, (p.y / SNAP).round() * SNAP);
+                let snap_indices: Vec<usize> = if self.multi_selected.len() > 1 {
+                    self.multi_selected.iter().cloned().collect()
+                } else if let Some((di, _)) = self.canvas_dragging {
+                    vec![di]
+                } else {
+                    vec![]
+                };
+                for si in snap_indices {
+                    if let Some(p) = self.canvas_positions.get_mut(&si) {
+                        *p = snap_pos(*p);
+                    }
+                }
+            }
             self.canvas_dragging = None;
             self.undo_pushed_for_current_drag = false;
             self.save_canvas_layout();
@@ -4228,18 +4234,7 @@ impl EditorApp {
                     if self.multi_selected.len() > 1 && self.multi_selected.contains(&idx) {
                         self.delete_selected_steps();
                     } else if idx < self.steps.len() {
-                        self.push_undo();
-                        self.steps.remove(idx);
-                        Self::canvas_shift_positions(&mut self.canvas_positions, idx, -1);
-                        if self.selected == Some(idx) {
-                            self.selected = None;
-                            self.multi_selected.clear();
-                        }
-                        self.edit_buf.clear();
-                        self.parse_error = None;
-                        let suffix = format!("@{idx}");
-                        self.form_edit_buffers.retain(|k, _| !k.ends_with(&suffix));
-                        self.dirty = true;
+                        self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
                     }
                 }
                 CanvasContextAction::Duplicate(idx) => {
@@ -4554,6 +4549,11 @@ impl eframe::App for EditorApp {
             self.selected = Some(0);
             self.canvas_selection_anchor = Some(0);
         }
+        if self.view_mode == ViewMode::Canvas
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Num0))
+        {
+            self.canvas_zoom = 1.0;
+        }
         if !self.add_menu_open
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F))
@@ -4719,10 +4719,12 @@ impl eframe::App for EditorApp {
                             self.steps.remove(idx);
                             Self::canvas_shift_positions(&mut self.canvas_positions, idx, -1);
                             self.selected = None;
+                            self.multi_selected.clear();
                             self.edit_buf.clear();
                             self.parse_error = None;
                             let suffix = format!("@{idx}");
                             self.form_edit_buffers.retain(|k, _| !k.ends_with(&suffix));
+                            self.dirty = true;
                         }
                     }
                     ConfirmAction::Quit => {
@@ -5081,6 +5083,9 @@ impl eframe::App for EditorApp {
                                 .show(ui, |ui| {
                                     ui.label("Ctrl+スクロール");
                                     ui.label("ズーム (カーソル固定)");
+                                    ui.end_row();
+                                    ui.label("Cmd+0");
+                                    ui.label("ズーム 100% にリセット");
                                     ui.end_row();
                                     ui.label("スクロール");
                                     ui.label("上下パン");
