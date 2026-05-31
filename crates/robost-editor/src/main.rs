@@ -1032,6 +1032,16 @@ fn step_summary(v: &serde_yml::Value) -> String {
     }
 }
 
+const NODE_W: f32 = 260.0;
+const NODE_H: f32 = 72.0;
+
+fn default_canvas_pos(i: usize, cols: usize) -> egui::Pos2 {
+    egui::pos2(
+        (i % cols) as f32 * 340.0 + 40.0,
+        (i / cols) as f32 * 132.0 + 40.0,
+    )
+}
+
 fn step_matches(step: &serde_yml::Value, query: &str) -> bool {
     step_summary(step).to_lowercase().contains(query)
         || get_step_key(step).to_lowercase().contains(query)
@@ -1286,6 +1296,8 @@ struct EditorState {
     canvas_positions: Vec<(usize, [f32; 2])>,
     canvas_zoom: f32,
     canvas_pan: [f32; 2],
+    multi_selected: Vec<usize>,
+    expanded_steps: Vec<usize>,
 }
 
 // ---- drag-and-drop payload ------------------------------------------------
@@ -1863,6 +1875,8 @@ impl EditorApp {
                 .collect(),
             canvas_zoom: self.canvas_zoom,
             canvas_pan: [self.canvas_pan.x, self.canvas_pan.y],
+            multi_selected: self.multi_selected.iter().cloned().collect(),
+            expanded_steps: self.expanded_steps.iter().cloned().collect(),
         }
     }
 
@@ -1878,6 +1892,8 @@ impl EditorApp {
             .collect();
         self.canvas_zoom = state.canvas_zoom;
         self.canvas_pan = egui::vec2(state.canvas_pan[0], state.canvas_pan[1]);
+        self.multi_selected = state.multi_selected.into_iter().collect();
+        self.expanded_steps = state.expanded_steps.into_iter().collect();
         self.child_edit_buf.clear();
         self.edit_buf = self
             .selected
@@ -2241,7 +2257,11 @@ impl EditorApp {
                 .desired_width(f32::INFINITY);
             if ui.add(te).changed() {
                 self.form_edit_buffers.insert(buf_key, prompt_buf.clone());
-                let escaped = prompt_buf.replace('\\', "\\\\").replace('"', "\\\"");
+                let escaped = prompt_buf
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n")
+                    .replace('\r', "\\r");
                 self.edit_buf = format!("ai_create:\n  prompt: \"{escaped}\"\n");
                 self.flush_edit();
                 // Clear stale error so user gets immediate visual feedback that edit registered
@@ -3555,8 +3575,6 @@ impl EditorApp {
     }
 
     fn ensure_canvas_layout(&mut self) {
-        const NODE_W: f32 = 260.0;
-        const NODE_H: f32 = 72.0;
         const GAP_X: f32 = 80.0;
         const GAP_Y: f32 = 60.0;
         const COLS: usize = 5;
@@ -3640,20 +3658,16 @@ impl EditorApp {
         if n == 0 {
             return;
         }
-        const NODE_W: f32 = 260.0;
-        const NODE_H: f32 = 72.0;
         let margin = 40.0_f32;
 
         // Use the same default-position formula as show_canvas so nodes without a stored
         // position (e.g. freshly loaded scenarios) are included in the bounding box.
         let cols = default_canvas_cols(n);
         let pos_of = |i: usize| {
-            self.canvas_positions.get(&i).copied().unwrap_or_else(|| {
-                egui::pos2(
-                    (i % cols) as f32 * 340.0 + 40.0,
-                    (i / cols) as f32 * 132.0 + 40.0,
-                )
-            })
+            self.canvas_positions
+                .get(&i)
+                .copied()
+                .unwrap_or_else(|| default_canvas_pos(i, cols))
         };
         let min_x = (0..n).map(|i| pos_of(i).x).fold(f32::INFINITY, f32::min);
         let min_y = (0..n).map(|i| pos_of(i).y).fold(f32::INFINITY, f32::min);
@@ -3702,12 +3716,17 @@ impl EditorApp {
     /// Shift `@N` numeric suffixes in form_edit_buffers when steps are inserted (delta>0)
     /// or removed (delta<0) at position `at`. Mirrors canvas_shift_positions behaviour.
     fn form_edit_buffers_shift(buffers: &mut HashMap<String, String>, at: usize, delta: isize) {
+        // Keys have format "{field}@{step_idx}" or "{field}@{step_idx}@{suffix}".
+        // We extract the step index as the segment between the first '@' and the
+        // next '@' (or end of string), so compound keys like "keys@5@add" are handled.
         let keys: Vec<String> = buffers.keys().cloned().collect();
         let mut to_move: Vec<(String, usize)> = keys
             .iter()
             .filter_map(|k| {
-                let at_pos = k.rfind('@')?;
-                let n: usize = k[at_pos + 1..].parse().ok()?;
+                let first_at = k.find('@')?;
+                let remainder = &k[first_at + 1..];
+                let end = remainder.find('@').unwrap_or(remainder.len());
+                let n: usize = remainder[..end].parse().ok()?;
                 if n >= at {
                     Some((k.clone(), n))
                 } else {
@@ -3720,8 +3739,12 @@ impl EditorApp {
             to_move.sort_by_key(|b| std::cmp::Reverse(b.1));
             for (key, n) in to_move {
                 if let Some(val) = buffers.remove(&key) {
-                    let prefix = &key[..key.rfind('@').unwrap()];
-                    buffers.insert(format!("{prefix}@{}", n + 1), val);
+                    let first_at = key.find('@').unwrap();
+                    let remainder = &key[first_at + 1..];
+                    let end = remainder.find('@').unwrap_or(remainder.len());
+                    let suffix = &remainder[end..]; // "" or "@add" etc.
+                    let prefix = &key[..first_at];
+                    buffers.insert(format!("{prefix}@{}{suffix}", n + 1), val);
                 }
             }
         } else {
@@ -3730,8 +3753,12 @@ impl EditorApp {
                 if n == at {
                     buffers.remove(&key);
                 } else if let Some(val) = buffers.remove(&key) {
-                    let prefix = &key[..key.rfind('@').unwrap()];
-                    buffers.insert(format!("{prefix}@{}", n - 1), val);
+                    let first_at = key.find('@').unwrap();
+                    let remainder = &key[first_at + 1..];
+                    let end = remainder.find('@').unwrap_or(remainder.len());
+                    let suffix = &remainder[end..];
+                    let prefix = &key[..first_at];
+                    buffers.insert(format!("{prefix}@{}{suffix}", n - 1), val);
                 }
             }
         }
@@ -3797,7 +3824,6 @@ impl EditorApp {
         if self.multi_selected.len() < 3 {
             return;
         }
-        const NODE_W: f32 = 260.0;
         self.push_undo();
         let mut indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
         indices.sort_by(|&a, &b| {
@@ -3848,7 +3874,6 @@ impl EditorApp {
         if self.multi_selected.len() < 3 {
             return;
         }
-        const NODE_H: f32 = 72.0;
         self.push_undo();
         let mut indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
         indices.sort_by(|&a, &b| {
@@ -3898,9 +3923,6 @@ impl EditorApp {
         let search_query = self.canvas_search.to_lowercase();
         let search_active = !search_query.is_empty();
 
-        const NODE_W: f32 = 260.0;
-        const NODE_H: f32 = 72.0;
-
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let origin = resp.rect.min;
         let z = self.canvas_zoom;
@@ -3923,10 +3945,11 @@ impl EditorApp {
             let mut max_cx = f32::MIN;
             let mut max_cy = f32::MIN;
             for i in 0..n {
-                let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
-                    (i % default_cols) as f32 * 340.0 + 40.0,
-                    (i / default_cols) as f32 * 132.0 + 40.0,
-                ));
+                let p = self
+                    .canvas_positions
+                    .get(&i)
+                    .copied()
+                    .unwrap_or_else(|| default_canvas_pos(i, default_cols));
                 min_cx = min_cx.min(p.x);
                 min_cy = min_cy.min(p.y);
                 max_cx = max_cx.max(p.x + NODE_W);
@@ -3998,7 +4021,8 @@ impl EditorApp {
             });
             if ctrl && scroll.y != 0.0 {
                 let z_old = self.canvas_zoom;
-                let z_new = (z_old * (1.0 + scroll.y * 0.001)).clamp(0.25, 2.0);
+                let scroll_clamped = scroll.y.clamp(-20.0, 20.0);
+                let z_new = (z_old * (1.0 + scroll_clamped * 0.001)).clamp(0.25, 2.0);
                 // Keep the canvas point under the cursor fixed: pan += cursor_offset * (1/z_new - 1/z_old)
                 if let Some(cursor) = ui.input(|i| i.pointer.hover_pos()) {
                     self.canvas_pan += (cursor - origin) * (1.0 / z_new - 1.0 / z_old);
@@ -4029,10 +4053,11 @@ impl EditorApp {
                     .input(|i| i.pointer.hover_pos())
                     .map(|cursor| {
                         (0..n).any(|i| {
-                            let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
-                                (i % default_cols) as f32 * 340.0 + 40.0,
-                                (i / default_cols) as f32 * 132.0 + 40.0,
-                            ));
+                            let p = self
+                                .canvas_positions
+                                .get(&i)
+                                .copied()
+                                .unwrap_or_else(|| default_canvas_pos(i, default_cols));
                             egui::Rect::from_min_size(
                                 origin + (p.to_vec2() + self.canvas_pan) * z,
                                 egui::vec2(NODE_W * z, NODE_H * z),
@@ -4075,10 +4100,11 @@ impl EditorApp {
         // Collect node screen positions
         let screen_positions: Vec<egui::Pos2> = (0..n)
             .map(|i| {
-                let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
-                    (i % default_cols) as f32 * 340.0 + 40.0,
-                    (i / default_cols) as f32 * 132.0 + 40.0,
-                ));
+                let p = self
+                    .canvas_positions
+                    .get(&i)
+                    .copied()
+                    .unwrap_or_else(|| default_canvas_pos(i, default_cols));
                 origin + (p.to_vec2() + self.canvas_pan) * z
             })
             .collect();
@@ -5014,10 +5040,11 @@ impl EditorApp {
 
             // Draw nodes as small rects (reuse precomputed to_mm)
             for i in 0..n {
-                let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
-                    (i % default_cols) as f32 * 340.0 + 40.0,
-                    (i / default_cols) as f32 * 132.0 + 40.0,
-                ));
+                let p = self
+                    .canvas_positions
+                    .get(&i)
+                    .copied()
+                    .unwrap_or_else(|| default_canvas_pos(i, default_cols));
                 let mm_min = to_mm(p);
                 let mm_node = egui::Rect::from_min_size(
                     mm_min,
@@ -5188,12 +5215,7 @@ impl EditorApp {
                         .canvas_positions
                         .get(&match_idx)
                         .copied()
-                        .unwrap_or_else(|| {
-                            egui::pos2(
-                                (match_idx % cols) as f32 * 340.0 + 40.0,
-                                (match_idx / cols) as f32 * 132.0 + 40.0,
-                            )
-                        });
+                        .unwrap_or_else(|| default_canvas_pos(match_idx, cols));
                     let z = self.canvas_zoom;
                     let vp = resp.rect.size();
                     self.canvas_pan = egui::vec2(
@@ -5204,19 +5226,6 @@ impl EditorApp {
                 }
             }
             self.canvas_search = search_text;
-        }
-
-        // Zoom level indicator at bottom-left of canvas
-        {
-            let zoom_text = format!("{:.0}%", self.canvas_zoom * 100.0);
-            let zoom_pos = egui::pos2(resp.rect.min.x + 8.0, resp.rect.max.y - 10.0);
-            painter.text(
-                zoom_pos,
-                Align2::LEFT_BOTTOM,
-                &zoom_text,
-                FontId::proportional(10.0),
-                Color32::from_gray(80),
-            );
         }
 
         // Canvas keyboard shortcut help overlay (toggled by `?`)
@@ -5409,6 +5418,7 @@ impl eframe::App for EditorApp {
         if self.view_mode == ViewMode::Canvas
             && !self.add_menu_open
             && !self.steps.is_empty()
+            && !self.canvas_search_open
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::A))
         {
             self.multi_selected = (0..self.steps.len()).collect();
@@ -5427,6 +5437,7 @@ impl eframe::App for EditorApp {
         }
         // `?` key toggles the canvas help overlay
         if self.view_mode == ViewMode::Canvas
+            && !self.canvas_search_open
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Questionmark))
         {
             self.canvas_help_open = !self.canvas_help_open;
@@ -5442,17 +5453,13 @@ impl eframe::App for EditorApp {
             self.canvas_zoom = 1.0;
             let n = self.steps.len();
             if n > 0 {
-                const NODE_W: f32 = 260.0;
-                const NODE_H: f32 = 72.0;
                 let positions = &self.canvas_positions;
                 let default_cols = default_canvas_cols(n);
                 let pos_of = |i: usize| {
-                    positions.get(&i).copied().unwrap_or_else(|| {
-                        egui::pos2(
-                            (i % default_cols) as f32 * 340.0 + 40.0,
-                            (i / default_cols) as f32 * 132.0 + 40.0,
-                        )
-                    })
+                    positions
+                        .get(&i)
+                        .copied()
+                        .unwrap_or_else(|| default_canvas_pos(i, default_cols))
                 };
                 let min_x = (0..n).map(|i| pos_of(i).x).fold(f32::INFINITY, f32::min);
                 let min_y = (0..n).map(|i| pos_of(i).y).fold(f32::INFINITY, f32::min);
@@ -5613,12 +5620,7 @@ impl eframe::App for EditorApp {
                         .canvas_positions
                         .get(&new_sel)
                         .copied()
-                        .unwrap_or_else(|| {
-                            egui::pos2(
-                                (new_sel % cols) as f32 * 340.0 + 40.0,
-                                (new_sel / cols) as f32 * 132.0 + 40.0,
-                            )
-                        });
+                        .unwrap_or_else(|| default_canvas_pos(new_sel, cols));
                     let z = self.canvas_zoom;
                     let vp = self.canvas_viewport_size;
                     self.canvas_pan = egui::vec2(
@@ -5642,12 +5644,7 @@ impl eframe::App for EditorApp {
                         .canvas_positions
                         .get(&new_sel)
                         .copied()
-                        .unwrap_or_else(|| {
-                            egui::pos2(
-                                (new_sel % cols) as f32 * 340.0 + 40.0,
-                                (new_sel / cols) as f32 * 132.0 + 40.0,
-                            )
-                        });
+                        .unwrap_or_else(|| default_canvas_pos(new_sel, cols));
                     let z = self.canvas_zoom;
                     let vp = self.canvas_viewport_size;
                     self.canvas_pan = egui::vec2(
@@ -5753,6 +5750,7 @@ impl eframe::App for EditorApp {
                             self.parse_error = None;
                             let suffix = format!("@{idx}");
                             self.form_edit_buffers.retain(|k, _| !k.ends_with(&suffix));
+                            Self::form_edit_buffers_shift(&mut self.form_edit_buffers, idx, -1);
                             self.dirty = true;
                         }
                     }
@@ -6185,6 +6183,7 @@ impl eframe::App for EditorApp {
                 if self.view_mode == ViewMode::Canvas {
                     ui.separator();
                     if ui.button(s.canvas_reset).clicked() {
+                        self.push_undo();
                         self.canvas_positions.clear();
                         self.ensure_canvas_layout();
                         self.save_canvas_layout();
@@ -6821,12 +6820,16 @@ impl eframe::App for EditorApp {
                                         drop_insert_idx
                                     };
                                     self.steps.insert(to, step);
+                                    let src_pos = self.canvas_positions.get(&from).copied();
                                     Self::canvas_shift_positions(
                                         &mut self.canvas_positions,
                                         from,
                                         -1,
                                     );
                                     Self::canvas_shift_positions(&mut self.canvas_positions, to, 1);
+                                    if let Some(pos) = src_pos {
+                                        self.canvas_positions.insert(to, pos);
+                                    }
                                     self.selected = Some(to);
                                     self.multi_selected.clear();
                                     self.multi_selected.insert(to);
@@ -6864,8 +6867,30 @@ impl eframe::App for EditorApp {
                                     for (offset, step) in extracted.drain(..).enumerate() {
                                         self.steps.insert(insert_at + offset, step);
                                     }
-                                    // Reset canvas positions to be repopulated by ensure_canvas_layout
-                                    self.canvas_positions.clear();
+                                    // Remap canvas positions to follow the moved steps.
+                                    // new_order[new_idx] = old_idx that now lives at new_idx.
+                                    {
+                                        let n_total = self.steps.len();
+                                        let moved_set: HashSet<usize> =
+                                            from_indices.iter().cloned().collect();
+                                        let remaining: Vec<usize> = (0..n_total)
+                                            .filter(|i| !moved_set.contains(i))
+                                            .collect();
+                                        let split = insert_at.min(remaining.len());
+                                        let new_order: Vec<usize> = remaining[..split]
+                                            .iter()
+                                            .chain(from_indices.iter())
+                                            .chain(remaining[split..].iter())
+                                            .cloned()
+                                            .collect();
+                                        let old_pos_map: HashMap<usize, egui::Pos2> =
+                                            self.canvas_positions.drain().collect();
+                                        for (new_i, old_i) in new_order.iter().enumerate() {
+                                            if let Some(&p) = old_pos_map.get(old_i) {
+                                                self.canvas_positions.insert(new_i, p);
+                                            }
+                                        }
+                                    }
                                     // Update selection to follow first moved step
                                     let new_sel = insert_at;
                                     self.selected = Some(new_sel);
