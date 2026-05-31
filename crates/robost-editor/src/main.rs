@@ -84,6 +84,13 @@ struct S {
     empty_no_steps: &'static str,
     empty_select_step: &'static str,
     empty_canvas_no_file: &'static str,
+    // canvas context menu
+    ctx_delete: &'static str,
+    ctx_duplicate: &'static str,
+    ctx_paste: &'static str,
+    ctx_open_in_list: &'static str,
+    ctx_align: &'static str,
+    ctx_add_step_here: &'static str,
 }
 
 impl S {
@@ -153,6 +160,12 @@ impl S {
                 empty_no_steps: "ステップがありません。左のパレットから追加してください。",
                 empty_select_step: "ステップを選択してください。",
                 empty_canvas_no_file: "シナリオを開くか、List ビューでステップを追加してください。",
+                ctx_delete: "削除",
+                ctx_duplicate: "複製",
+                ctx_paste: "貼り付け",
+                ctx_open_in_list: "List ビューで開く",
+                ctx_align: "整列",
+                ctx_add_step_here: "ここにステップを追加…",
             },
             Lang::En => Self {
                 menu_file: "File",
@@ -218,6 +231,12 @@ impl S {
                 empty_no_steps: "No steps. Add one from the left palette.",
                 empty_select_step: "Select a step.",
                 empty_canvas_no_file: "Open a scenario or add steps in List view.",
+                ctx_delete: "Delete",
+                ctx_duplicate: "Duplicate",
+                ctx_paste: "Paste",
+                ctx_open_in_list: "Open in List View",
+                ctx_align: "Align",
+                ctx_add_step_here: "Add step here…",
             },
             Lang::Zh => Self {
                 menu_file: "文件",
@@ -283,6 +302,12 @@ impl S {
                 empty_no_steps: "没有步骤。从左侧面板添加。",
                 empty_select_step: "请选择一个步骤。",
                 empty_canvas_no_file: "打开场景或在列表视图中添加步骤。",
+                ctx_delete: "删除",
+                ctx_duplicate: "复制",
+                ctx_paste: "粘贴",
+                ctx_open_in_list: "在列表视图中打开",
+                ctx_align: "对齐",
+                ctx_add_step_here: "在此处添加步骤…",
             },
         }
     }
@@ -1394,8 +1419,14 @@ struct EditorApp {
     ai_step_error: Option<(usize, String)>,
     /// Steps that failed during canvas execution, mapped to their error messages.
     canvas_error_steps: HashMap<usize, String>,
+    /// Steps that completed successfully in the most recent run.
+    canvas_completed_steps: HashSet<usize>,
     /// Active edge-drag: (source step index, current pointer screen position).
     canvas_edge_drag: Option<(usize, egui::Pos2)>,
+    /// When lasso was started with Shift held, new selection extends existing multi_selected.
+    canvas_lasso_additive: bool,
+    /// Canvas-space position set by background right-click "Add Step Here"; consumed on insert.
+    canvas_pending_insert_pos: Option<egui::Pos2>,
     /// Current canvas node search query.
     canvas_search: String,
     /// Whether the canvas search bar is visible.
@@ -1473,7 +1504,10 @@ impl Default for EditorApp {
             ai_step_rx: None,
             ai_step_error: None,
             canvas_error_steps: HashMap::new(),
+            canvas_completed_steps: HashSet::new(),
             canvas_edge_drag: None,
+            canvas_lasso_additive: false,
+            canvas_pending_insert_pos: None,
             canvas_search: String::new(),
             canvas_search_open: false,
             canvas_help_open: false,
@@ -1807,6 +1841,7 @@ impl EditorApp {
         self.run_progress_file = Some(progress_file.clone());
         self.current_run_step = None;
         self.canvas_error_steps.clear();
+        self.canvas_completed_steps.clear();
         let rpa_bin = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|d| d.join("rpa")))
@@ -1850,6 +1885,7 @@ impl EditorApp {
         self.run_progress_file = Some(progress_file.clone());
         self.current_run_step = None;
         self.canvas_error_steps.clear();
+        self.canvas_completed_steps.clear();
         // Prefer the `rpa` binary in the same directory as this editor to avoid PATH hijacking.
         let rpa_bin = std::env::current_exe()
             .ok()
@@ -4115,6 +4151,7 @@ impl EditorApp {
                 // Start lasso (converts ongoing pan to lasso on Shift press)
                 let start = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
                 self.canvas_lasso = Some((start, start));
+                self.canvas_lasso_additive = ui.input(|i| i.modifiers.shift);
             } else if let Some((start, _)) = self.canvas_lasso {
                 let cursor = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
                 self.canvas_lasso = Some((start, cursor));
@@ -4195,9 +4232,9 @@ impl EditorApp {
             // Branch label for compound steps — anchored just below the source node
             if is_compound && z >= 0.6 {
                 let branch_label = match get_step_key(&self.steps[i]) {
-                    "if" => Some("then"),
+                    "if" => Some("then/else"),
                     "foreach" | "while" | "do_while" | "repeat" | "group" => Some("do"),
-                    "try_catch" => Some("try"),
+                    "try_catch" => Some("try/catch"),
                     _ => None,
                 };
                 if let Some(lbl) = branch_label {
@@ -4210,37 +4247,43 @@ impl EditorApp {
                     );
                 }
             }
-            // Midpoint "+" insertion button (visible only on hover over edge area, z >= 0.6)
+            // Midpoint "+" insertion button — only rendered when pointer is near this edge
             if z >= 0.6 {
                 let mid = from.lerp(to, 0.5);
-                let btn_size = (14.0 * z).max(18.0);
-                let btn_rect = egui::Rect::from_center_size(mid, egui::vec2(btn_size, btn_size));
-                let btn_resp = ui.allocate_rect(btn_rect, Sense::click());
-                if btn_resp.hovered() || btn_resp.clicked() {
-                    painter.circle_filled(mid, btn_size / 2.0, Color32::from_rgb(50, 90, 160));
-                    painter.text(
-                        mid,
-                        Align2::CENTER_CENTER,
-                        "+",
-                        FontId::proportional(10.0 * z),
-                        Color32::WHITE,
-                    );
-                    if btn_resp.clicked() {
-                        insert_after_idx = Some(i);
+                let near_hover = ui
+                    .input(|inp| inp.pointer.hover_pos())
+                    .is_some_and(|hp| hp.distance(mid) <= 40.0 * z);
+                if near_hover {
+                    let btn_size = (14.0 * z).max(18.0);
+                    let btn_rect =
+                        egui::Rect::from_center_size(mid, egui::vec2(btn_size, btn_size));
+                    let btn_resp = ui.allocate_rect(btn_rect, Sense::click());
+                    if btn_resp.hovered() || btn_resp.clicked() {
+                        painter.circle_filled(mid, btn_size / 2.0, Color32::from_rgb(50, 90, 160));
+                        painter.text(
+                            mid,
+                            Align2::CENTER_CENTER,
+                            "+",
+                            FontId::proportional(10.0 * z),
+                            Color32::WHITE,
+                        );
+                        if btn_resp.clicked() {
+                            insert_after_idx = Some(i);
+                        }
+                    } else {
+                        painter.circle_filled(
+                            mid,
+                            btn_size / 2.0,
+                            Color32::from_rgba_premultiplied(50, 80, 140, 80),
+                        );
+                        painter.text(
+                            mid,
+                            Align2::CENTER_CENTER,
+                            "+",
+                            FontId::proportional(10.0 * z),
+                            Color32::from_gray(220),
+                        );
                     }
-                } else {
-                    painter.circle_filled(
-                        mid,
-                        btn_size / 2.0,
-                        Color32::from_rgba_premultiplied(50, 80, 140, 50),
-                    );
-                    painter.text(
-                        mid,
-                        Align2::CENTER_CENTER,
-                        "+",
-                        FontId::proportional(10.0 * z),
-                        Color32::from_rgba_premultiplied(180, 180, 200, 80),
-                    );
                 }
             }
         }
@@ -4363,26 +4406,27 @@ impl EditorApp {
 
             // Right-click context menu
             node_resp.context_menu(|ui| {
-                if ui.button("削除").clicked() {
+                let s = S::for_lang(&self.settings.lang);
+                if ui.button(s.ctx_delete).clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::Delete(idx));
                     ui.close();
                 }
-                if ui.button("複製").clicked() {
+                if ui.button(s.ctx_duplicate).clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::Duplicate(idx));
                     ui.close();
                 }
-                if !self.step_clipboard.is_empty() && ui.button("貼り付け").clicked() {
+                if !self.step_clipboard.is_empty() && ui.button(s.ctx_paste).clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::Paste);
                     ui.close();
                 }
                 ui.separator();
-                if ui.button("List ビューで開く").clicked() {
+                if ui.button(s.ctx_open_in_list).clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::OpenInList(idx));
                     ui.close();
                 }
                 if self.multi_selected.len() >= 2 && self.multi_selected.contains(&idx) {
                     ui.separator();
-                    ui.weak(format!("整列 ({} 選択)", self.multi_selected.len()));
+                    ui.weak(format!("{} ({})", s.ctx_align, self.multi_selected.len()));
                     if ui.button("← 左揃え").clicked() {
                         canvas_ctx_action = Some(CanvasContextAction::AlignLeft);
                         ui.close();
@@ -4517,8 +4561,8 @@ impl EditorApp {
                     node_rect.min + Vec2::new(10.0 * z, idx_y),
                     Align2::LEFT_CENTER,
                     format!("{}", idx + 1),
-                    FontId::proportional(9.0 * z),
-                    Color32::from_gray(140),
+                    FontId::proportional((9.0 * z).max(9.0)),
+                    Color32::from_gray(185),
                 );
                 const MAX_LABEL_CHARS: usize = 32;
                 let label = if full_label.chars().count() > MAX_LABEL_CHARS {
@@ -4531,8 +4575,8 @@ impl EditorApp {
                     node_rect.min + Vec2::new(10.0 * z, label_y),
                     Align2::LEFT_CENTER,
                     label,
-                    FontId::proportional(11.0 * z),
-                    Color32::from_gray(220),
+                    FontId::proportional((11.0 * z).max(10.0)),
+                    Color32::from_gray(228),
                 );
                 // High-zoom third line: step type
                 if z >= 1.5 {
@@ -4665,8 +4709,19 @@ impl EditorApp {
                     egui::StrokeKind::Outside,
                 );
             }
+            // Green left stripe for completed steps (only when not running/errored)
+            if self.canvas_completed_steps.contains(&idx)
+                && !is_running
+                && !self.canvas_error_steps.contains_key(&idx)
+            {
+                let stripe = egui::Rect::from_min_size(
+                    node_rect.min,
+                    Vec2::new((3.0 * z).max(2.0), NODE_H * z),
+                );
+                painter.rect_filled(stripe, 4.0 * z, Color32::from_rgb(50, 185, 100));
+            }
 
-            // Drag-handle at bottom-center — communicates reorder, not graph connection
+            // Output port dot at bottom-center (edge drag / reorder)
             let port_center = node_rect.min + Vec2::new(NODE_W * z / 2.0, NODE_H * z);
             let port_hovered = ui
                 .input(|i| i.pointer.hover_pos())
@@ -4674,23 +4729,27 @@ impl EditorApp {
                 .unwrap_or(false);
             let in_edge_drag = self.canvas_edge_drag.is_some();
             if z >= 0.5 {
-                let handle_color = if port_hovered && !in_edge_drag {
-                    Color32::from_rgb(180, 180, 200)
+                let dot_color = if port_hovered && !in_edge_drag {
+                    Color32::from_rgb(180, 200, 255)
                 } else if in_edge_drag {
                     Color32::from_rgb(100, 180, 255)
                 } else {
                     Color32::from_rgba_premultiplied(140, 140, 160, 90)
                 };
-                painter.text(
-                    port_center,
-                    Align2::CENTER_CENTER,
-                    "⠿",
-                    FontId::proportional(11.0 * z),
-                    handle_color,
-                );
+                // Small circle = output port (drag to reorder)
+                painter.circle_filled(port_center, (3.5 * z).max(3.0), dot_color);
+                // Visual-only drag-handle glyph on right edge (no interaction)
+                if z >= 0.8 {
+                    painter.text(
+                        node_rect.max - Vec2::new(6.0 * z, NODE_H * z / 2.0),
+                        Align2::RIGHT_CENTER,
+                        "⠿",
+                        FontId::proportional(10.0 * z),
+                        Color32::from_rgba_premultiplied(120, 120, 140, 70),
+                    );
+                }
                 if port_hovered && !in_edge_drag {
-                    ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
-                    // Allocate a tiny invisible rect to show tooltip via egui
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
                     let tip_rect =
                         egui::Rect::from_center_size(port_center, egui::vec2(20.0 * z, 12.0 * z));
                     let tip_resp = ui.allocate_rect(tip_rect, Sense::hover());
@@ -4915,11 +4974,27 @@ impl EditorApp {
 
         // Background right-click menu (shown when clicking empty canvas space, not on a node)
         resp.context_menu(|ui| {
+            let s = S::for_lang(&self.settings.lang);
+            if ui.button(s.ctx_add_step_here).clicked() {
+                // Convert screen position to canvas space
+                if let Some(click_screen) = ui.input(|i| i.pointer.interact_pos()) {
+                    let canvas_pos = egui::pos2(
+                        (click_screen.x - origin.x) / z - self.canvas_pan.x,
+                        (click_screen.y - origin.y) / z - self.canvas_pan.y,
+                    );
+                    self.canvas_pending_insert_pos = Some(canvas_pos);
+                }
+                self.add_menu_open = true;
+                self.add_menu_just_opened = true;
+                self.add_filter.clear();
+                ui.close();
+            }
+            ui.separator();
             if ui.button("全選択").clicked() {
                 canvas_ctx_action = Some(CanvasContextAction::SelectAll);
                 ui.close();
             }
-            if !self.step_clipboard.is_empty() && ui.button("貼り付け").clicked() {
+            if !self.step_clipboard.is_empty() && ui.button(s.ctx_paste).clicked() {
                 canvas_ctx_action = Some(CanvasContextAction::Paste);
                 ui.close();
             }
@@ -5042,7 +5117,9 @@ impl EditorApp {
             if let Some((lasso_start, lasso_end)) = self.canvas_lasso.take() {
                 let lasso_rect = egui::Rect::from_two_pos(lasso_start, lasso_end);
                 if lasso_rect.width() > 10.0 || lasso_rect.height() > 10.0 {
-                    self.multi_selected.clear();
+                    if !self.canvas_lasso_additive {
+                        self.multi_selected.clear();
+                    }
                     for (i, &sp) in screen_positions.iter().enumerate() {
                         let nr = egui::Rect::from_min_size(sp, Vec2::new(NODE_W * z, NODE_H * z));
                         if lasso_rect.intersects(nr) {
@@ -5054,6 +5131,7 @@ impl EditorApp {
                         self.canvas_selection_anchor = self.selected;
                     }
                 }
+                self.canvas_lasso_additive = false;
             }
         }
 
@@ -5846,12 +5924,18 @@ impl eframe::App for EditorApp {
             let last_run_step = self.current_run_step;
             self.current_run_step = None;
             if status.success() {
+                for i in 0..self.steps.len() {
+                    self.canvas_completed_steps.insert(i);
+                }
                 self.log_ok("実行が完了しました");
             } else {
                 let code = status.code().unwrap_or(-1);
                 if let Some(step_idx) = last_run_step {
                     self.canvas_error_steps
                         .insert(step_idx, format!("終了コード: {code}"));
+                    for i in 0..step_idx {
+                        self.canvas_completed_steps.insert(i);
+                    }
                 }
                 self.log_err(format!("実行に失敗しました (終了コード: {code})"));
             }
@@ -5861,6 +5945,11 @@ impl eframe::App for EditorApp {
                 if let Ok(s) = std::fs::read_to_string(f) {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
                         self.current_run_step = v["step"].as_u64().map(|n| n as usize);
+                        if let Some(curr) = self.current_run_step {
+                            for i in 0..curr {
+                                self.canvas_completed_steps.insert(i);
+                            }
+                        }
                     }
                 }
             }
@@ -7258,6 +7347,9 @@ impl eframe::App for EditorApp {
                             let idx = self.selected.map(|i| i + 1).unwrap_or(self.steps.len());
                             self.steps.insert(idx, v);
                             Self::canvas_shift_positions(&mut self.canvas_positions, idx, 1);
+                            if let Some(pos) = self.canvas_pending_insert_pos.take() {
+                                self.canvas_positions.insert(idx, pos);
+                            }
                             self.select_step(idx);
                             self.log_info("ステップを追加しました");
                         }
