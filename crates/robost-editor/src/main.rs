@@ -4077,6 +4077,7 @@ impl EditorApp {
         if resp.clicked() && self.canvas_dragging.is_none() && !cursor_over_minimap {
             self.selected = None;
             self.multi_selected.clear();
+            self.canvas_selection_anchor = None;
         }
         // Pan on background drag, or lasso when Shift is held (not over minimap).
         // Checking dragged_by (not just drag_started) handles the race condition where the
@@ -4168,10 +4169,28 @@ impl EditorApp {
                 Vec2::new(0.0, 5.0 * z),
                 Stroke::new(stroke_width, stroke_color),
             );
+            // Branch label for compound steps — anchored just below the source node
+            if is_compound && z >= 0.6 {
+                let branch_label = match get_step_key(&self.steps[i]) {
+                    "if" => Some("then"),
+                    "foreach" | "while" | "do_while" | "repeat" | "group" => Some("do"),
+                    "try_catch" => Some("try"),
+                    _ => None,
+                };
+                if let Some(lbl) = branch_label {
+                    painter.text(
+                        from + Vec2::new(8.0 * z, 4.0 * z),
+                        Align2::LEFT_TOP,
+                        lbl,
+                        FontId::proportional(9.0 * z),
+                        Color32::from_rgb(150, 130, 80),
+                    );
+                }
+            }
             // Midpoint "+" insertion button (visible only on hover over edge area, z >= 0.6)
             if z >= 0.6 {
                 let mid = from.lerp(to, 0.5);
-                let btn_size = 14.0 * z;
+                let btn_size = (14.0 * z).max(18.0);
                 let btn_rect = egui::Rect::from_center_size(mid, egui::vec2(btn_size, btn_size));
                 let btn_resp = ui.allocate_rect(btn_rect, Sense::click());
                 if btn_resp.hovered() || btn_resp.clicked() {
@@ -4226,11 +4245,10 @@ impl EditorApp {
                 ));
                 painter.circle_filled(from_p, 5.0 * z, Color32::from_rgb(100, 180, 255));
                 painter.circle_filled(end_pos, 5.0 * z, Color32::from_rgb(100, 180, 255));
-                // Show "→ ここに移動" label at midpoint of the drag line
-                let mid = from_p.lerp(end_pos, 0.5);
+                // Label anchored to the source port — doesn't move with cursor
                 painter.text(
-                    mid + egui::Vec2::new(8.0 * z, -10.0 * z),
-                    egui::Align2::LEFT_CENTER,
+                    from_p + egui::Vec2::new(10.0 * z, -12.0 * z),
+                    egui::Align2::LEFT_BOTTOM,
                     "→ ここに移動",
                     egui::FontId::proportional(10.0 * z),
                     egui::Color32::from_rgb(100, 200, 255),
@@ -4368,7 +4386,7 @@ impl EditorApp {
             let step = &self.steps[idx];
             let full_label = step_summary(step);
 
-            // Show full label as tooltip on hover when text is truncated (before culling)
+            // Show tooltip on hover: error > truncated label > double-click hint
             if hovered {
                 if let Some(err_msg) = self.canvas_error_steps.get(&idx) {
                     let msg = err_msg.clone();
@@ -4379,6 +4397,8 @@ impl EditorApp {
                     node_resp.show_tooltip_ui(|ui| {
                         ui.label(&full_label);
                     });
+                } else if self.selected != Some(idx) {
+                    node_resp.on_hover_text("ダブルクリックで List ビューで編集");
                 }
             }
 
@@ -4426,13 +4446,6 @@ impl EditorApp {
             );
 
             painter.rect_filled(node_rect, 4.0 * z, blended_bg);
-            if is_multi_only {
-                painter.rect_filled(
-                    node_rect,
-                    4.0 * z,
-                    egui::Color32::from_rgba_premultiplied(60, 100, 200, 40),
-                );
-            }
             painter.rect_stroke(
                 node_rect,
                 4.0 * z,
@@ -4441,9 +4454,9 @@ impl EditorApp {
             );
             if is_multi_only {
                 painter.rect_stroke(
-                    node_rect,
+                    node_rect.expand(1.5 * z),
                     4.0 * z,
-                    egui::Stroke::new(1.5, Color32::from_rgb(60, 100, 200)),
+                    egui::Stroke::new((1.5 * z).max(1.5), Color32::from_rgb(100, 140, 255)),
                     egui::StrokeKind::Outside,
                 );
             }
@@ -5009,7 +5022,7 @@ impl EditorApp {
                     self.multi_selected.clear();
                     for (i, &sp) in screen_positions.iter().enumerate() {
                         let nr = egui::Rect::from_min_size(sp, Vec2::new(NODE_W * z, NODE_H * z));
-                        if lasso_rect.contains_rect(nr) {
+                        if lasso_rect.intersects(nr) {
                             self.multi_selected.insert(i);
                         }
                     }
