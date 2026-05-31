@@ -536,6 +536,7 @@ enum CanvasContextAction {
     Delete(usize),
     Duplicate(usize),
     OpenInList(usize),
+    Paste,
     AlignLeft,
     AlignTop,
     DistributeH,
@@ -3923,10 +3924,10 @@ impl EditorApp {
                 self.canvas_zoom = z_new;
             } else {
                 if scroll.y != 0.0 {
-                    self.canvas_pan.y += scroll.y;
+                    self.canvas_pan.y += scroll.y / z;
                 }
                 if scroll.x != 0.0 {
-                    self.canvas_pan.x += scroll.x;
+                    self.canvas_pan.x += scroll.x / z;
                 }
             }
             // Visual cue: crosshair cursor when Shift is held over background (lasso mode ready).
@@ -4087,6 +4088,10 @@ impl EditorApp {
                 }
                 if ui.button("複製").clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::Duplicate(idx));
+                    ui.close();
+                }
+                if !self.step_clipboard.is_empty() && ui.button("貼り付け").clicked() {
+                    canvas_ctx_action = Some(CanvasContextAction::Paste);
                     ui.close();
                 }
                 ui.separator();
@@ -4395,6 +4400,10 @@ impl EditorApp {
                 canvas_ctx_action = Some(CanvasContextAction::SelectAll);
                 ui.close();
             }
+            if !self.step_clipboard.is_empty() && ui.button("貼り付け").clicked() {
+                canvas_ctx_action = Some(CanvasContextAction::Paste);
+                ui.close();
+            }
             if self.multi_selected.len() >= 2 {
                 ui.separator();
                 ui.weak(format!("整列 ({} 選択)", self.multi_selected.len()));
@@ -4452,6 +4461,7 @@ impl EditorApp {
                     self.scroll_to_selected = true;
                     self.selected_child = None;
                 }
+                CanvasContextAction::Paste => self.paste_steps(),
                 CanvasContextAction::AlignLeft => self.canvas_align_left(),
                 CanvasContextAction::AlignTop => self.canvas_align_top(),
                 CanvasContextAction::DistributeH => self.canvas_distribute_h(),
