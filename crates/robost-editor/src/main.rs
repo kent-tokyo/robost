@@ -1331,6 +1331,8 @@ struct EditorApp {
     canvas_zoom: f32,
     canvas_pan: egui::Vec2,
     canvas_dragging: Option<(usize, egui::Vec2)>,
+    undo_pushed_for_current_drag: bool,
+    canvas_lasso: Option<(egui::Pos2, egui::Pos2)>,
     canvas_viewport_size: egui::Vec2,
     /// When Some, step list rows referencing this variable name get an amber tint.
     var_highlight: Option<String>,
@@ -1397,6 +1399,8 @@ impl Default for EditorApp {
             canvas_zoom: 1.0,
             canvas_pan: egui::Vec2::ZERO,
             canvas_dragging: None,
+            undo_pushed_for_current_drag: false,
+            canvas_lasso: None,
             canvas_viewport_size: egui::Vec2::new(800.0, 600.0),
             var_highlight: None,
             manual_category_filter: None,
@@ -3519,9 +3523,25 @@ impl EditorApp {
                 }
             }
         }
-        // Pan on background drag (not on a node)
+        // Click on empty background clears selection
+        if resp.clicked() && self.canvas_dragging.is_none() {
+            self.selected = None;
+            self.multi_selected.clear();
+        }
+        // Lasso start: shift+primary drag on background
+        if resp.drag_started() && self.canvas_dragging.is_none() && ui.input(|i| i.modifiers.shift)
+        {
+            let start = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
+            self.canvas_lasso = Some((start, start));
+        }
+        // Pan on background drag, or update lasso end point
         if resp.dragged_by(egui::PointerButton::Primary) && self.canvas_dragging.is_none() {
-            self.canvas_pan += resp.drag_delta();
+            if let Some((start, _)) = self.canvas_lasso {
+                let cursor = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
+                self.canvas_lasso = Some((start, cursor));
+            } else {
+                self.canvas_pan += resp.drag_delta();
+            }
         }
 
         let n = self.steps.len();
@@ -3794,10 +3814,13 @@ impl EditorApp {
 
         // Apply interactions after the draw loop
         if let Some((idx, offset)) = drag_started_node {
-            self.push_undo();
             self.canvas_dragging = Some((idx, offset));
         }
         if let Some((idx, mut canvas_pos)) = drag_delta_node {
+            if !self.undo_pushed_for_current_drag {
+                self.push_undo();
+                self.undo_pushed_for_current_drag = true;
+            }
             if self.settings.canvas_snap {
                 const SNAP: f32 = 20.0;
                 canvas_pos.x = (canvas_pos.x / SNAP).round() * SNAP;
@@ -3822,6 +3845,7 @@ impl EditorApp {
         }
         if drag_ended {
             self.canvas_dragging = None;
+            self.undo_pushed_for_current_drag = false;
             self.save_canvas_layout();
         }
         if let Some((idx, shift, cmd)) = canvas_click_modifier {
@@ -3866,7 +3890,9 @@ impl EditorApp {
         if let Some(act) = canvas_ctx_action {
             match act {
                 CanvasContextAction::Delete(idx) => {
-                    if idx < self.steps.len() {
+                    if self.multi_selected.len() > 1 && self.multi_selected.contains(&idx) {
+                        self.delete_selected_steps();
+                    } else if idx < self.steps.len() {
                         self.push_undo();
                         self.steps.remove(idx);
                         Self::canvas_shift_positions(&mut self.canvas_positions, idx, -1);
@@ -3922,6 +3948,142 @@ impl EditorApp {
                 Color32::from_gray(100),
             );
         }
+
+        // Draw active lasso rectangle
+        if let Some((lasso_start, lasso_end)) = self.canvas_lasso {
+            let lasso_rect = egui::Rect::from_two_pos(lasso_start, lasso_end);
+            painter.rect_filled(
+                lasso_rect,
+                2.0,
+                Color32::from_rgba_premultiplied(80, 120, 220, 30),
+            );
+            painter.rect_stroke(
+                lasso_rect,
+                2.0,
+                Stroke::new(1.0, Color32::from_rgb(100, 140, 255)),
+                egui::StrokeKind::Inside,
+            );
+        }
+
+        // Finalize lasso selection on drag release
+        if resp.drag_stopped() {
+            if let Some((lasso_start, lasso_end)) = self.canvas_lasso.take() {
+                let lasso_rect = egui::Rect::from_two_pos(lasso_start, lasso_end);
+                if lasso_rect.width() > 5.0 || lasso_rect.height() > 5.0 {
+                    self.multi_selected.clear();
+                    for (i, &sp) in screen_positions.iter().enumerate() {
+                        let nr = egui::Rect::from_min_size(sp, Vec2::new(NODE_W * z, NODE_H * z));
+                        if lasso_rect.intersects(nr) {
+                            self.multi_selected.insert(i);
+                        }
+                    }
+                    if !self.multi_selected.is_empty() {
+                        self.selected = self.multi_selected.iter().min().cloned();
+                    }
+                }
+            }
+        }
+
+        // Minimap (shown when there are 15+ steps)
+        if n >= 15 {
+            const MM_W: f32 = 160.0;
+            const MM_H: f32 = 100.0;
+            const MM_MARGIN: f32 = 8.0;
+            const MM_PAD: f32 = 5.0;
+
+            let mm_rect = egui::Rect::from_min_size(
+                resp.rect.max - egui::vec2(MM_W + MM_MARGIN, MM_H + MM_MARGIN),
+                egui::vec2(MM_W, MM_H),
+            );
+            painter.rect_filled(
+                mm_rect,
+                4.0,
+                Color32::from_rgba_premultiplied(18, 18, 22, 220),
+            );
+            painter.rect_stroke(
+                mm_rect,
+                4.0,
+                Stroke::new(1.0, Color32::from_gray(55)),
+                egui::StrokeKind::Inside,
+            );
+
+            // Bounding box of all nodes in canvas space
+            let mut min_cx = f32::MAX;
+            let mut min_cy = f32::MAX;
+            let mut max_cx = f32::MIN;
+            let mut max_cy = f32::MIN;
+            for i in 0..n {
+                let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
+                    (i % 5) as f32 * 340.0 + 40.0,
+                    (i / 5) as f32 * 132.0 + 40.0,
+                ));
+                min_cx = min_cx.min(p.x);
+                min_cy = min_cy.min(p.y);
+                max_cx = max_cx.max(p.x + NODE_W);
+                max_cy = max_cy.max(p.y + NODE_H);
+            }
+            let content_w = (max_cx - min_cx).max(1.0);
+            let content_h = (max_cy - min_cy).max(1.0);
+            let mm_inner = mm_rect.shrink(MM_PAD);
+            let scale_x = mm_inner.width() / content_w;
+            let scale_y = mm_inner.height() / content_h;
+            let mm_scale = scale_x.min(scale_y);
+            let mm_offset_x = mm_inner.min.x + (mm_inner.width() - content_w * mm_scale) / 2.0;
+            let mm_offset_y = mm_inner.min.y + (mm_inner.height() - content_h * mm_scale) / 2.0;
+
+            let to_mm = |p: egui::Pos2| -> egui::Pos2 {
+                egui::pos2(
+                    mm_offset_x + (p.x - min_cx) * mm_scale,
+                    mm_offset_y + (p.y - min_cy) * mm_scale,
+                )
+            };
+
+            // Draw nodes as small rects
+            for i in 0..n {
+                let p = self.canvas_positions.get(&i).copied().unwrap_or(egui::pos2(
+                    (i % 5) as f32 * 340.0 + 40.0,
+                    (i / 5) as f32 * 132.0 + 40.0,
+                ));
+                let mm_min = to_mm(p);
+                let mm_node = egui::Rect::from_min_size(
+                    mm_min,
+                    egui::vec2((NODE_W * mm_scale).max(2.0), (NODE_H * mm_scale).max(2.0)),
+                );
+                let is_sel = self.selected == Some(i) || self.multi_selected.contains(&i);
+                let node_color = if is_sel {
+                    Color32::from_rgb(100, 140, 255)
+                } else {
+                    Color32::from_gray(110)
+                };
+                painter.rect_filled(mm_node, 1.0, node_color);
+            }
+
+            // Draw viewport rectangle
+            let vp_canvas_min = egui::pos2(
+                (resp.rect.min.x - origin.x) / z - self.canvas_pan.x,
+                (resp.rect.min.y - origin.y) / z - self.canvas_pan.y,
+            );
+            let vp_canvas_max = egui::pos2(
+                (resp.rect.max.x - origin.x) / z - self.canvas_pan.x,
+                (resp.rect.max.y - origin.y) / z - self.canvas_pan.y,
+            );
+            let mm_vp = egui::Rect::from_min_max(to_mm(vp_canvas_min), to_mm(vp_canvas_max));
+            let mm_vp_clipped = mm_vp.intersect(mm_inner);
+            if !mm_vp_clipped.is_negative() {
+                painter.rect_filled(
+                    mm_vp_clipped,
+                    2.0,
+                    Color32::from_rgba_premultiplied(255, 255, 255, 15),
+                );
+                painter.rect_stroke(
+                    mm_vp_clipped,
+                    2.0,
+                    Stroke::new(1.0, Color32::from_rgba_premultiplied(200, 210, 255, 160)),
+                    egui::StrokeKind::Inside,
+                );
+            }
+        }
+
         self.canvas_viewport_size = resp.rect.size();
     }
 }
@@ -4050,6 +4212,7 @@ impl eframe::App for EditorApp {
             if self.view_mode == ViewMode::Canvas {
                 self.selected = None;
                 self.multi_selected.clear();
+                self.canvas_lasso = None;
             }
         }
         if !self.add_menu_open
