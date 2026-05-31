@@ -49,7 +49,7 @@
 - **瞬态 UI 采集** — 热键冻结屏幕，可以选取平时会消失的下拉菜单和悬浮提示
 - **WASM 插件** — 沙箱内运行，插件崩溃不影响主进程
 - **纯 YAML 场景** — 支持变量、循环、分支、Rhai 内联脚本、子场景、数据源
-- **可视化编辑器** — 拖放步骤、多选、AI 场景助手（Anthropic/OpenAI）、EN/JA/ZH 界面
+- **可视化编辑器** — 列表和 Canvas 视图（自由布局、缩放/平移、迷你地图、网格吸附）、从自然语言 AI 生成步骤、AI 场景助手（Anthropic/OpenAI）、EN/JA/ZH 界面
 
 ## 自动化工具对比
 
@@ -92,7 +92,7 @@ crates/
 ├── robost-backend/      # Backend trait：本地 / RDP / VNC 统一
 ├── robost-core/         # 场景引擎：YAML 解析、步骤执行、重试、流程控制
 ├── robost-snip/         # 模板采集 GUI（托盘应用、热键、叠加层、日文 UI）
-├── robost-editor/       # 可视化场景编辑器（步骤列表 + YAML、暗色主题、日志面板）
+├── robost-editor/       # 可视化场景编辑器（列表 + Canvas 视图、AI 步骤生成、AI 聊天、多语言）
 ├── robost-template/     # 共享坐标/几何类型
 ├── robost-plugin-api/   # 插件作者公开 API（crates.io 发布候选）
 ├── robost-plugin-host/  # 基于 wasmtime 的 WASM 插件运行器（带 epoch 超时）

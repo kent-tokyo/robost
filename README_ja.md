@@ -49,7 +49,7 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 - **transient UI のキャプチャ** — ホットキーで画面をフリーズするため、消えてしまうドロップダウンやツールチップも採取できる
 - **WASM プラグイン** — サンドボックス内で実行。プラグインがクラッシュしてもランナーには影響しない
 - **プレーン YAML シナリオ** — 変数・ループ・分岐・Rhai インラインスクリプト・サブシナリオ・データソース対応
-- **ビジュアルエディタ** — ステップの DnD・複数選択・AI シナリオアシスタント (Anthropic/OpenAI)・EN/JA/ZH UI
+- **ビジュアルエディタ** — リスト＆Canvas ビュー (自由配置・ズーム/パン・ミニマップ・スナップ)・自然言語からの AI ステップ生成・AI シナリオアシスタント (Anthropic/OpenAI)・EN/JA/ZH UI
 
 ## 自動化ツール比較
 
@@ -92,7 +92,7 @@ crates/
 ├── robost-backend/      # Backend trait: ローカル / RDP / VNC を統一
 ├── robost-core/         # シナリオエンジン: YAML パース、ステップ実行、リトライ、フロー制御
 ├── robost-snip/         # テンプレート採取 GUI (tray app、ホットキー、オーバーレイ、日本語 UI)
-├── robost-editor/       # ビジュアルシナリオエディタ (リストパネル + YAML、ダークテーマ、ログパネル)
+├── robost-editor/       # ビジュアルシナリオエディタ (リスト + Canvas ビュー、AI ステップ生成、AI チャット、多言語)
 ├── robost-template/     # 共有座標・ジオメトリ型
 ├── robost-plugin-api/   # プラグイン作者向け公開 API (crates.io 公開候補)
 ├── robost-plugin-host/  # wasmtime ベースの WASM プラグインランナー (epoch タイムアウト付き)

@@ -49,7 +49,7 @@ A Rust-based OSS desktop automation (RPA) tool.
 - **Transient UI capture** — hotkey freezes the screen so you can select dropdowns and tooltips that would otherwise disappear
 - **WASM plugins** — sandboxed extensions; a crashing plugin can't bring down the runner
 - **Plain YAML scenarios** — variables, loops, branches, inline Rhai scripts, sub-scenarios, data sources
-- **Visual editor** — drag-and-drop steps, multi-select, AI scenario assistant (Anthropic/OpenAI), EN/JA/ZH UI
+- **Visual editor** — list and Canvas view (free-placement, zoom/pan, minimap, snap), AI step creation from natural language, AI scenario assistant (Anthropic/OpenAI), EN/JA/ZH UI
 
 ## Comparison with Automation Tools
 
@@ -92,7 +92,7 @@ crates/
 ├── robost-backend/      # Backend trait: Local / RDP / VNC unified
 ├── robost-core/         # Scenario engine: YAML parsing, step execution, retry, flow control
 ├── robost-snip/         # Template capture GUI (tray app, hotkey, overlay, Japanese UI)
-├── robost-editor/       # Visual scenario editor (step list + YAML, AI chat, i18n EN/JA/ZH, DnD)
+├── robost-editor/       # Visual scenario editor (list + Canvas view, AI step creation, AI chat, i18n EN/JA/ZH)
 ├── robost-template/     # Shared coordinate/geometry types
 ├── robost-plugin-api/   # Public plugin author API (crates.io publish candidate)
 ├── robost-plugin-host/  # wasmtime-based WASM plugin runner with epoch timeout
