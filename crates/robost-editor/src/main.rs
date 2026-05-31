@@ -1339,6 +1339,9 @@ struct EditorApp {
     undo_pushed_for_current_drag: bool,
     canvas_lasso: Option<(egui::Pos2, egui::Pos2)>,
     minimap_dragging: bool,
+    /// Anchor node for Shift+click range selection. Persists through background clicks
+    /// so clearing selection does not break the next range-select.
+    canvas_selection_anchor: Option<usize>,
     canvas_viewport_size: egui::Vec2,
     /// When Some, step list rows referencing this variable name get an amber tint.
     var_highlight: Option<String>,
@@ -1408,6 +1411,7 @@ impl Default for EditorApp {
             undo_pushed_for_current_drag: false,
             canvas_lasso: None,
             minimap_dragging: false,
+            canvas_selection_anchor: None,
             canvas_viewport_size: egui::Vec2::new(800.0, 600.0),
             var_highlight: None,
             manual_category_filter: None,
@@ -3558,15 +3562,26 @@ impl EditorApp {
         // span = left-edge-of-first to right-edge-of-last
         let span = (right_x + NODE_W) - left_x;
         let total_node_w = indices.len() as f32 * NODE_W;
-        let gap = if span > total_node_w {
-            (span - total_node_w) / (indices.len() - 1) as f32
+        let min_gap = 20.0_f32;
+        if span > total_node_w + min_gap * (indices.len() - 1) as f32 {
+            // Normal: fit within existing bounding box
+            let gap = (span - total_node_w) / (indices.len() - 1) as f32;
+            let step = NODE_W + gap;
+            for (rank, &i) in indices.iter().enumerate() {
+                if let Some(p) = self.canvas_positions.get_mut(&i) {
+                    p.x = left_x + rank as f32 * step;
+                }
+            }
         } else {
-            20.0 // minimum gap when nodes are already overlapping or touching
-        };
-        let step = NODE_W + gap;
-        for (rank, &i) in indices.iter().enumerate() {
-            if let Some(p) = self.canvas_positions.get_mut(&i) {
-                p.x = left_x + rank as f32 * step;
+            // Nodes are too close / overlapping: expand around the cluster centre
+            let center_x = (left_x + right_x + NODE_W) / 2.0;
+            let step = NODE_W + min_gap;
+            let total_w = indices.len() as f32 * NODE_W + (indices.len() - 1) as f32 * min_gap;
+            let new_left = center_x - total_w / 2.0;
+            for (rank, &i) in indices.iter().enumerate() {
+                if let Some(p) = self.canvas_positions.get_mut(&i) {
+                    p.x = new_left + rank as f32 * step;
+                }
             }
         }
         self.save_canvas_layout();
@@ -3596,15 +3611,24 @@ impl EditorApp {
             .unwrap_or(NODE_H);
         let span = (bottom_y + NODE_H) - top_y;
         let total_node_h = indices.len() as f32 * NODE_H;
-        let gap = if span > total_node_h {
-            (span - total_node_h) / (indices.len() - 1) as f32
+        let min_gap = 20.0_f32;
+        if span > total_node_h + min_gap * (indices.len() - 1) as f32 {
+            let gap = (span - total_node_h) / (indices.len() - 1) as f32;
+            let step = NODE_H + gap;
+            for (rank, &i) in indices.iter().enumerate() {
+                if let Some(p) = self.canvas_positions.get_mut(&i) {
+                    p.y = top_y + rank as f32 * step;
+                }
+            }
         } else {
-            20.0
-        };
-        let step = NODE_H + gap;
-        for (rank, &i) in indices.iter().enumerate() {
-            if let Some(p) = self.canvas_positions.get_mut(&i) {
-                p.y = top_y + rank as f32 * step;
+            let center_y = (top_y + bottom_y + NODE_H) / 2.0;
+            let step = NODE_H + min_gap;
+            let total_h = indices.len() as f32 * NODE_H + (indices.len() - 1) as f32 * min_gap;
+            let new_top = center_y - total_h / 2.0;
+            for (rank, &i) in indices.iter().enumerate() {
+                if let Some(p) = self.canvas_positions.get_mut(&i) {
+                    p.y = new_top + rank as f32 * step;
+                }
             }
         }
         self.save_canvas_layout();
@@ -4101,10 +4125,19 @@ impl EditorApp {
                     .copied()
                     .unwrap_or(canvas_pos);
                 let delta = canvas_pos - old_pos;
+                let snap_on = self.settings.canvas_snap;
                 let selected_indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
                 for sel_idx in selected_indices {
                     if let Some(pos) = self.canvas_positions.get(&sel_idx).copied() {
-                        self.canvas_positions.insert(sel_idx, pos + delta);
+                        let mut new_pos = pos + delta;
+                        // Snap each follower node individually so relative positions are
+                        // preserved on-grid and group drift does not accumulate.
+                        if snap_on {
+                            const SNAP: f32 = 20.0;
+                            new_pos.x = (new_pos.x / SNAP).round() * SNAP;
+                            new_pos.y = (new_pos.y / SNAP).round() * SNAP;
+                        }
+                        self.canvas_positions.insert(sel_idx, new_pos);
                     }
                 }
             } else {
@@ -4118,7 +4151,7 @@ impl EditorApp {
         }
         if let Some((idx, shift, cmd)) = canvas_click_modifier {
             if cmd {
-                // Toggle selection
+                // Toggle selection; anchor follows the toggled node
                 if self.multi_selected.contains(&idx) {
                     self.multi_selected.remove(&idx);
                     if self.selected == Some(idx) {
@@ -4134,8 +4167,10 @@ impl EditorApp {
                         self.edit_buf = serde_yml::to_string(step).unwrap_or_default();
                     }
                 }
+                self.canvas_selection_anchor = Some(idx);
             } else if shift {
-                let anchor = self.selected.unwrap_or(idx);
+                // Use persistent anchor so range-select still works after background clear
+                let anchor = self.canvas_selection_anchor.unwrap_or(idx);
                 let (lo, hi) = if anchor <= idx {
                     (anchor, idx)
                 } else {
@@ -4143,8 +4178,10 @@ impl EditorApp {
                 };
                 self.multi_selected = (lo..=hi).collect();
                 self.selected = Some(idx);
+                // anchor stays unchanged on Shift+click
             } else {
                 self.select_step(idx);
+                self.canvas_selection_anchor = Some(idx);
             }
         }
         if let Some(idx) = double_clicked_node {
@@ -4271,8 +4308,8 @@ impl EditorApp {
             );
         }
 
-        // Finalize lasso selection on drag release
-        if resp.drag_stopped() {
+        // Finalize lasso selection on drag release (guard against minimap drag sharing the frame)
+        if resp.drag_stopped() && !self.minimap_dragging {
             if let Some((lasso_start, lasso_end)) = self.canvas_lasso.take() {
                 let lasso_rect = egui::Rect::from_two_pos(lasso_start, lasso_end);
                 if lasso_rect.width() > 5.0 || lasso_rect.height() > 5.0 {
@@ -4510,10 +4547,12 @@ impl eframe::App for EditorApp {
         }
         if self.view_mode == ViewMode::Canvas
             && !self.add_menu_open
+            && !self.steps.is_empty()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::A))
         {
             self.multi_selected = (0..self.steps.len()).collect();
-            self.selected = self.multi_selected.iter().min().cloned();
+            self.selected = Some(0);
+            self.canvas_selection_anchor = Some(0);
         }
         if !self.add_menu_open
             && self.confirm_dialog.is_none()
