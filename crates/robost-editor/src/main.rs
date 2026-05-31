@@ -3827,24 +3827,48 @@ impl EditorApp {
             let stripe = Rect::from_min_size(node_rect.min, Vec2::new(6.0 * z, NODE_H * z));
             painter.rect_filled(stripe, 0.0, cat_color);
 
-            // Step index badge
-            painter.text(
-                node_rect.min + Vec2::new(10.0 * z, NODE_H * z * 0.3),
-                Align2::LEFT_CENTER,
-                format!("{}", idx + 1),
-                FontId::proportional(9.0 * z),
-                Color32::from_gray(140),
-            );
-
-            // Step label
-            let label: String = full_label.chars().take(32).collect();
-            painter.text(
-                node_rect.min + Vec2::new(10.0 * z, NODE_H * z * 0.68),
-                Align2::LEFT_CENTER,
-                label,
-                FontId::proportional(11.0 * z),
-                Color32::from_gray(220),
-            );
+            // Progressive node content based on zoom level
+            if z < 0.5 {
+                // Minimal: only step index centered — text too small to read otherwise
+                painter.text(
+                    node_rect.center(),
+                    Align2::CENTER_CENTER,
+                    format!("{}", idx + 1),
+                    FontId::proportional(10.0 * z),
+                    Color32::from_gray(160),
+                );
+            } else {
+                let (idx_y, label_y) = if z >= 1.5 {
+                    (NODE_H * z * 0.22, NODE_H * z * 0.52)
+                } else {
+                    (NODE_H * z * 0.3, NODE_H * z * 0.68)
+                };
+                painter.text(
+                    node_rect.min + Vec2::new(10.0 * z, idx_y),
+                    Align2::LEFT_CENTER,
+                    format!("{}", idx + 1),
+                    FontId::proportional(9.0 * z),
+                    Color32::from_gray(140),
+                );
+                let label: String = full_label.chars().take(32).collect();
+                painter.text(
+                    node_rect.min + Vec2::new(10.0 * z, label_y),
+                    Align2::LEFT_CENTER,
+                    label,
+                    FontId::proportional(11.0 * z),
+                    Color32::from_gray(220),
+                );
+                // High-zoom third line: step type
+                if z >= 1.5 {
+                    painter.text(
+                        node_rect.min + Vec2::new(10.0 * z, NODE_H * z * 0.82),
+                        Align2::LEFT_CENTER,
+                        key,
+                        FontId::proportional(8.5 * z),
+                        Color32::from_rgba_premultiplied(160, 170, 200, 170),
+                    );
+                }
+            }
 
             // Badge: show child step count for compound steps
             let step_key_badge = get_step_key(step);
@@ -4775,6 +4799,49 @@ impl eframe::App for EditorApp {
                         save_settings(&self.settings);
                     }
                     ui.label(format!("{:.0}%", self.canvas_zoom * 100.0));
+                    let help_btn = ui.button("?").on_hover_text("キャンバス操作ヘルプ");
+                    egui::Popup::from_toggle_button_response(&help_btn)
+                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                        .show(|ui| {
+                            ui.set_min_width(280.0);
+                            ui.strong("Canvas 操作ガイド");
+                            ui.separator();
+                            egui::Grid::new("canvas_help_grid")
+                                .num_columns(2)
+                                .spacing([12.0, 4.0])
+                                .show(ui, |ui| {
+                                    ui.label("Ctrl+スクロール");
+                                    ui.label("ズーム (カーソル固定)");
+                                    ui.end_row();
+                                    ui.label("スクロール");
+                                    ui.label("上下パン");
+                                    ui.end_row();
+                                    ui.label("背景ドラッグ");
+                                    ui.label("パン");
+                                    ui.end_row();
+                                    ui.label("Shift+背景ドラッグ");
+                                    ui.label("ラッソ選択");
+                                    ui.end_row();
+                                    ui.label("クリック");
+                                    ui.label("選択 / 背景クリックで解除");
+                                    ui.end_row();
+                                    ui.label("Cmd+クリック");
+                                    ui.label("選択をトグル");
+                                    ui.end_row();
+                                    ui.label("Shift+クリック");
+                                    ui.label("範囲選択");
+                                    ui.end_row();
+                                    ui.label("ダブルクリック");
+                                    ui.label("List ビューで開く");
+                                    ui.end_row();
+                                    ui.label("右クリック");
+                                    ui.label("コンテキストメニュー");
+                                    ui.end_row();
+                                    ui.label("ミニマップクリック");
+                                    ui.label("その位置へジャンプ");
+                                    ui.end_row();
+                                });
+                        });
                 }
                 if self.view_mode == ViewMode::Flow {
                     ui.separator();
