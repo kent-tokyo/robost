@@ -1569,7 +1569,21 @@ impl EditorApp {
     }
 
     fn select_step(&mut self, idx: usize) {
-        self.push_undo();
+        // Only push undo when there is a pending edit that would actually change state.
+        // Unconditional push_undo() here polluted the undo stack with every click.
+        let has_pending_edit = self
+            .selected
+            .map(|sel| {
+                sel < self.steps.len()
+                    && self.parse_error.is_none()
+                    && serde_yml::from_str::<serde_yml::Value>(&self.edit_buf)
+                        .map(|v| self.steps[sel] != v)
+                        .unwrap_or(false)
+            })
+            .unwrap_or(false);
+        if has_pending_edit {
+            self.push_undo();
+        }
         self.flush_edit();
         self.selected = Some(idx);
         self.multi_selected.clear();
@@ -3434,34 +3448,32 @@ impl EditorApp {
     }
 
     fn canvas_fit_view(&mut self, viewport_size: egui::Vec2) {
-        if self.canvas_positions.is_empty() {
+        let n = self.steps.len();
+        if n == 0 {
             return;
         }
         const NODE_W: f32 = 260.0;
         const NODE_H: f32 = 72.0;
         let margin = 40.0_f32;
 
-        // Compute bounding box of all nodes in canvas space
-        let min_x = self
-            .canvas_positions
-            .values()
-            .map(|p| p.x)
-            .fold(f32::INFINITY, f32::min);
-        let min_y = self
-            .canvas_positions
-            .values()
-            .map(|p| p.y)
-            .fold(f32::INFINITY, f32::min);
-        let max_x = self
-            .canvas_positions
-            .values()
-            .map(|p| p.x)
+        // Use the same default-position formula as show_canvas so nodes without a stored
+        // position (e.g. freshly loaded scenarios) are included in the bounding box.
+        let pos_of = |i: usize| {
+            self.canvas_positions.get(&i).copied().unwrap_or_else(|| {
+                egui::pos2(
+                    (i % 5) as f32 * 340.0 + 40.0,
+                    (i / 5) as f32 * 132.0 + 40.0,
+                )
+            })
+        };
+        let min_x = (0..n).map(|i| pos_of(i).x).fold(f32::INFINITY, f32::min);
+        let min_y = (0..n).map(|i| pos_of(i).y).fold(f32::INFINITY, f32::min);
+        let max_x = (0..n)
+            .map(|i| pos_of(i).x)
             .fold(f32::NEG_INFINITY, f32::max)
             + NODE_W;
-        let max_y = self
-            .canvas_positions
-            .values()
-            .map(|p| p.y)
+        let max_y = (0..n)
+            .map(|i| pos_of(i).y)
             .fold(f32::NEG_INFINITY, f32::max)
             + NODE_H;
 
@@ -3542,12 +3554,16 @@ impl EditorApp {
             .get(indices.last().unwrap())
             .map(|p| p.x)
             .unwrap_or(NODE_W);
-        // Fallback: if all nodes share the same x, space them out by NODE_W + 20px gap
-        let step = if (right_x - left_x).abs() < 1.0 {
-            NODE_W + 20.0
+        // Gap-based distribution: equal whitespace between nodes (accounts for NODE_W).
+        // span = left-edge-of-first to right-edge-of-last
+        let span = (right_x + NODE_W) - left_x;
+        let total_node_w = indices.len() as f32 * NODE_W;
+        let gap = if span > total_node_w {
+            (span - total_node_w) / (indices.len() - 1) as f32
         } else {
-            (right_x - left_x) / (indices.len() - 1) as f32
+            20.0 // minimum gap when nodes are already overlapping or touching
         };
+        let step = NODE_W + gap;
         for (rank, &i) in indices.iter().enumerate() {
             if let Some(p) = self.canvas_positions.get_mut(&i) {
                 p.x = left_x + rank as f32 * step;
@@ -3578,12 +3594,14 @@ impl EditorApp {
             .get(indices.last().unwrap())
             .map(|p| p.y)
             .unwrap_or(NODE_H);
-        // Fallback: if all nodes share the same y, space them out by NODE_H + 20px gap
-        let step = if (bottom_y - top_y).abs() < 1.0 {
-            NODE_H + 20.0
+        let span = (bottom_y + NODE_H) - top_y;
+        let total_node_h = indices.len() as f32 * NODE_H;
+        let gap = if span > total_node_h {
+            (span - total_node_h) / (indices.len() - 1) as f32
         } else {
-            (bottom_y - top_y) / (indices.len() - 1) as f32
+            20.0
         };
+        let step = NODE_H + gap;
         for (rank, &i) in indices.iter().enumerate() {
             if let Some(p) = self.canvas_positions.get_mut(&i) {
                 p.y = top_y + rank as f32 * step;
@@ -3729,21 +3747,20 @@ impl EditorApp {
             self.selected = None;
             self.multi_selected.clear();
         }
-        // Lasso start: shift+primary drag on background (not over minimap)
-        if resp.drag_started()
-            && self.canvas_dragging.is_none()
-            && !cursor_over_minimap
-            && ui.input(|i| i.modifiers.shift)
-        {
-            let start = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
-            self.canvas_lasso = Some((start, start));
-        }
-        // Pan on background drag, or update lasso end point (not over minimap)
+        // Pan on background drag, or lasso when Shift is held (not over minimap).
+        // Checking dragged_by (not just drag_started) handles the race condition where the
+        // user presses Shift slightly after beginning a drag — the lasso starts from the
+        // current pointer position and the already-accumulated pan delta stays.
         if resp.dragged_by(egui::PointerButton::Primary)
             && self.canvas_dragging.is_none()
             && !cursor_over_minimap
         {
-            if let Some((start, _)) = self.canvas_lasso {
+            let shift = ui.input(|i| i.modifiers.shift);
+            if shift && self.canvas_lasso.is_none() {
+                // Start lasso (converts ongoing pan to lasso on Shift press)
+                let start = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
+                self.canvas_lasso = Some((start, start));
+            } else if let Some((start, _)) = self.canvas_lasso {
                 let cursor = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
                 self.canvas_lasso = Some((start, cursor));
             } else {
@@ -4491,6 +4508,13 @@ impl eframe::App for EditorApp {
                 self.canvas_lasso = None;
             }
         }
+        if self.view_mode == ViewMode::Canvas
+            && !self.add_menu_open
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::A))
+        {
+            self.multi_selected = (0..self.steps.len()).collect();
+            self.selected = self.multi_selected.iter().min().cloned();
+        }
         if !self.add_menu_open
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F))
@@ -5026,7 +5050,10 @@ impl eframe::App for EditorApp {
                                     ui.label("パン");
                                     ui.end_row();
                                     ui.label("Shift+背景ドラッグ");
-                                    ui.label("ラッソ選択");
+                                    ui.label("ラッソ選択 (途中Shift押しでも可)");
+                                    ui.end_row();
+                                    ui.label("Cmd+A");
+                                    ui.label("全選択 (Canvasビューのみ)");
                                     ui.end_row();
                                     ui.label("クリック");
                                     ui.label("選択 / 背景クリックで解除");
