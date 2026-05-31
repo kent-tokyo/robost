@@ -1635,6 +1635,7 @@ impl EditorApp {
         for (j, step) in self.step_clipboard.iter().enumerate() {
             self.steps.insert(at + j, step.clone());
             Self::canvas_shift_positions(&mut self.canvas_positions, at + j, 1);
+            Self::form_edit_buffers_shift(&mut self.form_edit_buffers, at + j, 1);
         }
         // Select the newly pasted range.
         let end = at + self.step_clipboard.len() - 1;
@@ -2172,6 +2173,8 @@ impl EditorApp {
                 let escaped = prompt_buf.replace('\\', "\\\\").replace('"', "\\\"");
                 self.edit_buf = format!("ai_create:\n  prompt: \"{escaped}\"\n");
                 self.flush_edit();
+                // Clear stale error so user gets immediate visual feedback that edit registered
+                self.ai_step_error = None;
             }
             ui.add_space(8.0);
             let is_loading = self.ai_step_rx.as_ref().map(|(i, _)| *i) == Some(idx);
@@ -2203,9 +2206,9 @@ impl EditorApp {
 - press: Enter  # キー押下 (Tab/Enter/Escape/F1-F12 等)\n\
 - wait_image: { template: \"xxx.png\", timeout_ms: 5000 }  # 画像が現れるまで待機\n\
 - wait_no_image: { template: \"xxx.png\", timeout_ms: 5000 }  # 画像が消えるまで待機\n\
-- wait_ms: { ms: 1000 }  # ミリ秒待機\n\
+- wait_ms: 1000  # ミリ秒待機 (スカラー値)\n\
 - key_combo: { keys: [\"ctrl\", \"c\"] }  # キーの組み合わせ\n\
-- set: { var: \"名前\", value: \"値\" }  # 変数セット\n\
+- set: { name: \"変数名\", value: \"値\" }  # 変数セット\n\
 \n\
 必ず ```yaml コードブロックで出力してください。複数ステップも可能です:\n\
 ```yaml\n\
@@ -2229,6 +2232,11 @@ impl EditorApp {
                 if err_idx == idx {
                     ui.add_space(4.0);
                     ui.colored_label(egui::Color32::from_rgb(220, 80, 80), format!("⚠ {msg}"));
+                    if msg.contains("APIキー") {
+                        if ui.small_button("設定を開く").clicked() {
+                            self.settings_open = true;
+                        }
+                    }
                 }
             }
             return;
@@ -3054,11 +3062,13 @@ impl EditorApp {
                         for (j, s) in seq.into_iter().enumerate() {
                             self.steps.insert(at + j, s);
                             Self::canvas_shift_positions(&mut self.canvas_positions, at + j, 1);
+                            Self::form_edit_buffers_shift(&mut self.form_edit_buffers, at + j, 1);
                         }
                     }
                     other => {
                         self.steps.insert(at, other);
                         Self::canvas_shift_positions(&mut self.canvas_positions, at, 1);
+                        Self::form_edit_buffers_shift(&mut self.form_edit_buffers, at, 1);
                     }
                 }
                 self.dirty = true;
@@ -3612,6 +3622,50 @@ impl EditorApp {
             vis_w / 2.0 / z - center_x,
             viewport_size.y / 2.0 / z - center_y,
         );
+    }
+
+    /// Shift `@N` numeric suffixes in form_edit_buffers when steps are inserted (delta>0)
+    /// or removed (delta<0) at position `at`. Mirrors canvas_shift_positions behaviour.
+    fn form_edit_buffers_shift(
+        buffers: &mut HashMap<String, String>,
+        at: usize,
+        delta: isize,
+    ) {
+        let keys: Vec<String> = buffers.keys().cloned().collect();
+        let mut to_move: Vec<(String, usize)> = keys
+            .iter()
+            .filter_map(|k| {
+                let at_pos = k.rfind('@')?;
+                let n: usize = k[at_pos + 1..].parse().ok()?;
+                if delta > 0 && n >= at {
+                    Some((k.clone(), n))
+                } else if delta < 0 && n >= at {
+                    Some((k.clone(), n))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if delta > 0 {
+            // Sort descending to avoid key collisions when renaming in-place
+            to_move.sort_by(|a, b| b.1.cmp(&a.1));
+            for (key, n) in to_move {
+                if let Some(val) = buffers.remove(&key) {
+                    let prefix = &key[..key.rfind('@').unwrap()];
+                    buffers.insert(format!("{prefix}@{}", n + 1), val);
+                }
+            }
+        } else {
+            to_move.sort_by(|a, b| a.1.cmp(&b.1));
+            for (key, n) in to_move {
+                if n == at {
+                    buffers.remove(&key);
+                } else if let Some(val) = buffers.remove(&key) {
+                    let prefix = &key[..key.rfind('@').unwrap()];
+                    buffers.insert(format!("{prefix}@{}", n - 1), val);
+                }
+            }
+        }
     }
 
     fn canvas_align_left(&mut self) {
@@ -4270,7 +4324,9 @@ impl EditorApp {
         }
         if drag_ended {
             // Apply snap once at drag release so delta math stays exact during the drag.
-            if self.settings.canvas_snap {
+            // Only if the drag actually moved (undo_pushed_for_current_drag is set by
+            // drag_delta_node) — a press-and-release click must not mutate positions.
+            if self.settings.canvas_snap && self.undo_pushed_for_current_drag {
                 const SNAP: f32 = 20.0;
                 let snap_pos =
                     |p: egui::Pos2| egui::pos2((p.x / SNAP).round() * SNAP, (p.y / SNAP).round() * SNAP);
@@ -5031,33 +5087,53 @@ impl eframe::App for EditorApp {
                                 self.ai_step_error =
                                     Some((idx, "AIから有効なステップが返りませんでした。".into()));
                             } else {
-                                let count = new_steps.len();
-                                self.push_undo();
-                                if idx < self.steps.len() {
+                                // Verify the ai_create step is still at the original idx.
+                                // The user may have inserted/deleted steps while the request
+                                // was in-flight, which would shift or remove the slot.
+                                let still_valid = idx < self.steps.len()
+                                    && get_step_key(&self.steps[idx]) == "ai_create";
+                                if !still_valid {
+                                    self.ai_step_error = Some((
+                                        idx,
+                                        "生成完了前にステップが変更されました。再度お試しください。".into(),
+                                    ));
+                                } else {
+                                    let count = new_steps.len();
+                                    self.push_undo();
                                     self.steps.remove(idx);
                                     Self::canvas_shift_positions(
                                         &mut self.canvas_positions,
                                         idx,
                                         -1,
                                     );
-                                }
-                                for (j, s) in new_steps.into_iter().enumerate() {
-                                    self.steps.insert(idx + j, s);
-                                    Self::canvas_shift_positions(
-                                        &mut self.canvas_positions,
-                                        idx + j,
-                                        1,
+                                    Self::form_edit_buffers_shift(
+                                        &mut self.form_edit_buffers,
+                                        idx,
+                                        -1,
                                     );
+                                    for (j, s) in new_steps.into_iter().enumerate() {
+                                        self.steps.insert(idx + j, s);
+                                        Self::canvas_shift_positions(
+                                            &mut self.canvas_positions,
+                                            idx + j,
+                                            1,
+                                        );
+                                        Self::form_edit_buffers_shift(
+                                            &mut self.form_edit_buffers,
+                                            idx + j,
+                                            1,
+                                        );
+                                    }
+                                    self.selected = Some(idx);
+                                    self.multi_selected.clear();
+                                    self.edit_buf = self
+                                        .steps
+                                        .get(idx)
+                                        .map(|s| serde_yml::to_string(s).unwrap_or_default())
+                                        .unwrap_or_default();
+                                    self.dirty = true;
+                                    self.log_ok(format!("{count} ステップを生成しました"));
                                 }
-                                self.selected = Some(idx);
-                                self.multi_selected.clear();
-                                self.edit_buf = self
-                                    .steps
-                                    .get(idx)
-                                    .map(|s| serde_yml::to_string(s).unwrap_or_default())
-                                    .unwrap_or_default();
-                                self.dirty = true;
-                                self.log_ok(format!("{count} ステップを生成しました"));
                             }
                         }
                     }
