@@ -3498,12 +3498,19 @@ impl EditorApp {
         let zoom_y = viewport_size.y / content_h;
         self.canvas_zoom = zoom_x.min(zoom_y).clamp(0.25, 2.0);
 
-        // Center the content
+        // Center in the visible area (minimap occupies bottom-right when n >= 15)
+        const MM_W_FV: f32 = 160.0;
+        const MM_MARGIN_FV: f32 = 8.0;
+        let vis_w = if n >= 15 {
+            (viewport_size.x - MM_W_FV - MM_MARGIN_FV * 2.0).max(viewport_size.x * 0.5)
+        } else {
+            viewport_size.x
+        };
         let z = self.canvas_zoom;
         let center_x = (min_x + max_x) / 2.0;
         let center_y = (min_y + max_y) / 2.0;
         self.canvas_pan = egui::vec2(
-            viewport_size.x / 2.0 / z - center_x,
+            vis_w / 2.0 / z - center_x,
             viewport_size.y / 2.0 / z - center_y,
         );
     }
@@ -3512,13 +3519,20 @@ impl EditorApp {
         if self.multi_selected.len() < 2 {
             return;
         }
-        self.push_undo();
         let min_x = self
             .multi_selected
             .iter()
             .filter_map(|i| self.canvas_positions.get(i))
             .map(|p| p.x)
             .fold(f32::INFINITY, f32::min);
+        let any_change = self
+            .multi_selected
+            .iter()
+            .any(|i| self.canvas_positions.get(i).map(|p| p.x != min_x).unwrap_or(false));
+        if !any_change {
+            return;
+        }
+        self.push_undo();
         for &i in &self.multi_selected {
             if let Some(p) = self.canvas_positions.get_mut(&i) {
                 p.x = min_x;
@@ -3531,13 +3545,20 @@ impl EditorApp {
         if self.multi_selected.len() < 2 {
             return;
         }
-        self.push_undo();
         let min_y = self
             .multi_selected
             .iter()
             .filter_map(|i| self.canvas_positions.get(i))
             .map(|p| p.y)
             .fold(f32::INFINITY, f32::min);
+        let any_change = self
+            .multi_selected
+            .iter()
+            .any(|i| self.canvas_positions.get(i).map(|p| p.y != min_y).unwrap_or(false));
+        if !any_change {
+            return;
+        }
+        self.push_undo();
         for &i in &self.multi_selected {
             if let Some(p) = self.canvas_positions.get_mut(&i) {
                 p.y = min_y;
@@ -4290,29 +4311,26 @@ impl EditorApp {
         // Empty state hint
         if n == 0 {
             let s = S::for_lang(&self.settings.lang);
-            let (msg, show_add_hint) = if self.path.is_none() {
-                (s.empty_canvas_no_file, false)
+            let (msg, cta) = if self.path.is_none() {
+                (s.empty_canvas_no_file, "Cmd+N で新規シナリオ / Cmd+O で開く")
             } else {
-                (s.empty_no_steps, true)
+                (s.empty_no_steps, "Cmd+F でステップを追加")
             };
             let center = resp.rect.center();
-            let offset = if show_add_hint { egui::vec2(0.0, -10.0) } else { egui::Vec2::ZERO };
             painter.text(
-                center + offset,
+                center + egui::vec2(0.0, -10.0),
                 Align2::CENTER_CENTER,
                 msg,
                 FontId::proportional(13.0),
                 Color32::from_gray(100),
             );
-            if show_add_hint {
-                painter.text(
-                    center + egui::vec2(0.0, 14.0),
-                    Align2::CENTER_CENTER,
-                    "Cmd+F でステップを追加",
-                    FontId::proportional(11.0),
-                    Color32::from_gray(65),
-                );
-            }
+            painter.text(
+                center + egui::vec2(0.0, 14.0),
+                Align2::CENTER_CENTER,
+                cta,
+                FontId::proportional(11.0),
+                Color32::from_gray(65),
+            );
         }
 
         // Draw active lasso rectangle
@@ -4384,7 +4402,14 @@ impl EditorApp {
                 let node_color = if is_sel {
                     Color32::from_rgb(100, 140, 255)
                 } else {
-                    Color32::from_gray(110)
+                    // Reflect the same category color used on canvas, darkened for minimap scale
+                    let cat = category_color(step_key_category(get_step_key(&self.steps[i])));
+                    let [r, g, b, _] = cat.to_array();
+                    Color32::from_rgb(
+                        (r as u16 * 2 / 3) as u8,
+                        (g as u16 * 2 / 3) as u8,
+                        (b as u16 * 2 / 3) as u8,
+                    )
                 };
                 painter.rect_filled(mm_node, 1.0, node_color);
             }
@@ -4599,8 +4624,16 @@ impl eframe::App for EditorApp {
                 let max_x = (0..n).map(|i| pos_of(i).x).fold(f32::NEG_INFINITY, f32::max) + NODE_W;
                 let max_y = (0..n).map(|i| pos_of(i).y).fold(f32::NEG_INFINITY, f32::max) + NODE_H;
                 let vp = self.canvas_viewport_size;
+                // Same minimap exclusion as canvas_fit_view: visible width shrinks when n>=15
+                const MM_W_0: f32 = 160.0;
+                const MM_MARGIN_0: f32 = 8.0;
+                let vis_w = if n >= 15 {
+                    (vp.x - MM_W_0 - MM_MARGIN_0 * 2.0).max(vp.x * 0.5)
+                } else {
+                    vp.x
+                };
                 self.canvas_pan = egui::vec2(
-                    vp.x / 2.0 - (min_x + max_x) / 2.0,
+                    vis_w / 2.0 - (min_x + max_x) / 2.0,
                     vp.y / 2.0 - (min_y + max_y) / 2.0,
                 );
             }
@@ -5157,6 +5190,12 @@ impl eframe::App for EditorApp {
                                     ui.end_row();
                                     ui.label("Cmd+A");
                                     ui.label("全選択 (Canvasビューのみ)");
+                                    ui.end_row();
+                                    ui.label("Delete / Backspace");
+                                    ui.label("選択ステップを削除 (確認あり)");
+                                    ui.end_row();
+                                    ui.label("Cmd+C / X / V / D");
+                                    ui.label("コピー / カット / 貼付 / 複製");
                                     ui.end_row();
                                     ui.label("クリック");
                                     ui.label("選択 / 背景クリックで解除");
