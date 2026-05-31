@@ -1360,6 +1360,10 @@ struct EditorApp {
     ai_step_rx: Option<(usize, std::sync::mpsc::Receiver<anyhow::Result<String>>)>,
     /// Per-step error from the most recent ai_create generation attempt.
     ai_step_error: Option<(usize, String)>,
+    /// Index of the step that failed most recently during canvas execution.
+    canvas_error_step: Option<usize>,
+    /// Error message from the most recent canvas execution failure.
+    canvas_error_msg: String,
 }
 
 impl Default for EditorApp {
@@ -1429,6 +1433,8 @@ impl Default for EditorApp {
             undo_limit_warned_at: None,
             ai_step_rx: None,
             ai_step_error: None,
+            canvas_error_step: None,
+            canvas_error_msg: String::new(),
         }
     }
 }
@@ -1727,6 +1733,8 @@ impl EditorApp {
         let _ = std::fs::remove_file(&progress_file);
         self.run_progress_file = Some(progress_file.clone());
         self.current_run_step = None;
+        self.canvas_error_step = None;
+        self.canvas_error_msg.clear();
         let rpa_bin = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|d| d.join("rpa")))
@@ -1769,6 +1777,8 @@ impl EditorApp {
         let _ = std::fs::remove_file(&progress_file);
         self.run_progress_file = Some(progress_file.clone());
         self.current_run_step = None;
+        self.canvas_error_step = None;
+        self.canvas_error_msg.clear();
         // Prefer the `rpa` binary in the same directory as this editor to avoid PATH hijacking.
         let rpa_bin = std::env::current_exe()
             .ok()
@@ -4009,7 +4019,18 @@ impl EditorApp {
                     | "group"
                     | "switch"
             );
-            let from = screen_positions[i] + Vec2::new(NODE_W * z / 2.0, NODE_H * z);
+            let expand_offset = if self.expanded_steps.contains(&i) {
+                let branches = get_inner_steps(&self.steps[i]);
+                if branches.is_empty() {
+                    0.0
+                } else {
+                    (branches.len() as f32 * 18.0 + 8.0) * z
+                }
+            } else {
+                0.0
+            };
+            let from =
+                screen_positions[i] + Vec2::new(NODE_W * z / 2.0, NODE_H * z + expand_offset);
             let to = screen_positions[i + 1] + Vec2::new(NODE_W * z / 2.0, 0.0);
             let dy = to.y - from.y;
             let ctrl_mag = if dy.abs() > 20.0 * z {
@@ -4041,6 +4062,23 @@ impl EditorApp {
                 Vec2::new(0.0, 5.0 * z),
                 Stroke::new(stroke_width, stroke_color),
             );
+            let arrow_label = match step_key {
+                "if" => Some("then"),
+                "foreach" | "while" | "do_while" | "repeat" => Some("do"),
+                "try_catch" => Some("try"),
+                "group" => Some("steps"),
+                _ => None,
+            };
+            if let Some(lbl) = arrow_label {
+                let mid = from.lerp(to, 0.5);
+                painter.text(
+                    mid + Vec2::new(8.0 * z, 0.0),
+                    Align2::LEFT_CENTER,
+                    lbl,
+                    FontId::proportional(9.0 * z),
+                    Color32::from_rgb(150, 130, 80),
+                );
+            }
         }
 
         // ── Collect interactions (to avoid borrow conflicts) ───────────────
@@ -4050,6 +4088,7 @@ impl EditorApp {
         let mut canvas_click_modifier: Option<(usize, bool, bool)> = None; // (idx, shift, cmd)
         let mut double_clicked_node: Option<usize> = None;
         let mut canvas_ctx_action: Option<CanvasContextAction> = None;
+        let mut badge_toggle_idx: Option<usize> = None;
 
         for (idx, _step) in self.steps.iter().enumerate() {
             let screen_pos = screen_positions[idx];
@@ -4081,8 +4120,28 @@ impl EditorApp {
                 drag_ended = true;
             }
             if node_resp.clicked() {
-                let (shift, cmd) = ui.input(|i| (i.modifiers.shift, i.modifiers.command));
-                canvas_click_modifier = Some((idx, shift, cmd));
+                let click_pos = node_resp.interact_pointer_pos().unwrap_or_default();
+                let badge_rect = egui::Rect::from_min_size(
+                    node_rect.max - Vec2::new(38.0 * z, 22.0 * z),
+                    Vec2::new(34.0 * z, 20.0 * z),
+                );
+                let sk = get_step_key(&self.steps[idx]);
+                let is_cpd = matches!(
+                    sk,
+                    "if" | "foreach"
+                        | "repeat"
+                        | "while"
+                        | "do_while"
+                        | "try_catch"
+                        | "group"
+                        | "switch"
+                );
+                if is_cpd && badge_rect.contains(click_pos) {
+                    badge_toggle_idx = Some(idx);
+                } else {
+                    let (shift, cmd) = ui.input(|i| (i.modifiers.shift, i.modifiers.command));
+                    canvas_click_modifier = Some((idx, shift, cmd));
+                }
             }
             if node_resp.double_clicked() {
                 double_clicked_node = Some(idx);
@@ -4137,7 +4196,11 @@ impl EditorApp {
             let full_label = step_summary(step);
 
             // Show full label as tooltip on hover when text is truncated (before culling)
-            if hovered && full_label.chars().count() > 32 {
+            if hovered && self.canvas_error_step == Some(idx) && !self.canvas_error_msg.is_empty() {
+                node_resp.show_tooltip_ui(|ui| {
+                    ui.colored_label(egui::Color32::from_rgb(220, 80, 80), &self.canvas_error_msg);
+                });
+            } else if hovered && full_label.chars().count() > 32 {
                 node_resp.show_tooltip_ui(|ui| {
                     ui.label(&full_label);
                 });
@@ -4271,7 +4334,7 @@ impl EditorApp {
                 }
             }
 
-            // Badge: show child step count for compound steps
+            // Badge: show child step count for compound steps; click to expand/collapse
             let step_key_badge = get_step_key(step);
             let is_compound_node = matches!(
                 step_key_badge,
@@ -4284,9 +4347,15 @@ impl EditorApp {
                     | "switch"
             );
             if is_compound_node {
-                let child_count: usize = get_inner_steps(step).iter().map(|(_, v)| v.len()).sum();
+                let branches = get_inner_steps(step);
+                let child_count: usize = branches.iter().map(|(_, v)| v.len()).sum();
                 if child_count > 0 {
-                    let badge_text = format!("+{child_count}");
+                    let is_expanded = self.expanded_steps.contains(&idx);
+                    let badge_text = if is_expanded {
+                        format!("-{child_count}")
+                    } else {
+                        format!("+{child_count}")
+                    };
                     let badge_pos = node_rect.max - Vec2::new(4.0 * z, 2.0 * z);
                     painter.text(
                         badge_pos,
@@ -4295,6 +4364,38 @@ impl EditorApp {
                         FontId::proportional(9.0 * z),
                         Color32::from_rgba_premultiplied(255, 200, 80, 200),
                     );
+                    // Expand panel when toggled open
+                    if is_expanded && !branches.is_empty() {
+                        let row_h = 18.0 * z;
+                        let panel_h = branches.len() as f32 * row_h + 6.0 * z;
+                        let panel_rect = egui::Rect::from_min_size(
+                            egui::Pos2::new(node_rect.min.x, node_rect.max.y + 2.0 * z),
+                            Vec2::new(NODE_W * z, panel_h),
+                        );
+                        painter.rect_filled(
+                            panel_rect,
+                            4.0 * z,
+                            Color32::from_rgb(28, 28, 32),
+                        );
+                        painter.rect_stroke(
+                            panel_rect,
+                            4.0 * z,
+                            Stroke::new(1.0 * z, Color32::from_rgb(60, 60, 80)),
+                            egui::StrokeKind::Outside,
+                        );
+                        for (row, (label, steps_vec)) in branches.iter().enumerate() {
+                            let row_y = panel_rect.min.y + 3.0 * z + row as f32 * row_h;
+                            let text =
+                                format!("▸ {}  {} steps", label, steps_vec.len());
+                            painter.text(
+                                egui::Pos2::new(node_rect.min.x + 8.0 * z, row_y + row_h * 0.5),
+                                Align2::LEFT_CENTER,
+                                &text,
+                                FontId::proportional(9.5 * z),
+                                Color32::from_rgb(180, 170, 150),
+                            );
+                        }
+                    }
                 }
             }
             if is_running {
@@ -4302,6 +4403,14 @@ impl EditorApp {
                     node_rect.expand(2.0 * z),
                     4.0 * z,
                     egui::Stroke::new(2.0 * z, egui::Color32::from_rgb(249, 226, 175)),
+                    egui::StrokeKind::Outside,
+                );
+            }
+            if self.canvas_error_step == Some(idx) {
+                painter.rect_stroke(
+                    node_rect.expand(2.0 * z),
+                    4.0 * z,
+                    egui::Stroke::new(2.0 * z, egui::Color32::from_rgb(220, 60, 60)),
                     egui::StrokeKind::Outside,
                 );
             }
@@ -4401,6 +4510,13 @@ impl EditorApp {
             self.view_mode = ViewMode::List;
             self.selected_child = None;
             self.scroll_to_selected = true;
+        }
+        if let Some(idx) = badge_toggle_idx {
+            if self.expanded_steps.contains(&idx) {
+                self.expanded_steps.remove(&idx);
+            } else {
+                self.expanded_steps.insert(idx);
+            }
         }
 
         // Background right-click menu (shown when clicking empty canvas space, not on a node)
@@ -5035,11 +5151,14 @@ impl eframe::App for EditorApp {
         if let Some(status) = child_exited_status {
             self.run_child = None;
             self.run_progress_file = None;
+            let last_run_step = self.current_run_step;
             self.current_run_step = None;
             if status.success() {
                 self.log_ok("実行が完了しました");
             } else {
                 let code = status.code().unwrap_or(-1);
+                self.canvas_error_step = last_run_step;
+                self.canvas_error_msg = format!("終了コード: {code}");
                 self.log_err(format!("実行に失敗しました (終了コード: {code})"));
             }
         }
