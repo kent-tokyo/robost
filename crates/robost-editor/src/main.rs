@@ -1567,6 +1567,29 @@ impl EditorApp {
         }
     }
 
+    fn load_file_path(&mut self, p: &std::path::Path) {
+        match std::fs::read_to_string(p) {
+            Ok(text) => match parse_scenario_steps(&text) {
+                Ok((name, vars, steps)) => {
+                    self.name = name;
+                    self.scenario_vars = vars;
+                    self.steps = steps;
+                    self.selected = None;
+                    self.edit_buf.clear();
+                    self.path = Some(p.to_path_buf());
+                    self.dirty = false;
+                    self.undo_stack.clear();
+                    self.redo_stack.clear();
+                    self.form_edit_buffers.clear();
+                    self.canvas_positions.clear();
+                    self.load_canvas_layout(p);
+                }
+                Err(e) => self.log_err(format!("構文エラー: {e}")),
+            },
+            Err(e) => self.log_err(format!("読み込みエラー: {e}")),
+        }
+    }
+
     fn write_scenario_to_path(&mut self, path: PathBuf) {
         match build_scenario_yaml(&self.name, &self.scenario_vars, &self.steps) {
             Ok(text) => match std::fs::write(&path, &text) {
@@ -2722,16 +2745,16 @@ impl EditorApp {
                                                 }
                                                 let branch_len = branch_steps.len();
                                                 ui.add_enabled_ui(ci > 0, |ui| {
-                                                    if ui.small_button("↑").clicked() {
+                                                    if ui.small_button("↑").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                                                         child_action = Some(ChildAction::MoveUp(branch_name.clone(), ci));
                                                     }
                                                 });
                                                 ui.add_enabled_ui(ci + 1 < branch_len, |ui| {
-                                                    if ui.small_button("↓").clicked() {
+                                                    if ui.small_button("↓").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                                                         child_action = Some(ChildAction::MoveDown(branch_name.clone(), ci));
                                                     }
                                                 });
-                                                if ui.small_button("✕").clicked() {
+                                                if ui.small_button("✕").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                                                     child_action = Some(ChildAction::Delete(branch_name.clone(), ci));
                                                 }
                                             });
@@ -2760,7 +2783,7 @@ impl EditorApp {
                                             ui.colored_label(egui::Color32::from_rgb(160, 160, 160), "▶");
                                             ui.colored_label(egui::Color32::from_rgb(160, 160, 160), format!("[{}]", child_idx));
                                             ui.colored_label(col, step_display_name(ck));
-                                            if ui.small_button("✕").clicked() {
+                                            if ui.small_button("✕").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                                                 deselect_child = true;
                                             }
                                         });
@@ -3254,10 +3277,10 @@ impl EditorApp {
                 ui.horizontal(|ui| {
                     ui.strong("AI アシスタント");
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button("✕").clicked() {
+                        if ui.small_button("✕").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                             self.ai_panel_open = false;
                         }
-                        if ui.small_button("クリア").clicked() {
+                        if ui.small_button("クリア").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                             self.ai_messages.clear();
                             self.md_cache = egui_commonmark::CommonMarkCache::default();
                         }
@@ -6654,16 +6677,34 @@ impl eframe::App for EditorApp {
                                                         }
                                                     }
                                                     ui.add_enabled_ui(i > 0, |ui| {
-                                                        if ui.small_button("↑").clicked() {
+                                                        if ui
+                                                            .small_button("↑")
+                                                            .on_hover_cursor(
+                                                                egui::CursorIcon::PointingHand,
+                                                            )
+                                                            .clicked()
+                                                        {
                                                             action = Some(StepAction::MoveUp(i));
                                                         }
                                                     });
                                                     ui.add_enabled_ui(i + 1 < step_count, |ui| {
-                                                        if ui.small_button("↓").clicked() {
+                                                        if ui
+                                                            .small_button("↓")
+                                                            .on_hover_cursor(
+                                                                egui::CursorIcon::PointingHand,
+                                                            )
+                                                            .clicked()
+                                                        {
                                                             action = Some(StepAction::MoveDown(i));
                                                         }
                                                     });
-                                                    if ui.small_button("✕").clicked() {
+                                                    if ui
+                                                        .small_button("✕")
+                                                        .on_hover_cursor(
+                                                            egui::CursorIcon::PointingHand,
+                                                        )
+                                                        .clicked()
+                                                    {
                                                         action = Some(StepAction::Delete(i));
                                                     }
                                                 })
@@ -7380,6 +7421,8 @@ fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    let initial_path: Option<std::path::PathBuf> = std::env::args().nth(1).map(Into::into);
+
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("RPA シナリオエディター")
@@ -7390,11 +7433,15 @@ fn main() -> Result<()> {
     eframe::run_native(
         "robost-editor",
         native_options,
-        Box::new(|cc| {
+        Box::new(move |cc| {
             cc.egui_ctx.set_visuals(egui::Visuals::dark());
             setup_fonts(&cc.egui_ctx);
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Ok(Box::new(EditorApp::default()))
+            let mut app = EditorApp::default();
+            if let Some(p) = initial_path {
+                app.load_file_path(&p);
+            }
+            Ok(Box::new(app))
         }),
     )
     .map_err(|e| anyhow::anyhow!("{e}"))?;
