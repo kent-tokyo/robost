@@ -2233,10 +2233,8 @@ impl EditorApp {
                 if err_idx == idx {
                     ui.add_space(4.0);
                     ui.colored_label(egui::Color32::from_rgb(220, 80, 80), format!("⚠ {msg}"));
-                    if msg.contains("APIキー") {
-                        if ui.small_button("設定を開く").clicked() {
-                            self.settings_open = true;
-                        }
+                    if msg.contains("APIキー") && ui.small_button("設定を開く").clicked() {
+                        self.settings_open = true;
                     }
                 }
             }
@@ -3638,9 +3636,7 @@ impl EditorApp {
             .filter_map(|k| {
                 let at_pos = k.rfind('@')?;
                 let n: usize = k[at_pos + 1..].parse().ok()?;
-                if delta > 0 && n >= at {
-                    Some((k.clone(), n))
-                } else if delta < 0 && n >= at {
+                if n >= at {
                     Some((k.clone(), n))
                 } else {
                     None
@@ -3649,7 +3645,7 @@ impl EditorApp {
             .collect();
         if delta > 0 {
             // Sort descending to avoid key collisions when renaming in-place
-            to_move.sort_by(|a, b| b.1.cmp(&a.1));
+            to_move.sort_by_key(|b| std::cmp::Reverse(b.1));
             for (key, n) in to_move {
                 if let Some(val) = buffers.remove(&key) {
                     let prefix = &key[..key.rfind('@').unwrap()];
@@ -3657,7 +3653,7 @@ impl EditorApp {
                 }
             }
         } else {
-            to_move.sort_by(|a, b| a.1.cmp(&b.1));
+            to_move.sort_by_key(|a| a.1);
             for (key, n) in to_move {
                 if n == at {
                     buffers.remove(&key);
