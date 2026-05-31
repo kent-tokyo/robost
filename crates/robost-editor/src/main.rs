@@ -1375,6 +1375,7 @@ struct EditorApp {
     canvas_pan: egui::Vec2,
     canvas_dragging: Option<(usize, egui::Vec2)>,
     undo_pushed_for_current_drag: bool,
+    canvas_layout_dirty: bool,
     canvas_lasso: Option<(egui::Pos2, egui::Pos2)>,
     minimap_dragging: bool,
     /// Anchor node for Shift+click range selection. Persists through background clicks
@@ -1461,6 +1462,7 @@ impl Default for EditorApp {
             canvas_pan: egui::Vec2::ZERO,
             canvas_dragging: None,
             undo_pushed_for_current_drag: false,
+            canvas_layout_dirty: false,
             canvas_lasso: None,
             minimap_dragging: false,
             canvas_selection_anchor: None,
@@ -1687,8 +1689,8 @@ impl EditorApp {
             Self::canvas_shift_positions(&mut self.canvas_positions, at + j, 1);
             Self::form_edit_buffers_shift(&mut self.form_edit_buffers, at + j, 1);
             let paste_pos = egui::pos2(
-                vp.x / 2.0 / z - pan.x - 130.0 + j as f32 * 40.0,
-                vp.y / 2.0 / z - pan.y - 36.0 + j as f32 * 40.0,
+                vp.x / 2.0 / z - pan.x - NODE_W / 2.0 + j as f32 * 40.0,
+                vp.y / 2.0 / z - pan.y - NODE_H / 2.0 + j as f32 * 40.0,
             );
             self.canvas_positions.insert(at + j, paste_pos);
         }
@@ -3789,7 +3791,7 @@ impl EditorApp {
                 p.x = min_x;
             }
         }
-        self.save_canvas_layout();
+        self.canvas_layout_dirty = true;
     }
 
     fn canvas_align_top(&mut self) {
@@ -3817,7 +3819,7 @@ impl EditorApp {
                 p.y = min_y;
             }
         }
-        self.save_canvas_layout();
+        self.canvas_layout_dirty = true;
     }
 
     fn canvas_distribute_h(&mut self) {
@@ -3867,7 +3869,7 @@ impl EditorApp {
                 }
             }
         }
-        self.save_canvas_layout();
+        self.canvas_layout_dirty = true;
     }
 
     fn canvas_distribute_v(&mut self) {
@@ -3913,7 +3915,7 @@ impl EditorApp {
                 }
             }
         }
-        self.save_canvas_layout();
+        self.canvas_layout_dirty = true;
     }
 
     fn show_canvas(&mut self, ui: &mut egui::Ui) {
@@ -4337,7 +4339,7 @@ impl EditorApp {
                     canvas_ctx_action = Some(CanvasContextAction::OpenInList(idx));
                     ui.close();
                 }
-                if self.multi_selected.len() >= 2 {
+                if self.multi_selected.len() >= 2 && self.multi_selected.contains(&idx) {
                     ui.separator();
                     ui.weak(format!("整列 ({} 選択)", self.multi_selected.len()));
                     if ui.button("← 左揃え").clicked() {
@@ -4743,13 +4745,16 @@ impl EditorApp {
                         tgt_idx
                     };
                     Self::canvas_shift_positions(&mut self.canvas_positions, src_idx, -1);
+                    Self::form_edit_buffers_shift(&mut self.form_edit_buffers, src_idx, -1);
                     Self::canvas_shift_positions(&mut self.canvas_positions, insert_at, 1);
+                    Self::form_edit_buffers_shift(&mut self.form_edit_buffers, insert_at, 1);
                     if let Some(pos) = src_pos {
                         self.canvas_positions.insert(insert_at, pos);
                     }
                     self.steps.insert(insert_at, step);
+                    self.selected = Some(insert_at);
                     self.dirty = true;
-                    self.save_canvas_layout();
+                    self.canvas_layout_dirty = true;
                 }
             }
         }
@@ -4816,7 +4821,7 @@ impl EditorApp {
             }
             self.canvas_dragging = None;
             self.undo_pushed_for_current_drag = false;
-            self.save_canvas_layout();
+            self.canvas_layout_dirty = true;
         }
         if let Some((idx, shift, cmd)) = canvas_click_modifier {
             if cmd {
@@ -4924,6 +4929,7 @@ impl EditorApp {
                         let insert_at = idx + 1;
                         self.steps.insert(insert_at, step);
                         Self::canvas_shift_positions(&mut self.canvas_positions, insert_at, 1);
+                        Self::form_edit_buffers_shift(&mut self.form_edit_buffers, insert_at, 1);
                         if let Some(orig_pos) = self.canvas_positions.get(&idx).copied() {
                             self.canvas_positions.insert(
                                 insert_at,
@@ -5219,8 +5225,8 @@ impl EditorApp {
                     let z = self.canvas_zoom;
                     let vp = resp.rect.size();
                     self.canvas_pan = egui::vec2(
-                        vp.x / 2.0 / z - pos.x - 130.0,
-                        vp.y / 2.0 / z - pos.y - 36.0,
+                        vp.x / 2.0 / z - pos.x - NODE_W / 2.0,
+                        vp.y / 2.0 / z - pos.y - NODE_H / 2.0,
                     );
                     self.select_step(match_idx);
                 }
@@ -5544,7 +5550,14 @@ impl eframe::App for EditorApp {
                         })
                         .collect();
                     self.selected = Some(i - 1);
-                    self.form_edit_buffers.clear();
+                    self.form_edit_buffers.retain(|k, _| {
+                        let first_at = k.find('@').unwrap_or(k.len());
+                        let rem = &k[first_at.saturating_add(1)..];
+                        let end = rem.find('@').unwrap_or(rem.len());
+                        rem[..end]
+                            .parse::<usize>()
+                            .map_or(true, |n| n != i && n != i - 1)
+                    });
                     self.dirty = true;
                 }
             }
@@ -5600,7 +5613,14 @@ impl eframe::App for EditorApp {
                         })
                         .collect();
                     self.selected = Some(i + 1);
-                    self.form_edit_buffers.clear();
+                    self.form_edit_buffers.retain(|k, _| {
+                        let first_at = k.find('@').unwrap_or(k.len());
+                        let rem = &k[first_at.saturating_add(1)..];
+                        let end = rem.find('@').unwrap_or(rem.len());
+                        rem[..end]
+                            .parse::<usize>()
+                            .map_or(true, |n| n != i && n != i + 1)
+                    });
                     self.dirty = true;
                 }
             }
@@ -5624,8 +5644,8 @@ impl eframe::App for EditorApp {
                     let z = self.canvas_zoom;
                     let vp = self.canvas_viewport_size;
                     self.canvas_pan = egui::vec2(
-                        vp.x / 2.0 / z - pos.x - 130.0,
-                        vp.y / 2.0 / z - pos.y - 36.0,
+                        vp.x / 2.0 / z - pos.x - NODE_W / 2.0,
+                        vp.y / 2.0 / z - pos.y - NODE_H / 2.0,
                     );
                 }
             }
@@ -5648,8 +5668,8 @@ impl eframe::App for EditorApp {
                     let z = self.canvas_zoom;
                     let vp = self.canvas_viewport_size;
                     self.canvas_pan = egui::vec2(
-                        vp.x / 2.0 / z - pos.x - 130.0,
-                        vp.y / 2.0 / z - pos.y - 36.0,
+                        vp.x / 2.0 / z - pos.x - NODE_W / 2.0,
+                        vp.y / 2.0 / z - pos.y - NODE_H / 2.0,
                     );
                 }
             }
@@ -6186,7 +6206,7 @@ impl eframe::App for EditorApp {
                         self.push_undo();
                         self.canvas_positions.clear();
                         self.ensure_canvas_layout();
-                        self.save_canvas_layout();
+                        self.canvas_layout_dirty = true;
                     }
                     if ui.button(s.canvas_fit).clicked() {
                         self.canvas_fit_view(self.canvas_viewport_size);
@@ -7284,6 +7304,11 @@ impl eframe::App for EditorApp {
                 );
                 y += toast_height + 4.0;
             }
+        }
+
+        if self.canvas_layout_dirty {
+            self.save_canvas_layout();
+            self.canvas_layout_dirty = false;
         }
     }
 }
