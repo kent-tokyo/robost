@@ -12,15 +12,19 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 |:---:|:---:|
 | ![Scenario YAML](assets/screenshots/scenario_yaml.png) | ![Run Output](assets/screenshots/scenario_run.png) |
 
-## フローエディタ (開発中)
+## ビジュアルシナリオエディタ
 
-| 概要 | ノード設定 |
+| リストビュー — ステップ一覧とノードパレット | Canvas ビュー — 自由配置フローチャート |
 |:---:|:---:|
-| ![Flow Editor Overview](assets/screenshots/editor_overview.png) | ![Node Config](assets/screenshots/editor_node_config.png) |
+| ![List View](assets/screenshots/editor_canvas_list.png) | ![Canvas View](assets/screenshots/editor_canvas_nodes.png) |
 
-| ループ / 分岐フロー | テンプレートピッカー |
+| ノード設定 | テンプレートピッカー |
 |:---:|:---:|
-| ![Loop Flow](assets/screenshots/editor_flow_loop.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
+| ![Node Config](assets/screenshots/editor_node_config.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
+
+| AI パネル | CLI ヘルプ |
+|:---:|:---:|
+| ![AI Panel](assets/screenshots/editor_ai_panel.png) | ![CLI Help](assets/screenshots/cli_help.png) |
 
 ## ダウンロード
 

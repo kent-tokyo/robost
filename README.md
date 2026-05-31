@@ -12,15 +12,19 @@ A Rust-based OSS desktop automation (RPA) tool.
 |:---:|:---:|
 | ![Scenario YAML](assets/screenshots/scenario_yaml.png) | ![Run Output](assets/screenshots/scenario_run.png) |
 
-## Flow Editor (in development)
+## Visual Scenario Editor
 
-| Overview | Node Configuration |
+| List View — step list with node palette | Canvas View — free-placement flowchart |
 |:---:|:---:|
-| ![Flow Editor Overview](assets/screenshots/editor_overview.png) | ![Node Config](assets/screenshots/editor_node_config.png) |
+| ![List View](assets/screenshots/editor_canvas_list.png) | ![Canvas View](assets/screenshots/editor_canvas_nodes.png) |
 
-| Loop / Branch Flow | Template Picker |
+| Node Configuration | Template Picker |
 |:---:|:---:|
-| ![Loop Flow](assets/screenshots/editor_flow_loop.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
+| ![Node Config](assets/screenshots/editor_node_config.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
+
+| AI Panel | CLI Help |
+|:---:|:---:|
+| ![AI Panel](assets/screenshots/editor_ai_panel.png) | ![CLI Help](assets/screenshots/cli_help.png) |
 
 ## Download
 

@@ -12,15 +12,19 @@
 |:---:|:---:|
 | ![Scenario YAML](assets/screenshots/scenario_yaml.png) | ![Run Output](assets/screenshots/scenario_run.png) |
 
-## 流程编辑器 (开发中)
+## 可视化场景编辑器
 
-| 总览 | 节点配置 |
+| 列表视图 — 步骤列表与节点面板 | Canvas 视图 — 自由布局流程图 |
 |:---:|:---:|
-| ![Flow Editor Overview](assets/screenshots/editor_overview.png) | ![Node Config](assets/screenshots/editor_node_config.png) |
+| ![List View](assets/screenshots/editor_canvas_list.png) | ![Canvas View](assets/screenshots/editor_canvas_nodes.png) |
 
-| 循环 / 分支流程 | 模板选择器 |
+| 节点配置 | 模板选择器 |
 |:---:|:---:|
-| ![Loop Flow](assets/screenshots/editor_flow_loop.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
+| ![Node Config](assets/screenshots/editor_node_config.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
+
+| AI 面板 | CLI 帮助 |
+|:---:|:---:|
+| ![AI Panel](assets/screenshots/editor_ai_panel.png) | ![CLI Help](assets/screenshots/cli_help.png) |
 
 ## 下载
 
