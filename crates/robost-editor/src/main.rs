@@ -4192,7 +4192,7 @@ impl EditorApp {
                         | "group"
                         | "switch"
                 );
-                if is_cpd && badge_rect.contains(click_pos) {
+                if is_cpd && z >= 0.7 && badge_rect.contains(click_pos) {
                     badge_toggle_idx = Some(idx);
                 } else {
                     let (shift, cmd) = ui.input(|i| (i.modifiers.shift, i.modifiers.command));
@@ -4407,19 +4407,21 @@ impl EditorApp {
                 let child_count: usize = branches.iter().map(|(_, v)| v.len()).sum();
                 if child_count > 0 {
                     let is_expanded = self.expanded_steps.contains(&idx);
-                    let badge_text = if is_expanded {
-                        format!("-{child_count}")
-                    } else {
-                        format!("+{child_count}")
-                    };
-                    let badge_pos = node_rect.max - Vec2::new(4.0 * z, 2.0 * z);
-                    painter.text(
-                        badge_pos,
-                        Align2::RIGHT_BOTTOM,
-                        badge_text,
-                        FontId::proportional(9.0 * z),
-                        Color32::from_rgba_premultiplied(255, 200, 80, 200),
-                    );
+                    if z >= 0.7 {
+                        let badge_text = if is_expanded {
+                            format!("-{child_count}")
+                        } else {
+                            format!("+{child_count}")
+                        };
+                        let badge_pos = node_rect.max - Vec2::new(4.0 * z, 2.0 * z);
+                        painter.text(
+                            badge_pos,
+                            Align2::RIGHT_BOTTOM,
+                            badge_text,
+                            FontId::proportional(9.0 * z),
+                            Color32::from_rgba_premultiplied(255, 200, 80, 200),
+                        );
+                    }
                     // Expand panel when toggled open (capped at 8 rows)
                     if is_expanded && !branches.is_empty() {
                         const MAX_ROWS: usize = 8;
@@ -4428,8 +4430,14 @@ impl EditorApp {
                         let row_count = visible + usize::from(has_more);
                         let row_h = 18.0 * z;
                         let panel_h = row_count as f32 * row_h + 6.0 * z;
+                        let panel_top_if_above = node_rect.min.y - panel_h - 2.0 * z;
+                        let panel_y = if panel_top_if_above >= origin.y {
+                            panel_top_if_above
+                        } else {
+                            node_rect.max.y + 2.0 * z
+                        };
                         let panel_rect = egui::Rect::from_min_size(
-                            egui::Pos2::new(node_rect.min.x, node_rect.max.y + 2.0 * z),
+                            egui::Pos2::new(node_rect.min.x, panel_y),
                             Vec2::new(NODE_W * z, panel_h),
                         );
                         painter.rect_filled(
@@ -4956,23 +4964,38 @@ impl EditorApp {
 
         // ── Canvas node search bar overlay ────────────────────────────────
         if self.canvas_search_open {
-            let bar_w = 280.0_f32;
+            let bar_w = 320.0_f32;
             let bar_pos = resp.rect.center_top() + egui::vec2(-bar_w / 2.0, 10.0);
-            // Pre-compute match count before moving canvas_search into the closure
             let mut search_text = std::mem::take(&mut self.canvas_search);
-            let matched_count = if search_text.is_empty() {
-                self.steps.len()
+            let q = search_text.to_lowercase();
+            // Collect all matching step indices
+            let matches: Vec<usize> = if q.is_empty() {
+                vec![]
             } else {
-                let q = search_text.to_lowercase();
                 self.steps
                     .iter()
-                    .filter(|s| {
+                    .enumerate()
+                    .filter(|(_, s)| {
                         step_summary(s).to_lowercase().contains(&q)
                             || get_step_key(s).to_lowercase().contains(&q)
                     })
-                    .count()
+                    .map(|(i, _)| i)
+                    .collect()
             };
+            let matched_count = matches.len();
             let total = self.steps.len();
+            // Show "cur/total" if the selected node is in the match list
+            let count_label = if q.is_empty() {
+                format!("{total}")
+            } else {
+                let cur_pos = self
+                    .selected
+                    .and_then(|sel| matches.iter().position(|&i| i == sel));
+                match cur_pos {
+                    Some(p) => format!("{}/{matched_count}", p + 1),
+                    None => format!("{matched_count}/{total}"),
+                }
+            };
             egui::Area::new(egui::Id::new("canvas_search_bar"))
                 .fixed_pos(bar_pos)
                 .order(egui::Order::Foreground)
@@ -4984,36 +5007,66 @@ impl EditorApp {
                             ui.horizontal(|ui| {
                                 let te = ui.add(
                                     egui::TextEdit::singleline(&mut search_text)
-                                        .hint_text("🔍 ノード検索... (Esc で閉じる)")
-                                        .desired_width(bar_w - 70.0),
+                                        .hint_text(
+                                            "🔍 ノード検索... (Enter: 次  ⇧Enter: 前  Esc: 閉じる)",
+                                        )
+                                        .desired_width(bar_w - 90.0),
                                 );
                                 if !te.has_focus() {
                                     te.request_focus();
                                 }
                                 ui.label(
-                                    egui::RichText::new(format!("{matched_count}/{total}"))
+                                    egui::RichText::new(&count_label)
                                         .color(egui::Color32::from_gray(150))
                                         .small(),
                                 );
+                                // Clear button
+                                if !search_text.is_empty()
+                                    && ui
+                                        .small_button(
+                                            egui::RichText::new("×")
+                                                .color(egui::Color32::from_gray(160)),
+                                        )
+                                        .on_hover_text("クリア")
+                                        .clicked()
+                                {
+                                    search_text.clear();
+                                }
                             });
                         });
                 });
-            // Enter → pan to first matching node
-            if !search_text.is_empty()
-                && ui.input(|i| i.key_pressed(egui::Key::Enter))
-            {
-                let q = search_text.to_lowercase();
-                if let Some(match_idx) = self.steps.iter().position(|s| {
-                    step_summary(s).to_lowercase().contains(&q)
-                        || get_step_key(s).to_lowercase().contains(&q)
-                }) {
+            // Enter → next match after selected; Shift+Enter → previous match
+            let shift_enter = ui
+                .input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Enter));
+            let plain_enter = ui
+                .input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+            if !search_text.is_empty() && !matches.is_empty() {
+                let jump_to = if plain_enter {
+                    let cur = self.selected.unwrap_or(0);
+                    let pos = matches.iter().position(|&i| i > cur).unwrap_or(0);
+                    Some(matches[pos])
+                } else if shift_enter {
+                    let cur = self.selected.unwrap_or(0);
+                    let pos = matches
+                        .iter()
+                        .rposition(|&i| i < cur)
+                        .unwrap_or(matches.len() - 1);
+                    Some(matches[pos])
+                } else {
+                    None
+                };
+                if let Some(match_idx) = jump_to {
                     let cols = default_canvas_cols(self.steps.len());
-                    let pos = self.canvas_positions.get(&match_idx).copied().unwrap_or_else(|| {
-                        egui::pos2(
-                            (match_idx % cols) as f32 * 340.0 + 40.0,
-                            (match_idx / cols) as f32 * 132.0 + 40.0,
-                        )
-                    });
+                    let pos = self
+                        .canvas_positions
+                        .get(&match_idx)
+                        .copied()
+                        .unwrap_or_else(|| {
+                            egui::pos2(
+                                (match_idx % cols) as f32 * 340.0 + 40.0,
+                                (match_idx / cols) as f32 * 132.0 + 40.0,
+                            )
+                        });
                     let z = self.canvas_zoom;
                     let vp = resp.rect.size();
                     self.canvas_pan = egui::vec2(
