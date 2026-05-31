@@ -404,6 +404,7 @@ enum ConfirmAction {
 
 // ---- color palette (ajisai-inspired) --------------------------------------
 
+const COL_AI: egui::Color32 = egui::Color32::from_rgb(180, 80, 220);
 const COL_IMG: egui::Color32 = egui::Color32::from_rgb(70, 130, 200);
 const COL_FLOW: egui::Color32 = egui::Color32::from_rgb(200, 140, 50);
 const COL_INPUT: egui::Color32 = egui::Color32::from_rgb(100, 200, 120);
@@ -432,6 +433,7 @@ const COL_UTIL: egui::Color32 = egui::Color32::from_rgb(130, 150, 200);
 
 fn category_color(category: &str) -> egui::Color32 {
     match category {
+        "AI" => COL_AI,
         "画像操作" => COL_IMG,
         "制御フロー" => COL_FLOW,
         "入力操作" => COL_INPUT,
@@ -463,6 +465,7 @@ fn category_color(category: &str) -> egui::Color32 {
 
 fn step_key_category(key: &str) -> &str {
     match key {
+        "ai_create" => "AI",
         "wait_image" | "click_image" | "find_image" | "match_rect" | "wait_no_image"
         | "wait_change" | "ocr_match" | "ml_detect" | "screenshot_save" | "get_pixel_color"
         | "wait_color" | "window_control" => "画像操作",
@@ -619,6 +622,8 @@ struct StepTemplate {
 }
 
 const STEP_TEMPLATES: &[StepTemplate] = &[
+    // ── AI ─────────────────────────────────────────────────────────────────
+    StepTemplate { category: "AI", display_name: "AI でステップ作成", name: "ai_create", yaml: "ai_create:\n  prompt: \"\"\n" },
     // ── 制御フロー ─────────────────────────────────────────────────────────
     StepTemplate { category: "制御フロー", display_name: "条件分岐",           name: "if",           yaml: "if:\n  cond: \"{{ var }}\"\nthen:\n  - wait_ms: 100\nelse:\n  - wait_ms: 100\n" },
     StepTemplate { category: "制御フロー", display_name: "繰り返し(foreach)",  name: "foreach",      yaml: "foreach:\n  var: __rows__\n  do:\n    - wait_ms: 100\n" },
@@ -1350,6 +1355,10 @@ struct EditorApp {
     manual_category_filter: Option<&'static str>,
     /// Tracks when the undo-limit warning toast was last shown (throttles the toast).
     undo_limit_warned_at: Option<std::time::Instant>,
+    /// Background channel for ai_create step generation. Holds (step_idx, receiver).
+    ai_step_rx: Option<(usize, std::sync::mpsc::Receiver<anyhow::Result<String>>)>,
+    /// Per-step error from the most recent ai_create generation attempt.
+    ai_step_error: Option<(usize, String)>,
 }
 
 impl Default for EditorApp {
@@ -1417,6 +1426,8 @@ impl Default for EditorApp {
             var_highlight: None,
             manual_category_filter: None,
             undo_limit_warned_at: None,
+            ai_step_rx: None,
+            ai_step_error: None,
         }
     }
 }
@@ -2134,6 +2145,94 @@ impl EditorApp {
         // Pending actions resolved after closures
         let mut pending_file_key: Option<String> = None;
         let mut child_action: Option<ChildAction> = None;
+
+        // ── ai_create: special prompt + generate button ─────────────────────
+        if outer_key == "ai_create" {
+            ui.label(egui::RichText::new("AI に指示を書くと、自動でステップを生成して置き換えます。").weak());
+            ui.add_space(6.0);
+            let buf_key = format!("ai_prompt@{idx}");
+            let prompt_text = self
+                .form_edit_buffers
+                .entry(buf_key.clone())
+                .or_insert_with(|| {
+                    outer_map
+                        .get("prompt")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_owned()
+                })
+                .clone();
+            let mut prompt_buf = prompt_text.clone();
+            let te = egui::TextEdit::multiline(&mut prompt_buf)
+                .hint_text("例: 「ログインボタンを押す」「パスワード欄に入力してEnterを押す」")
+                .desired_rows(6)
+                .desired_width(f32::INFINITY);
+            if ui.add(te).changed() {
+                self.form_edit_buffers.insert(buf_key, prompt_buf.clone());
+                let escaped = prompt_buf.replace('\\', "\\\\").replace('"', "\\\"");
+                self.edit_buf = format!("ai_create:\n  prompt: \"{escaped}\"\n");
+                self.flush_edit();
+            }
+            ui.add_space(8.0);
+            let is_loading = self.ai_step_rx.as_ref().map(|(i, _)| *i) == Some(idx);
+            let any_loading = self.ai_step_rx.is_some();
+            if is_loading {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label("生成中...");
+                });
+            } else {
+                let btn = egui::Button::new("⚡ AI で生成");
+                if ui.add_enabled(!any_loading, btn).clicked() {
+                    let current_prompt = self
+                        .form_edit_buffers
+                        .get(&format!("ai_prompt@{idx}"))
+                        .cloned()
+                        .unwrap_or_default();
+                    if current_prompt.trim().is_empty() {
+                        self.ai_step_error = Some((idx, "指示を入力してください。".into()));
+                    } else if self.settings.api_key.trim().is_empty() {
+                        self.ai_step_error = Some((idx, "APIキーが設定されていません。「設定」から入力してください。".into()));
+                    } else {
+                        const AI_CREATE_SYSTEM: &str = "\
+あなたはRPAシナリオ作成アシスタントです。ユーザーの指示をRPAのYAMLステップに変換してください。\n\
+\n\
+主要ステップ:\n\
+- click_image: { template: \"xxx.png\" }  # 画像クリック\n\
+- type: \"テキスト\"  # 文字入力\n\
+- press: Enter  # キー押下 (Tab/Enter/Escape/F1-F12 等)\n\
+- wait_image: { template: \"xxx.png\", timeout_ms: 5000 }  # 画像が現れるまで待機\n\
+- wait_no_image: { template: \"xxx.png\", timeout_ms: 5000 }  # 画像が消えるまで待機\n\
+- wait_ms: { ms: 1000 }  # ミリ秒待機\n\
+- key_combo: { keys: [\"ctrl\", \"c\"] }  # キーの組み合わせ\n\
+- set: { var: \"名前\", value: \"値\" }  # 変数セット\n\
+\n\
+必ず ```yaml コードブロックで出力してください。複数ステップも可能です:\n\
+```yaml\n\
+- click_image:\n\
+    template: \"button.png\"\n\
+```\n\
+テンプレート名はユーザーの指示から推測した説明的な名前 (例: \"login_button.png\") を使用してください。";
+                        let (tx, rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
+                        let settings = self.settings.clone();
+                        let prompt_to_send = current_prompt.clone();
+                        std::thread::spawn(move || {
+                            let result = call_ai_api(&settings, &[], &prompt_to_send, AI_CREATE_SYSTEM);
+                            let _ = tx.send(result);
+                        });
+                        self.ai_step_rx = Some((idx, rx));
+                        self.ai_step_error = None;
+                    }
+                }
+            }
+            if let Some((err_idx, ref msg)) = self.ai_step_error.clone() {
+                if err_idx == idx {
+                    ui.add_space(4.0);
+                    ui.colored_label(egui::Color32::from_rgb(220, 80, 80), format!("⚠ {msg}"));
+                }
+            }
+            return;
+        }
 
         egui::ScrollArea::vertical()
             .id_salt("prop_form_scroll")
@@ -4891,6 +4990,78 @@ impl eframe::App for EditorApp {
                     self.ai_unread = true;
                 }
                 ctx.request_repaint();
+            }
+        }
+
+        // ── ai_create step generation polling ────────────────────────────────
+        let ai_step_done = if let Some((idx, ref rx)) = self.ai_step_rx {
+            if let Ok(result) = rx.try_recv() {
+                ctx.request_repaint();
+                Some((idx, result))
+            } else {
+                ctx.request_repaint();
+                None
+            }
+        } else {
+            None
+        };
+        if let Some((idx, result)) = ai_step_done {
+            self.ai_step_rx = None;
+            match result {
+                Err(e) => {
+                    self.ai_step_error = Some((idx, e.to_string()));
+                }
+                Ok(text) => {
+                    let (blocks, _) = extract_yaml_blocks(&text);
+                    let yaml_src = if blocks.is_empty() {
+                        text.clone()
+                    } else {
+                        blocks.join("\n---\n")
+                    };
+                    match serde_yml::from_str::<serde_yml::Value>(&yaml_src) {
+                        Err(e) => {
+                            self.ai_step_error = Some((idx, format!("YAML解析失敗: {e}")));
+                        }
+                        Ok(val) => {
+                            let new_steps: Vec<serde_yml::Value> = match val {
+                                serde_yml::Value::Sequence(seq) => seq,
+                                other => vec![other],
+                            };
+                            if new_steps.is_empty() {
+                                self.ai_step_error =
+                                    Some((idx, "AIから有効なステップが返りませんでした。".into()));
+                            } else {
+                                let count = new_steps.len();
+                                self.push_undo();
+                                if idx < self.steps.len() {
+                                    self.steps.remove(idx);
+                                    Self::canvas_shift_positions(
+                                        &mut self.canvas_positions,
+                                        idx,
+                                        -1,
+                                    );
+                                }
+                                for (j, s) in new_steps.into_iter().enumerate() {
+                                    self.steps.insert(idx + j, s);
+                                    Self::canvas_shift_positions(
+                                        &mut self.canvas_positions,
+                                        idx + j,
+                                        1,
+                                    );
+                                }
+                                self.selected = Some(idx);
+                                self.multi_selected.clear();
+                                self.edit_buf = self
+                                    .steps
+                                    .get(idx)
+                                    .map(|s| serde_yml::to_string(s).unwrap_or_default())
+                                    .unwrap_or_default();
+                                self.dirty = true;
+                                self.log_ok(format!("{count} ステップを生成しました"));
+                            }
+                        }
+                    }
+                }
             }
         }
 
