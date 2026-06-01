@@ -1,0 +1,1206 @@
+// ---- property panel, AI panel, settings, manual windows --------------------
+
+use eframe::egui;
+use std::collections::HashMap;
+
+use crate::ai_integration::{build_system_prompt, call_ai_api, test_ai_connection};
+use crate::flow_helpers::{get_step_key, step_display_name, step_summary};
+use crate::i18n::{Lang, S};
+use crate::settings::{save_settings, AiProvider};
+use crate::state::EditorApp;
+use crate::step_templates::STEP_TEMPLATES;
+use crate::types::{category_color, AiMessage, LogEntry, LogLevel, PropView};
+
+impl EditorApp {
+    pub(crate) fn show_property_form(&mut self, ui: &mut egui::Ui, idx: usize) {
+        const FILE_KEYS: &[&str] = &[
+            "template", "file", "path", "src", "dest", "local", "remote", "sub",
+        ];
+        const SECRET_KEYS: &[&str] = &["password", "pass", "secret", "token"];
+        const MULTILINE_KEYS: &[&str] = &["script", "sql", "cmd", "body", "message", "query"];
+        const PRESS_KEYS: &[&str] = &[
+            "Enter",
+            "Tab",
+            "Escape",
+            "Space",
+            "Backspace",
+            "Delete",
+            "Up",
+            "Down",
+            "Left",
+            "Right",
+            "Home",
+            "End",
+            "PageUp",
+            "PageDown",
+            "F1",
+            "F2",
+            "F3",
+            "F4",
+            "F5",
+            "F6",
+            "F7",
+            "F8",
+            "F9",
+            "F10",
+            "F11",
+            "F12",
+            "Insert",
+        ];
+        const WINDOW_STATES: &[&str] = &["exists", "visible", "focused", "closed"];
+        const WIN_CTRL_ACTIONS: &[&str] = &["focus", "maximize", "minimize", "close"];
+        const SCROLL_DIRS: &[&str] = &["down", "up", "left", "right"];
+        const UIA_STATES: &[&str] = &["exists", "enabled", "visible"];
+        const ALERT_ACTIONS: &[&str] = &["accept", "dismiss", "get_text"];
+
+        enum ChildAction {
+            Select(String, usize),
+            MoveUp(String, usize),
+            MoveDown(String, usize),
+            Delete(String, usize),
+            Add(String),
+        }
+
+        let step = self.steps[idx].clone();
+        let outer_key = get_step_key(&step);
+        let outer_map = match step.as_mapping() {
+            Some(m) => m.clone(),
+            None => {
+                ui.label("ステップ形式が不明です。YAML タブで編集してください。");
+                return;
+            }
+        };
+        let inner_val = outer_map.get(outer_key).cloned();
+
+        // Collect sibling branch sequences (if: then/else at top level)
+        let sibling_branches: Vec<(String, Vec<serde_yml::Value>)> = outer_map
+            .iter()
+            .filter_map(|(k, v)| {
+                let ks = k.as_str()?;
+                if ks == outer_key {
+                    return None;
+                }
+                let seq = v.as_sequence()?;
+                if seq.is_empty() || seq.iter().all(|s| s.is_mapping()) {
+                    Some((ks.to_owned(), seq.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Pending actions resolved after closures
+        let mut pending_file_key: Option<String> = None;
+        let mut child_action: Option<ChildAction> = None;
+
+        // ── ai_create: special prompt + generate button ─────────────────────
+        if outer_key == "ai_create" {
+            ui.label(
+                egui::RichText::new("AI に指示を書くと、自動でステップを生成して置き換えます。")
+                    .weak(),
+            );
+            ui.add_space(6.0);
+            let buf_key = format!("ai_prompt@{idx}");
+            let prompt_text = self
+                .form_edit_buffers
+                .entry(buf_key.clone())
+                .or_insert_with(|| {
+                    outer_map
+                        .get("prompt")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_owned()
+                })
+                .clone();
+            let mut prompt_buf = prompt_text.clone();
+            let te = egui::TextEdit::multiline(&mut prompt_buf)
+                .hint_text("例: 「ログインボタンを押す」「パスワード欄に入力してEnterを押す」")
+                .desired_rows(6)
+                .desired_width(f32::INFINITY);
+            if ui.add(te).changed() {
+                self.form_edit_buffers.insert(buf_key, prompt_buf.clone());
+                let escaped = prompt_buf
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n")
+                    .replace('\r', "\\r");
+                self.edit_buf = format!("ai_create:\n  prompt: \"{escaped}\"\n");
+                self.flush_edit();
+                // Clear stale error so user gets immediate visual feedback that edit registered
+                self.ai_step_error = None;
+            }
+            ui.add_space(8.0);
+            let is_loading = self.ai_step_rx.as_ref().map(|(i, _)| *i) == Some(idx);
+            let any_loading = self.ai_step_rx.is_some();
+            if is_loading {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label("生成中...");
+                });
+            } else {
+                let btn = egui::Button::new("⚡ AI で生成");
+                if ui.add_enabled(!any_loading, btn).clicked() {
+                    let current_prompt = self
+                        .form_edit_buffers
+                        .get(&format!("ai_prompt@{idx}"))
+                        .cloned()
+                        .unwrap_or_default();
+                    if current_prompt.trim().is_empty() {
+                        self.ai_step_error = Some((idx, "指示を入力してください。".into()));
+                    } else if self.settings.api_key.trim().is_empty() {
+                        self.ai_step_error = Some((
+                            idx,
+                            "APIキーが設定されていません。「設定」から入力してください。".into(),
+                        ));
+                    } else {
+                        const AI_CREATE_SYSTEM: &str = "\
+あなたはRPAシナリオ作成アシスタントです。ユーザーの指示をRPAのYAMLステップに変換してください。\n\
+\n\
+主要ステップ:\n\
+- click_image: { template: \"xxx.png\" }  # 画像クリック\n\
+- type: \"テキスト\"  # 文字入力\n\
+- press: Enter  # キー押下 (Tab/Enter/Escape/F1-F12 等)\n\
+- wait_image: { template: \"xxx.png\", timeout_ms: 5000 }  # 画像が現れるまで待機\n\
+- wait_no_image: { template: \"xxx.png\", timeout_ms: 5000 }  # 画像が消えるまで待機\n\
+- wait_ms: 1000  # ミリ秒待機 (スカラー値)\n\
+- key_combo: { keys: [\"ctrl\", \"c\"] }  # キーの組み合わせ\n\
+- set: { name: \"変数名\", value: \"値\" }  # 変数セット\n\
+\n\
+必ず ```yaml コードブロックで出力してください。複数ステップも可能です:\n\
+```yaml\n\
+- click_image:\n\
+    template: \"button.png\"\n\
+```\n\
+テンプレート名はユーザーの指示から推測した説明的な名前 (例: \"login_button.png\") を使用してください。";
+                        let (tx, rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
+                        let settings = self.settings.clone();
+                        let prompt_to_send = current_prompt.clone();
+                        std::thread::spawn(move || {
+                            let result =
+                                call_ai_api(&settings, &[], &prompt_to_send, AI_CREATE_SYSTEM);
+                            let _ = tx.send(result);
+                        });
+                        self.ai_step_rx = Some((idx, rx));
+                        self.ai_step_error = None;
+                    }
+                }
+            }
+            if let Some((err_idx, ref msg)) = self.ai_step_error.clone() {
+                if err_idx == idx {
+                    ui.add_space(4.0);
+                    ui.colored_label(egui::Color32::from_rgb(220, 80, 80), format!("⚠ {msg}"));
+                    if msg.contains("APIキー") && ui.small_button("設定を開く").clicked() {
+                        self.settings_open = true;
+                    }
+                }
+            }
+            return;
+        }
+
+        egui::ScrollArea::vertical()
+            .id_salt("prop_form_scroll")
+            .show(ui, |ui| {
+                // ── press: ComboBox ──────────────────────────────────────────
+                if outer_key == "press" {
+                    let current = match &inner_val {
+                        Some(serde_yml::Value::String(s)) => s.clone(),
+                        _ => String::new(),
+                    };
+                    let mut new_key = current.clone();
+                    ui.horizontal(|ui| {
+                        ui.monospace("press:");
+                        egui::ComboBox::from_id_salt("press_combo")
+                            .selected_text(&current)
+                            .width(130.0)
+                            .show_ui(ui, |ui| {
+                                for k in PRESS_KEYS {
+                                    ui.selectable_value(&mut new_key, k.to_string(), *k);
+                                }
+                            });
+                        let mut free_buf = current.clone();
+                        if ui.add(egui::TextEdit::singleline(&mut free_buf).desired_width(80.0)).changed() {
+                            new_key = free_buf;
+                        }
+                    });
+                    if new_key != current {
+                        let mut rebuilt = outer_map.clone();
+                        rebuilt.insert(
+                            serde_yml::Value::String(outer_key.to_owned()),
+                            serde_yml::Value::String(new_key),
+                        );
+                        self.commit_step(idx, rebuilt);
+                    }
+                    return;
+                }
+
+                match inner_val {
+                    Some(serde_yml::Value::Mapping(m)) => {
+                        let pairs: Vec<(String, serde_yml::Value)> = m
+                            .iter()
+                            .filter_map(|(k, v)| k.as_str().map(|s| (s.to_owned(), v.clone())))
+                            .collect();
+
+                        let scalar_pairs: Vec<&(String, serde_yml::Value)> = pairs
+                            .iter()
+                            .filter(|(_, v)| !matches!(v, serde_yml::Value::Sequence(_)))
+                            .collect();
+                        let inner_branches: Vec<(String, Vec<serde_yml::Value>)> = pairs
+                            .iter()
+                            .filter_map(|(k, v)| {
+                                if let serde_yml::Value::Sequence(seq) = v {
+                                    if seq.is_empty() || seq.iter().all(|s| s.is_mapping()) {
+                                        return Some((k.clone(), seq.clone()));
+                                    }
+                                }
+                                None
+                            })
+                            .collect();
+                        // Sequences of scalars (e.g. keys: [ctrl, c]) — rendered as tag pills.
+                        let scalar_seq_pairs: Vec<(String, Vec<serde_yml::Value>)> = pairs
+                            .iter()
+                            .filter_map(|(k, v)| {
+                                if let serde_yml::Value::Sequence(seq) = v {
+                                    if !seq.is_empty() && seq.iter().any(|s| !s.is_mapping()) {
+                                        return Some((k.clone(), seq.clone()));
+                                    }
+                                }
+                                None
+                            })
+                            .collect();
+
+                        // Pre-populate persistent numeric-field edit buffers from stored state or model.
+                        let mut field_bufs: HashMap<String, String> = scalar_pairs
+                            .iter()
+                            .filter_map(|(fk, fv)| {
+                                if matches!(fv, serde_yml::Value::Number(_)) {
+                                    let key = format!("{fk}@{idx}");
+                                    let val = self.form_edit_buffers.get(&key).cloned()
+                                        .unwrap_or_else(|| match fv {
+                                            serde_yml::Value::Number(n) => n.to_string(),
+                                            _ => unreachable!(),
+                                        });
+                                    Some((fk.clone(), val))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+
+                        let mut new_m = m.clone();
+                        let mut any_changed = false;
+                        let mut num_errors: Vec<(String, String)> = Vec::new();
+
+                        egui::Grid::new("prop_grid")
+                            .num_columns(2)
+                            .min_col_width(90.0)
+                            .spacing([8.0, 6.0])
+                            .striped(true)
+                            .show(ui, |ui| {
+                                for (fk, fv) in &scalar_pairs {
+                                    ui.label(egui::RichText::new(fk.as_str()).monospace().size(12.0));
+                                    ui.horizontal(|ui| {
+                                        let is_file = FILE_KEYS.contains(&fk.as_str());
+                                        let is_secret = SECRET_KEYS.contains(&fk.as_str());
+                                        let is_multi = MULTILINE_KEYS.contains(&fk.as_str());
+                                        let is_state = fk.as_str() == "state" && outer_key == "wait_window";
+                                        let combo_opts: Option<(&[&str], &str)> =
+                                            if fk.as_str() == "state" && outer_key == "wait_window" {
+                                                Some((WINDOW_STATES, "state_combo"))
+                                            } else if fk.as_str() == "action" && outer_key == "window_control" {
+                                                Some((WIN_CTRL_ACTIONS, "win_ctrl_action_combo"))
+                                            } else if fk.as_str() == "direction" && outer_key == "mouse_scroll" {
+                                                Some((SCROLL_DIRS, "scroll_dir_combo"))
+                                            } else if fk.as_str() == "state" && outer_key == "uia_wait" {
+                                                Some((UIA_STATES, "uia_state_combo"))
+                                            } else if fk.as_str() == "action" && outer_key == "web_alert" {
+                                                Some((ALERT_ACTIONS, "alert_action_combo"))
+                                            } else {
+                                                None
+                                            };
+                                        match fv {
+                                            serde_yml::Value::String(s) => {
+                                                if let Some((opts, salt)) = combo_opts {
+                                                    let mut sel = s.clone();
+                                                    egui::ComboBox::from_id_salt(salt)
+                                                        .selected_text(&sel)
+                                                        .width(110.0)
+                                                        .show_ui(ui, |ui| {
+                                                            for opt in opts {
+                                                                ui.selectable_value(&mut sel, opt.to_string(), *opt);
+                                                            }
+                                                        });
+                                                    if sel != *s {
+                                                        new_m.insert(
+                                                            serde_yml::Value::String(fk.clone()),
+                                                            serde_yml::Value::String(sel),
+                                                        );
+                                                        any_changed = true;
+                                                    }
+                                                } else if is_state {
+                                                    // legacy fallback (should be covered above)
+                                                    let mut sel = s.clone();
+                                                    egui::ComboBox::from_id_salt("state_combo")
+                                                        .selected_text(&sel)
+                                                        .width(110.0)
+                                                        .show_ui(ui, |ui| {
+                                                            for st in WINDOW_STATES {
+                                                                ui.selectable_value(&mut sel, st.to_string(), *st);
+                                                            }
+                                                        });
+                                                    if sel != *s {
+                                                        new_m.insert(
+                                                            serde_yml::Value::String(fk.clone()),
+                                                            serde_yml::Value::String(sel),
+                                                        );
+                                                        any_changed = true;
+                                                    }
+                                                } else if is_multi || s.contains('\n') {
+                                                    let mut buf = s.clone();
+                                                    if ui.add(
+                                                        egui::TextEdit::multiline(&mut buf)
+                                                            .code_editor()
+                                                            .desired_width(240.0)
+                                                            .desired_rows(4),
+                                                    ).changed() {
+                                                        new_m.insert(
+                                                            serde_yml::Value::String(fk.clone()),
+                                                            serde_yml::Value::String(buf),
+                                                        );
+                                                        any_changed = true;
+                                                    }
+                                                } else {
+                                                    let mut buf = s.clone();
+                                                    let w = if is_file { 180.0 } else { 250.0 };
+                                                    if ui.add(
+                                                        egui::TextEdit::singleline(&mut buf)
+                                                            .password(is_secret)
+                                                            .desired_width(w),
+                                                    ).changed() {
+                                                        new_m.insert(
+                                                            serde_yml::Value::String(fk.clone()),
+                                                            serde_yml::Value::String(buf),
+                                                        );
+                                                        any_changed = true;
+                                                    }
+                                                    if is_file && ui.small_button("📂").clicked() {
+                                                        pending_file_key = Some(fk.clone());
+                                                    }
+                                                }
+                                            }
+                                            serde_yml::Value::Number(n) => {
+                                                let current_model = n.to_string();
+                                                let buf = field_bufs
+                                                    .entry(fk.clone())
+                                                    .or_insert_with(|| current_model.clone());
+                                                let buf_valid = serde_yml::from_str::<serde_yml::Value>(buf.as_str()).is_ok();
+                                                let text_color = if buf_valid {
+                                                    ui.visuals().text_color()
+                                                } else {
+                                                    egui::Color32::from_rgb(220, 60, 60)
+                                                };
+                                                let resp = ui.add(
+                                                    egui::TextEdit::singleline(buf)
+                                                        .desired_width(90.0)
+                                                        .text_color(text_color),
+                                                );
+                                                if !buf_valid && resp.has_focus() {
+                                                    ui.colored_label(egui::Color32::from_rgb(220, 60, 60), "⚠");
+                                                }
+                                                if resp.has_focus() {
+                                                    if resp.changed() {
+                                                        match serde_yml::from_str::<serde_yml::Value>(buf.as_str()) {
+                                                            Ok(v) => {
+                                                                new_m.insert(serde_yml::Value::String(fk.clone()), v);
+                                                                any_changed = true;
+                                                            }
+                                                            Err(_) => {
+                                                                num_errors.push((fk.clone(), format!("「{buf}」は数値ではありません")));
+                                                            }
+                                                        }
+                                                    }
+                                                } else if resp.lost_focus() {
+                                                    if serde_yml::from_str::<serde_yml::Value>(buf.as_str()).is_err() {
+                                                        *buf = current_model;
+                                                    }
+                                                } else {
+                                                    // Not focused: keep buffer in sync with model
+                                                    *buf = current_model;
+                                                }
+                                            }
+                                            serde_yml::Value::Bool(b) => {
+                                                let mut val = *b;
+                                                if ui.checkbox(&mut val, "").changed() {
+                                                    new_m.insert(
+                                                        serde_yml::Value::String(fk.clone()),
+                                                        serde_yml::Value::Bool(val),
+                                                    );
+                                                    any_changed = true;
+                                                }
+                                            }
+                                            _ => {
+                                                let s = serde_yml::to_string(fv).unwrap_or_default();
+                                                let preview = s.trim();
+                                                let short: String = preview.chars().take(48).collect();
+                                                let short = short.as_str();
+                                                ui.weak(egui::RichText::new(short).monospace().size(10.0))
+                                                    .on_hover_text("複雑な値は YAML タブで編集してください");
+                                                if ui.small_button("YAML タブで編集").clicked() {
+                                                    self.prop_view = PropView::Yaml;
+                                                }
+                                            }
+                                        }
+                                    });
+                                    ui.end_row();
+                                }
+                            });
+
+                        for (fk, err) in &num_errors {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(255, 100, 100),
+                                format!("⚠ {fk}: {err}"),
+                            );
+                        }
+
+                        // Sync persistent numeric buffers back to struct storage.
+                        for (fk, buf) in &field_bufs {
+                            self.form_edit_buffers.insert(format!("{fk}@{idx}"), buf.clone());
+                        }
+
+                        // ── Scalar-sequence tag-pill editor ──────────────────
+                        for (fk, seq) in &scalar_seq_pairs {
+                            ui.add_space(4.0);
+                            ui.label(
+                                egui::RichText::new(fk.as_str()).monospace().size(12.0),
+                            );
+                            let mut new_seq = seq.clone();
+                            let mut seq_changed = false;
+                            let mut delete_idx: Option<usize> = None;
+
+                            ui.horizontal_wrapped(|ui| {
+                                for (item_idx, item) in seq.iter().enumerate() {
+                                    let label = match item {
+                                        serde_yml::Value::String(s) => s.clone(),
+                                        serde_yml::Value::Number(n) => n.to_string(),
+                                        serde_yml::Value::Bool(b) => b.to_string(),
+                                        _ => "?".to_owned(),
+                                    };
+                                    let pill = egui::Button::new(
+                                        egui::RichText::new(format!("{label} ✕")).size(11.0),
+                                    )
+                                    .fill(egui::Color32::from_gray(55))
+                                    .min_size(egui::vec2(0.0, 20.0));
+                                    if ui.add(pill).clicked() {
+                                        delete_idx = Some(item_idx);
+                                    }
+                                    ui.add_space(2.0);
+                                }
+                            });
+
+                            let add_key = format!("{fk}@{idx}@add");
+                            let mut add_buf = self
+                                .form_edit_buffers
+                                .get(&add_key)
+                                .cloned()
+                                .unwrap_or_default();
+                            let mut do_add = false;
+                            ui.horizontal(|ui| {
+                                let resp = ui.add(
+                                    egui::TextEdit::singleline(&mut add_buf)
+                                        .desired_width(120.0)
+                                        .hint_text("追加…"),
+                                );
+                                let enter = resp.has_focus()
+                                    && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                if (enter || ui.small_button("+").clicked()) && !add_buf.is_empty()
+                                {
+                                    do_add = true;
+                                }
+                            });
+
+                            if let Some(di) = delete_idx {
+                                new_seq.remove(di);
+                                seq_changed = true;
+                            }
+                            if do_add {
+                                new_seq.push(serde_yml::Value::String(add_buf.clone()));
+                                add_buf.clear();
+                                seq_changed = true;
+                            }
+                            self.form_edit_buffers.insert(add_key, add_buf);
+
+                            if seq_changed {
+                                new_m.insert(
+                                    serde_yml::Value::String(fk.clone()),
+                                    serde_yml::Value::Sequence(new_seq),
+                                );
+                                any_changed = true;
+                            }
+                        }
+
+                        if any_changed {
+                            let mut rebuilt = outer_map.clone();
+                            rebuilt.insert(
+                                serde_yml::Value::String(outer_key.to_owned()),
+                                serde_yml::Value::Mapping(new_m),
+                            );
+                            self.commit_step(idx, rebuilt);
+                            self.parse_error = None;
+                        }
+
+                        // ── Branch sub-lists ─────────────────────────────────
+                        let all_branches: Vec<(String, Vec<serde_yml::Value>)> = {
+                            let mut v = inner_branches;
+                            v.extend(sibling_branches.iter().cloned());
+                            v
+                        };
+
+                        if !all_branches.is_empty() {
+                            ui.add_space(8.0);
+                            ui.separator();
+
+                            for (branch_name, branch_steps) in &all_branches {
+                                let hdr = egui::RichText::new(format!(
+                                    "▸ {}  ({} ステップ)", branch_name, branch_steps.len()
+                                )).strong().size(12.0);
+                                egui::CollapsingHeader::new(hdr)
+                                    .default_open(true)
+                                    .id_salt(format!("branch_{branch_name}"))
+                                    .show(ui, |ui| {
+                                        for (ci, child) in branch_steps.iter().enumerate() {
+                                            let ck = get_step_key(child);
+                                            let col = category_color(crate::types::step_key_category(ck));
+                                            let summary = step_summary(child);
+                                            let is_sel = self.selected_child
+                                                == Some((branch_name.clone(), ci));
+                                            ui.horizontal(|ui| {
+                                                ui.colored_label(col, "▌");
+                                                if ui.selectable_label(
+                                                    is_sel,
+                                                    format!("{ci}: {summary}"),
+                                                ).clicked() {
+                                                    child_action = Some(ChildAction::Select(branch_name.clone(), ci));
+                                                }
+                                                let branch_len = branch_steps.len();
+                                                ui.add_enabled_ui(ci > 0, |ui| {
+                                                    if ui.small_button("↑").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                                                        child_action = Some(ChildAction::MoveUp(branch_name.clone(), ci));
+                                                    }
+                                                });
+                                                ui.add_enabled_ui(ci + 1 < branch_len, |ui| {
+                                                    if ui.small_button("↓").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                                                        child_action = Some(ChildAction::MoveDown(branch_name.clone(), ci));
+                                                    }
+                                                });
+                                                if ui.small_button("✕").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                                                    child_action = Some(ChildAction::Delete(branch_name.clone(), ci));
+                                                }
+                                            });
+                                        }
+                                        if ui.small_button("+ ステップ追加…").clicked() {
+                                            child_action = Some(ChildAction::Add(branch_name.clone()));
+                                        }
+                                    });
+                            }
+
+                            // Inline YAML editor for selected child
+                            if let Some((ref branch, child_idx)) = self.selected_child.clone() {
+                                if let Some(branch_steps) = self.get_branch_steps(idx, branch) {
+                                    if child_idx < branch_steps.len() {
+                                        ui.separator();
+                                        let ck = get_step_key(&branch_steps[child_idx]);
+                                        let col = category_color(crate::types::step_key_category(ck));
+                                        let mut deselect_child = false;
+                                        ui.horizontal_wrapped(|ui| {
+                                            ui.colored_label(egui::Color32::from_rgb(120, 120, 120), format!("ステップ {}", idx + 1));
+                                            ui.colored_label(egui::Color32::from_rgb(120, 120, 120), "(");
+                                            ui.colored_label(col, outer_key);
+                                            ui.colored_label(egui::Color32::from_rgb(120, 120, 120), ")");
+                                            ui.colored_label(egui::Color32::from_rgb(160, 160, 160), "▶");
+                                            ui.colored_label(egui::Color32::from_rgb(100, 160, 220), branch.as_str());
+                                            ui.colored_label(egui::Color32::from_rgb(160, 160, 160), "▶");
+                                            ui.colored_label(egui::Color32::from_rgb(160, 160, 160), format!("[{}]", child_idx));
+                                            ui.colored_label(col, step_display_name(ck));
+                                            if ui.small_button("✕").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                                                deselect_child = true;
+                                            }
+                                        });
+                                        let resp = ui.add(
+                                            egui::TextEdit::multiline(&mut self.child_edit_buf)
+                                                .code_editor()
+                                                .desired_rows(5)
+                                                .desired_width(f32::INFINITY),
+                                        );
+                                        if resp.changed() {
+                                            match serde_yml::from_str::<serde_yml::Value>(&self.child_edit_buf) {
+                                                Ok(new_child) => {
+                                                    self.child_parse_error = None;
+                                                    let branch_clone = branch.clone();
+                                                    self.push_undo();
+                                                    self.set_branch_step(idx, &branch_clone, child_idx, new_child);
+                                                }
+                                                Err(e) => {
+                                                    self.child_parse_error = Some(e.to_string());
+                                                }
+                                            }
+                                        }
+                                        if let Some(ref err) = self.child_parse_error.clone() {
+                                            ui.colored_label(
+                                                egui::Color32::from_rgb(255, 100, 100),
+                                                format!("YAML エラー: {err}"),
+                                            );
+                                        }
+                                        if deselect_child {
+                                            self.selected_child = None;
+                                            self.child_edit_buf.clear();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Some(scalar) => {
+                        let mut buf = match &scalar {
+                            serde_yml::Value::String(s) => s.clone(),
+                            serde_yml::Value::Number(n) => n.to_string(),
+                            serde_yml::Value::Bool(b) => b.to_string(),
+                            serde_yml::Value::Null => String::new(),
+                            _ => serde_yml::to_string(&scalar).unwrap_or_default(),
+                        };
+                        ui.horizontal(|ui| {
+                            ui.monospace(outer_key);
+                            ui.label(":");
+                            if ui.text_edit_singleline(&mut buf).changed() {
+                                let new_val = serde_yml::from_str::<serde_yml::Value>(&buf)
+                                    .unwrap_or(serde_yml::Value::String(buf.clone()));
+                                let mut rebuilt = outer_map.clone();
+                                rebuilt.insert(
+                                    serde_yml::Value::String(outer_key.to_owned()),
+                                    new_val,
+                                );
+                                self.commit_step(idx, rebuilt);
+                            }
+                        });
+                    }
+                    None => {
+                        ui.label("ステップ形式が不明です。YAML タブで編集してください。");
+                    }
+                }
+            });
+
+        // ── Deferred file dialog ─────────────────────────────────────────────
+        if let Some(fkey) = pending_file_key {
+            if let Some(p) = rfd::FileDialog::new().pick_file() {
+                let path_str = if let Some(ref scenario_path) = self.path {
+                    if let Some(dir) = scenario_path.parent() {
+                        p.strip_prefix(dir)
+                            .map(|r| r.to_string_lossy().into_owned())
+                            .unwrap_or_else(|_| p.to_string_lossy().into_owned())
+                    } else {
+                        p.to_string_lossy().into_owned()
+                    }
+                } else {
+                    p.to_string_lossy().into_owned()
+                };
+                if let Some(step) = self.steps.get(idx) {
+                    let step = step.clone();
+                    let ok = get_step_key(&step);
+                    if let Some(serde_yml::Value::Mapping(mut inner)) =
+                        step.as_mapping().and_then(|m| m.get(ok)).cloned()
+                    {
+                        inner.insert(
+                            serde_yml::Value::String(fkey),
+                            serde_yml::Value::String(path_str),
+                        );
+                        let mut outer = step.as_mapping().unwrap().clone();
+                        outer.insert(
+                            serde_yml::Value::String(ok.to_owned()),
+                            serde_yml::Value::Mapping(inner),
+                        );
+                        self.commit_step(idx, outer);
+                    }
+                }
+            }
+        }
+
+        // ── Child actions ─────────────────────────────────────────────────────
+        if let Some(act) = child_action {
+            match act {
+                ChildAction::Select(branch, ci) => {
+                    if let Some(steps) = self.get_branch_steps(idx, &branch) {
+                        if ci < steps.len() {
+                            self.child_edit_buf =
+                                serde_yml::to_string(&steps[ci]).unwrap_or_default();
+                            self.selected_child = Some((branch, ci));
+                        }
+                    }
+                }
+                ChildAction::MoveUp(branch, ci) => {
+                    self.push_undo();
+                    self.swap_branch_steps(idx, &branch, ci - 1, ci);
+                    if self.selected_child == Some((branch.clone(), ci)) {
+                        self.selected_child = Some((branch, ci - 1));
+                    }
+                }
+                ChildAction::MoveDown(branch, ci) => {
+                    self.push_undo();
+                    self.swap_branch_steps(idx, &branch, ci, ci + 1);
+                    if self.selected_child == Some((branch.clone(), ci)) {
+                        self.selected_child = Some((branch, ci + 1));
+                    }
+                }
+                ChildAction::Delete(branch, ci) => {
+                    self.push_undo();
+                    self.remove_branch_step(idx, &branch, ci);
+                    if self.selected_child == Some((branch.clone(), ci)) {
+                        self.selected_child = None;
+                        self.child_edit_buf.clear();
+                    } else if let Some((ref b, ref mut sel_ci)) = self.selected_child {
+                        if *b == branch && *sel_ci > ci {
+                            *sel_ci -= 1;
+                        }
+                    }
+                }
+                ChildAction::Add(branch) => {
+                    // Open the step picker targeting this branch
+                    self.add_branch_target = Some((idx, branch));
+                    self.add_menu_open = true;
+                    self.add_menu_just_opened = true;
+                    self.add_filter.clear();
+                }
+            }
+        }
+    }
+
+    pub(crate) fn insert_yaml_snippet(&mut self, yaml: &str) {
+        match serde_yml::from_str::<serde_yml::Value>(yaml) {
+            Ok(val) => {
+                self.push_undo();
+                let at = self.selected.map(|i| i + 1).unwrap_or(self.steps.len());
+                let count = match &val {
+                    serde_yml::Value::Sequence(seq) => seq.len(),
+                    _ => 1,
+                };
+                match val {
+                    serde_yml::Value::Sequence(seq) => {
+                        for (j, s) in seq.into_iter().enumerate() {
+                            self.steps.insert(at + j, s);
+                            Self::canvas_shift_positions(&mut self.canvas_positions, at + j, 1);
+                            Self::form_edit_buffers_shift(&mut self.form_edit_buffers, at + j, 1);
+                        }
+                    }
+                    other => {
+                        self.steps.insert(at, other);
+                        Self::canvas_shift_positions(&mut self.canvas_positions, at, 1);
+                        Self::form_edit_buffers_shift(&mut self.form_edit_buffers, at, 1);
+                    }
+                }
+                self.dirty = true;
+                self.ensure_canvas_layout();
+                self.log.push(LogEntry {
+                    message: format!("✅ {}ステップを{}番目の後に挿入しました", count, at),
+                    level: LogLevel::Ok,
+                });
+            }
+            Err(e) => {
+                self.log.push(LogEntry {
+                    message: format!("⚠ YAML解析エラー (挿入失敗): {e}"),
+                    level: LogLevel::Error,
+                });
+            }
+        }
+    }
+
+    pub(crate) fn send_ai_request(&mut self) {
+        if self.ai_loading || self.ai_input.trim().is_empty() {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel::<String>();
+        self.ai_rx = Some(rx);
+        self.ai_loading = true;
+        let settings = self.settings.clone();
+        let history = self.ai_messages.clone();
+        let input = self.ai_input.clone();
+        let input_for_thread = input.clone();
+        let system = build_system_prompt();
+        std::thread::spawn(move || {
+            let result = call_ai_api(&settings, &history, &input_for_thread, &system);
+            let _ = tx.send(result.unwrap_or_else(|e| format!("⚠ API エラー: {e}")));
+        });
+        self.ai_messages.push(AiMessage {
+            role: "user".into(),
+            content: input,
+            yaml_blocks: vec![],
+        });
+        self.ai_input.clear();
+    }
+
+    pub(crate) fn show_ai_panel(&mut self, ctx: &egui::Context) {
+        // Floating button at bottom-right corner
+        let screen = ctx.content_rect();
+        egui::Area::new(egui::Id::new("ai_fab"))
+            .fixed_pos(egui::pos2(screen.max.x - 60.0, screen.max.y - 60.0))
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                let fill = if self.ai_unread {
+                    egui::Color32::from_rgb(220, 80, 40)
+                } else {
+                    egui::Color32::from_rgb(60, 100, 200)
+                };
+                let label = egui::RichText::new("💬")
+                    .color(egui::Color32::WHITE)
+                    .size(22.0);
+                if ui
+                    .add(
+                        egui::Button::new(label)
+                            .min_size(egui::vec2(48.0, 48.0))
+                            .corner_radius(egui::CornerRadius::same(24))
+                            .fill(fill),
+                    )
+                    .on_hover_text("AI アシスタント")
+                    .clicked()
+                {
+                    self.ai_panel_open = !self.ai_panel_open;
+                    if self.ai_panel_open {
+                        self.ai_unread = false;
+                    }
+                }
+            });
+
+        if !self.ai_panel_open {
+            return;
+        }
+        self.ai_unread = false;
+
+        let default_pos = egui::pos2(screen.max.x - 390.0, screen.max.y - 360.0);
+        egui::Window::new("AI アシスタント")
+            .default_pos(default_pos)
+            .default_size([360.0, 320.0])
+            .min_size([280.0, 220.0])
+            .resizable(true)
+            .collapsible(false)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.strong("AI アシスタント");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("✕").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                            self.ai_panel_open = false;
+                        }
+                        if ui.small_button("クリア").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                            self.ai_messages.clear();
+                            self.md_cache = egui_commonmark::CommonMarkCache::default();
+                        }
+                    });
+                });
+                ui.separator();
+
+                egui::ScrollArea::vertical()
+                    .id_salt("ai_scroll")
+                    .max_height(ui.available_height() - 80.0)
+                    .stick_to_bottom(true)
+                    .show(ui, |ui| {
+                        let messages = self.ai_messages.clone();
+                        for (i, msg) in messages.iter().enumerate() {
+                            if msg.role == "user" {
+                                ui.horizontal(|ui| {
+                                    ui.strong("あなた:");
+                                    ui.label(&msg.content);
+                                });
+                            } else {
+                                ui.strong("AI:");
+                                egui_commonmark::CommonMarkViewer::new()
+                                    .show(ui, &mut self.md_cache, &msg.content);
+                                for (bi, yaml) in msg.yaml_blocks.iter().enumerate() {
+                                    let yaml_clone = yaml.clone();
+                                    let preview_text = match serde_yml::from_str::<serde_yml::Value>(&yaml_clone) {
+                                        Ok(serde_yml::Value::Sequence(ref seq)) => {
+                                            let names: Vec<&str> = seq.iter().map(get_step_key).take(3).collect();
+                                            let suffix = if seq.len() > 3 {
+                                                format!(" … ({}件)", seq.len())
+                                            } else {
+                                                String::new()
+                                            };
+                                            format!("{}件: {}{}", seq.len(), names.join(", "), suffix)
+                                        }
+                                        Ok(ref v) => format!("1件: {}", get_step_key(v)),
+                                        Err(_) => "(プレビュー不可)".to_owned(),
+                                    };
+                                    if ui
+                                        .button(format!("📋 挿入 #{}", bi + 1))
+                                        .on_hover_text(preview_text)
+                                        .clicked()
+                                    {
+                                        self.insert_yaml_snippet(&yaml_clone);
+                                    }
+                                }
+                                let _ = i; // suppress unused variable warning
+                            }
+                            ui.separator();
+                        }
+                        if self.ai_loading {
+                            ui.spinner();
+                            ui.label("処理中…");
+                        }
+                    });
+
+                ui.separator();
+                ui.horizontal(|ui| {
+                    let resp = ui.add(
+                        egui::TextEdit::multiline(&mut self.ai_input)
+                            .desired_rows(2)
+                            .desired_width(ui.available_width() - 55.0)
+                            .hint_text(
+                                "e.g. \"Create an Excel loop\"\n\"画像クリックのステップを追加して\"",
+                            ),
+                    );
+                    let send = ui.add_enabled(
+                        !self.ai_loading,
+                        egui::Button::new("送信").min_size(egui::vec2(50.0, 44.0)),
+                    );
+                    if send.clicked()
+                        || (resp.has_focus()
+                            && ctx.input(|i| i.key_pressed(egui::Key::Enter))
+                            && ctx.input(|i| i.modifiers.ctrl))
+                    {
+                        self.send_ai_request();
+                    }
+                });
+                ui.weak("Ctrl+Enter で送信");
+            });
+    }
+
+    pub(crate) fn show_settings_window(&mut self, ctx: &egui::Context) {
+        if !self.settings_open {
+            return;
+        }
+        let s = S::for_lang(&self.settings.lang);
+        let mut open = self.settings_open;
+        egui::Window::new(s.settings_title)
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .default_size([380.0, 240.0])
+            .show(ctx, |ui| {
+                egui::Grid::new("settings_grid")
+                    .num_columns(2)
+                    .spacing([12.0, 8.0])
+                    .show(ui, |ui| {
+                        ui.label(format!("{}:", s.settings_lang));
+                        egui::ComboBox::from_id_salt("lang_combo")
+                            .selected_text(match self.settings.lang {
+                                Lang::Ja => "日本語",
+                                Lang::En => "English",
+                                Lang::Zh => "中文",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.settings.lang, Lang::En, "English");
+                                ui.selectable_value(&mut self.settings.lang, Lang::Ja, "日本語");
+                                ui.selectable_value(&mut self.settings.lang, Lang::Zh, "中文");
+                            });
+                        ui.end_row();
+
+                        ui.label(format!("{}:", s.settings_provider));
+                        egui::ComboBox::from_id_salt("provider_combo")
+                            .selected_text(match self.settings.provider {
+                                AiProvider::Anthropic => "Anthropic (Claude)",
+                                AiProvider::OpenAI => "OpenAI",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.settings.provider,
+                                    AiProvider::Anthropic,
+                                    "Anthropic (Claude)",
+                                );
+                                ui.selectable_value(
+                                    &mut self.settings.provider,
+                                    AiProvider::OpenAI,
+                                    "OpenAI",
+                                );
+                            });
+                        ui.end_row();
+
+                        ui.label(format!("{}:", s.settings_api_key));
+                        if ui
+                            .add(
+                                egui::TextEdit::singleline(&mut self.settings.api_key)
+                                    .password(true)
+                                    .desired_width(240.0),
+                            )
+                            .changed()
+                        {
+                            save_settings(&self.settings);
+                        }
+                        ui.end_row();
+
+                        ui.label(format!("{}:", s.settings_model));
+                        let models: &[&str] = match self.settings.provider {
+                            AiProvider::Anthropic => &[
+                                "claude-haiku-4-5-20251001",
+                                "claude-sonnet-4-6",
+                                "claude-opus-4-7",
+                            ],
+                            AiProvider::OpenAI => &["gpt-4o-mini", "gpt-4o"],
+                        };
+                        egui::ComboBox::from_id_salt("model_combo")
+                            .selected_text(&self.settings.model)
+                            .show_ui(ui, |ui| {
+                                for m in models {
+                                    ui.selectable_value(
+                                        &mut self.settings.model,
+                                        m.to_string(),
+                                        *m,
+                                    );
+                                }
+                            });
+                        ui.end_row();
+                    });
+
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.button(s.settings_save).clicked() {
+                        save_settings(&self.settings);
+                        self.settings_open = false;
+                    }
+                    let testing = self.settings_test_rx.is_some();
+                    if ui
+                        .add_enabled(
+                            !testing && !self.settings.api_key.is_empty(),
+                            egui::Button::new(s.settings_test),
+                        )
+                        .clicked()
+                    {
+                        self.settings_test_result = None;
+                        let (tx, rx) = std::sync::mpsc::channel::<(bool, String)>();
+                        self.settings_test_rx = Some(rx);
+                        let settings = self.settings.clone();
+                        std::thread::spawn(move || {
+                            let result = test_ai_connection(&settings);
+                            let _ = tx.send(result);
+                        });
+                    }
+                    if testing {
+                        ui.spinner();
+                        ui.weak("テスト中…");
+                    } else if let Some((ok, ref msg)) = self.settings_test_result {
+                        if ok {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(80, 200, 80),
+                                format!("✓ {msg}"),
+                            );
+                        } else {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(220, 60, 60),
+                                format!("✗ {msg}"),
+                            );
+                        }
+                    }
+                });
+            });
+        // Flush settings when the window is closed by clicking the X button.
+        if self.settings_open && !open {
+            save_settings(&self.settings);
+        }
+        self.settings_open = open;
+    }
+
+    pub(crate) fn show_manual_window(&mut self, ctx: &egui::Context) {
+        if !self.manual_open {
+            return;
+        }
+        let mut open = self.manual_open;
+        let mut insert_yaml: Option<&'static str> = None;
+
+        egui::Window::new("マニュアル — ステップ一覧")
+            .open(&mut open)
+            .resizable(true)
+            .default_size([500.0, 560.0])
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("検索:");
+                    ui.text_edit_singleline(&mut self.manual_search);
+                    if ui.small_button("クリア").clicked() {
+                        self.manual_search.clear();
+                    }
+                });
+
+                // Category chips — toggles the category filter independently of the text search.
+                ui.horizontal_wrapped(|ui| {
+                    let mut seen = std::collections::HashSet::new();
+                    for t in STEP_TEMPLATES {
+                        if seen.insert(t.category) {
+                            let col = category_color(t.category);
+                            let is_active = self.manual_category_filter == Some(t.category);
+                            let fill = if is_active {
+                                egui::Color32::from_rgba_unmultiplied(
+                                    col.r(),
+                                    col.g(),
+                                    col.b(),
+                                    100,
+                                )
+                            } else {
+                                egui::Color32::from_rgba_unmultiplied(col.r(), col.g(), col.b(), 35)
+                            };
+                            if ui
+                                .add(
+                                    egui::Button::new(egui::RichText::new(t.category).size(10.0))
+                                        .fill(fill)
+                                        .min_size(egui::vec2(0.0, 18.0)),
+                                )
+                                .clicked()
+                            {
+                                self.manual_category_filter =
+                                    if is_active { None } else { Some(t.category) };
+                            }
+                        }
+                    }
+                });
+                ui.separator();
+
+                let kw_filter = self.manual_search.to_lowercase();
+                egui::ScrollArea::vertical()
+                    .max_height(440.0)
+                    .show(ui, |ui| {
+                        let mut last_cat = "";
+                        for t in STEP_TEMPLATES {
+                            let match_filter = (kw_filter.is_empty()
+                                || t.name.to_lowercase().contains(&kw_filter)
+                                || t.display_name.to_lowercase().contains(&kw_filter))
+                                && (self.manual_category_filter.is_none()
+                                    || self.manual_category_filter == Some(t.category));
+                            if !match_filter {
+                                continue;
+                            }
+
+                            if t.category != last_cat {
+                                ui.add_space(4.0);
+                                let col = category_color(t.category);
+                                ui.colored_label(
+                                    col,
+                                    egui::RichText::new(t.category).strong().size(12.0),
+                                );
+                                ui.separator();
+                                last_cat = t.category;
+                            }
+
+                            ui.horizontal(|ui| {
+                                let col = category_color(t.category);
+                                ui.colored_label(col, "▌");
+                                ui.label(egui::RichText::new(t.display_name).size(12.0))
+                                    .on_hover_text(format!(
+                                        "{}\n\n```yaml\n{}\n```",
+                                        t.name, t.yaml
+                                    ));
+                                ui.weak(egui::RichText::new(format!("({})", t.name)).size(10.0));
+                                if ui.small_button("挿入").clicked() {
+                                    insert_yaml = Some(t.yaml);
+                                }
+                            });
+                        }
+                    });
+            });
+
+        self.manual_open = open;
+        if let Some(yaml) = insert_yaml {
+            self.insert_yaml_snippet(yaml);
+        }
+    }
+}
