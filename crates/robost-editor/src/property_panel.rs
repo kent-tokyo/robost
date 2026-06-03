@@ -3,6 +3,8 @@
 use eframe::egui;
 use std::collections::HashMap;
 
+use crate::tokens;
+
 use crate::ai_integration::{build_system_prompt, call_ai_api, test_ai_connection};
 use crate::flow_helpers::{get_step_key, step_display_name, step_summary};
 use crate::i18n::{Lang, S};
@@ -188,7 +190,7 @@ impl EditorApp {
             if let Some((err_idx, ref msg)) = self.ai_step_error.clone() {
                 if err_idx == idx {
                     ui.add_space(4.0);
-                    ui.colored_label(egui::Color32::from_rgb(220, 80, 80), format!("⚠ {msg}"));
+                    ui.colored_label(tokens::ERROR, format!("⚠ {msg}"));
                     if msg.contains("APIキー") && ui.small_button("設定を開く").clicked() {
                         self.settings_open = true;
                     }
@@ -289,6 +291,11 @@ impl EditorApp {
                         let mut new_m = m.clone();
                         let mut any_changed = false;
                         let mut num_errors: Vec<(String, String)> = Vec::new();
+                        // Collect existing variable names for save_as autocomplete
+                        let existing_var_names: Vec<String> = self.scenario_vars
+                            .keys()
+                            .filter_map(|k| k.as_str().map(|s| s.to_owned()))
+                            .collect();
 
                         egui::Grid::new("prop_grid")
                             .num_columns(2)
@@ -368,6 +375,45 @@ impl EditorApp {
                                                         );
                                                         any_changed = true;
                                                     }
+                                                } else if fk.as_str() == "save_as" {
+                                                    // save_as: text field + existing variable picker
+                                                    let mut buf = s.clone();
+                                                    if ui.add(
+                                                        egui::TextEdit::singleline(&mut buf)
+                                                            .desired_width(160.0)
+                                                            .hint_text("変数名"),
+                                                    ).changed() {
+                                                        new_m.insert(
+                                                            serde_yml::Value::String(fk.clone()),
+                                                            serde_yml::Value::String(buf.clone()),
+                                                        );
+                                                        any_changed = true;
+                                                    }
+                                                    if !existing_var_names.is_empty() {
+                                                        let mut sel = buf.clone();
+                                                        egui::ComboBox::from_id_salt(
+                                                            format!("save_as_pick_{idx}"),
+                                                        )
+                                                        .selected_text("▾")
+                                                        .width(36.0)
+                                                        .show_ui(ui, |ui| {
+                                                            ui.set_min_width(120.0);
+                                                            for name in &existing_var_names {
+                                                                ui.selectable_value(
+                                                                    &mut sel,
+                                                                    name.clone(),
+                                                                    name.as_str(),
+                                                                );
+                                                            }
+                                                        });
+                                                        if sel != buf {
+                                                            new_m.insert(
+                                                                serde_yml::Value::String(fk.clone()),
+                                                                serde_yml::Value::String(sel),
+                                                            );
+                                                            any_changed = true;
+                                                        }
+                                                    }
                                                 } else {
                                                     let mut buf = s.clone();
                                                     let w = if is_file { 180.0 } else { 250.0 };
@@ -396,7 +442,7 @@ impl EditorApp {
                                                 let text_color = if buf_valid {
                                                     ui.visuals().text_color()
                                                 } else {
-                                                    egui::Color32::from_rgb(220, 60, 60)
+                                                    tokens::ERROR
                                                 };
                                                 let resp = ui.add(
                                                     egui::TextEdit::singleline(buf)
@@ -404,7 +450,7 @@ impl EditorApp {
                                                         .text_color(text_color),
                                                 );
                                                 if !buf_valid && resp.has_focus() {
-                                                    ui.colored_label(egui::Color32::from_rgb(220, 60, 60), "⚠");
+                                                    ui.colored_label(tokens::ERROR, "⚠");
                                                 }
                                                 if resp.has_focus() {
                                                     if resp.changed() {
@@ -455,10 +501,7 @@ impl EditorApp {
                             });
 
                         for (fk, err) in &num_errors {
-                            ui.colored_label(
-                                egui::Color32::from_rgb(255, 100, 100),
-                                format!("⚠ {fk}: {err}"),
-                            );
+                            ui.colored_label(tokens::ERROR, format!("⚠ {fk}: {err}"));
                         }
 
                         // Sync persistent numeric buffers back to struct storage.
@@ -602,7 +645,7 @@ impl EditorApp {
                                     });
                             }
 
-                            // Inline YAML editor for selected child
+                            // Property form (or YAML fallback) for selected child step
                             if let Some((ref branch, child_idx)) = self.selected_child.clone() {
                                 if let Some(branch_steps) = self.get_branch_steps(idx, branch) {
                                     if child_idx < branch_steps.len() {
@@ -616,39 +659,18 @@ impl EditorApp {
                                             ui.colored_label(col, outer_key);
                                             ui.colored_label(egui::Color32::from_rgb(120, 120, 120), ")");
                                             ui.colored_label(egui::Color32::from_rgb(160, 160, 160), "▶");
-                                            ui.colored_label(egui::Color32::from_rgb(100, 160, 220), branch.as_str());
+                                            ui.colored_label(tokens::ACCENT, branch.as_str());
                                             ui.colored_label(egui::Color32::from_rgb(160, 160, 160), "▶");
-                                            ui.colored_label(egui::Color32::from_rgb(160, 160, 160), format!("[{}]", child_idx));
+                                            ui.colored_label(egui::Color32::from_rgb(160, 160, 160), format!("[{}]", child_idx + 1));
                                             ui.colored_label(col, step_display_name(ck));
                                             if ui.small_button("✕").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                                                 deselect_child = true;
                                             }
                                         });
-                                        let resp = ui.add(
-                                            egui::TextEdit::multiline(&mut self.child_edit_buf)
-                                                .code_editor()
-                                                .desired_rows(5)
-                                                .desired_width(f32::INFINITY),
-                                        );
-                                        if resp.changed() {
-                                            match serde_yml::from_str::<serde_yml::Value>(&self.child_edit_buf) {
-                                                Ok(new_child) => {
-                                                    self.child_parse_error = None;
-                                                    let branch_clone = branch.clone();
-                                                    self.push_undo();
-                                                    self.set_branch_step(idx, &branch_clone, child_idx, new_child);
-                                                }
-                                                Err(e) => {
-                                                    self.child_parse_error = Some(e.to_string());
-                                                }
-                                            }
-                                        }
-                                        if let Some(ref err) = self.child_parse_error.clone() {
-                                            ui.colored_label(
-                                                egui::Color32::from_rgb(255, 100, 100),
-                                                format!("YAML エラー: {err}"),
-                                            );
-                                        }
+                                        // Show inline property form for leaf steps;
+                                        // compound steps fall back to the YAML editor.
+                                        let branch_clone = branch.clone();
+                                        self.show_child_property_form(ui, idx, &branch_clone, child_idx);
                                         if deselect_child {
                                             self.selected_child = None;
                                             self.child_edit_buf.clear();
@@ -728,8 +750,10 @@ impl EditorApp {
                 ChildAction::Select(branch, ci) => {
                     if let Some(steps) = self.get_branch_steps(idx, &branch) {
                         if ci < steps.len() {
-                            self.child_edit_buf =
-                                serde_yml::to_string(&steps[ci]).unwrap_or_default();
+                            // REF-6: child_edit_buf is populated lazily in
+                            // show_child_yaml_editor only when the YAML editor
+                            // fallback is actually used (compound/unknown steps).
+                            self.child_edit_buf.clear();
                             self.selected_child = Some((branch, ci));
                         }
                     }
@@ -770,6 +794,271 @@ impl EditorApp {
             }
         }
     }
+
+    /// Inline property form for a child step inside a branch.
+    /// Shows a field grid for leaf steps; falls back to the YAML textarea for
+    /// compound steps (if/foreach/try_catch/…) which have their own branches.
+    pub(crate) fn show_child_property_form(
+        &mut self,
+        ui: &mut egui::Ui,
+        parent_idx: usize,
+        branch: &str,
+        child_idx: usize,
+    ) {
+        const FILE_KEYS: &[&str] = &[
+            "template", "file", "path", "src", "dest", "local", "remote", "sub",
+        ];
+        const COMPOUND_KEYS: &[&str] = &[
+            "if", "foreach", "repeat", "while", "do_while", "try_catch", "group", "switch",
+        ];
+
+        let child_steps = match self.get_branch_steps(parent_idx, branch) {
+            Some(s) => s,
+            None => return,
+        };
+        let child = match child_steps.get(child_idx) {
+            Some(c) => c.clone(),
+            None => return,
+        };
+
+        let outer_map = match child.as_mapping() {
+            Some(m) => m.clone(),
+            None => {
+                // Non-mapping value — show YAML fallback
+                self.show_child_yaml_editor(ui, parent_idx, branch, child_idx);
+                return;
+            }
+        };
+        let outer_key = match outer_map.iter().next().and_then(|(k, _)| k.as_str()) {
+            Some(k) => k,
+            None => {
+                self.show_child_yaml_editor(ui, parent_idx, branch, child_idx);
+                return;
+            }
+        };
+
+        // Compound steps keep the YAML editor (their branches need separate handling)
+        if COMPOUND_KEYS.contains(&outer_key) {
+            self.show_child_yaml_editor(ui, parent_idx, branch, child_idx);
+            return;
+        }
+
+        let inner_val = outer_map.get(outer_key).cloned();
+        let mut new_outer = outer_map.clone();
+        let mut changed = false;
+        let mut pending_file_key: Option<String> = None;
+
+        match inner_val {
+            Some(serde_yml::Value::Mapping(inner_map)) => {
+                let pairs: Vec<(String, serde_yml::Value)> = inner_map
+                    .iter()
+                    .filter_map(|(k, v)| k.as_str().map(|s| (s.to_owned(), v.clone())))
+                    .collect();
+                let mut new_inner = inner_map.clone();
+
+                egui::Grid::new(egui::Id::new(("child_form", parent_idx, child_idx)))
+                    .num_columns(2)
+                    .spacing([8.0, 4.0])
+                    .striped(true)
+                    .show(ui, |ui| {
+                        for (fk, fv) in &pairs {
+                            let is_file = FILE_KEYS.contains(&fk.as_str());
+                            ui.monospace(fk);
+                            ui.horizontal(|ui| match fv {
+                                serde_yml::Value::String(sv) => {
+                                    let mut buf = sv.clone();
+                                    let resp = ui.add(
+                                        egui::TextEdit::singleline(&mut buf).desired_width(200.0),
+                                    );
+                                    if is_file && ui.small_button("📂").clicked() {
+                                        pending_file_key = Some(fk.clone());
+                                    }
+                                    if resp.changed() {
+                                        new_inner.insert(
+                                            serde_yml::Value::String(fk.clone()),
+                                            serde_yml::Value::String(buf),
+                                        );
+                                        changed = true;
+                                    }
+                                }
+                                serde_yml::Value::Number(n) => {
+                                    let mut buf = n.to_string();
+                                    if ui
+                                        .add(
+                                            egui::TextEdit::singleline(&mut buf)
+                                                .desired_width(100.0),
+                                        )
+                                        .changed()
+                                    {
+                                        if let Ok(nv) =
+                                            serde_yml::from_str::<serde_yml::Value>(&buf)
+                                        {
+                                            new_inner.insert(
+                                                serde_yml::Value::String(fk.clone()),
+                                                nv,
+                                            );
+                                            changed = true;
+                                        }
+                                    }
+                                }
+                                serde_yml::Value::Bool(b) => {
+                                    let mut val = *b;
+                                    if ui.checkbox(&mut val, "").changed() {
+                                        new_inner.insert(
+                                            serde_yml::Value::String(fk.clone()),
+                                            serde_yml::Value::Bool(val),
+                                        );
+                                        changed = true;
+                                    }
+                                }
+                                _ => {
+                                    let preview: String = serde_yml::to_string(fv)
+                                        .unwrap_or_default()
+                                        .trim()
+                                        .chars()
+                                        .take(48)
+                                        .collect();
+                                    ui.weak(
+                                        egui::RichText::new(preview).monospace().size(10.0),
+                                    )
+                                    .on_hover_text("複雑な値は YAML タブで編集してください");
+                                }
+                            });
+                            ui.end_row();
+                        }
+                    });
+
+                // Deferred file picker (must run outside the grid closure)
+                if let Some(fk) = pending_file_key {
+                    if let Some(p) = rfd::FileDialog::new().pick_file() {
+                        let path_str = if let Some(ref scenario_path) = self.path {
+                            if let Some(dir) = scenario_path.parent() {
+                                p.strip_prefix(dir)
+                                    .map(|r| r.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|_| p.to_string_lossy().into_owned())
+                            } else {
+                                p.to_string_lossy().into_owned()
+                            }
+                        } else {
+                            p.to_string_lossy().into_owned()
+                        };
+                        new_inner.insert(
+                            serde_yml::Value::String(fk),
+                            serde_yml::Value::String(path_str),
+                        );
+                        changed = true;
+                    }
+                }
+
+                if changed {
+                    new_outer.insert(
+                        serde_yml::Value::String(outer_key.to_owned()),
+                        serde_yml::Value::Mapping(new_inner),
+                    );
+                    let branch_owned = branch.to_owned();
+                    self.push_undo();
+                    self.set_branch_step(
+                        parent_idx,
+                        &branch_owned,
+                        child_idx,
+                        serde_yml::Value::Mapping(new_outer),
+                    );
+                }
+            }
+
+            Some(serde_yml::Value::String(sv)) => {
+                // e.g.  type: "hello world"
+                let mut buf = sv.clone();
+                if ui
+                    .add(egui::TextEdit::singleline(&mut buf).desired_width(280.0))
+                    .changed()
+                {
+                    new_outer.insert(
+                        serde_yml::Value::String(outer_key.to_owned()),
+                        serde_yml::Value::String(buf),
+                    );
+                    let branch_owned = branch.to_owned();
+                    self.push_undo();
+                    self.set_branch_step(
+                        parent_idx,
+                        &branch_owned,
+                        child_idx,
+                        serde_yml::Value::Mapping(new_outer),
+                    );
+                }
+            }
+
+            Some(serde_yml::Value::Number(n)) => {
+                // e.g.  wait_ms: 1000
+                let mut buf = n.to_string();
+                if ui
+                    .add(egui::TextEdit::singleline(&mut buf).desired_width(120.0))
+                    .changed()
+                {
+                    if let Ok(nv) = serde_yml::from_str::<serde_yml::Value>(&buf) {
+                        new_outer.insert(serde_yml::Value::String(outer_key.to_owned()), nv);
+                        let branch_owned = branch.to_owned();
+                        self.push_undo();
+                        self.set_branch_step(
+                            parent_idx,
+                            &branch_owned,
+                            child_idx,
+                            serde_yml::Value::Mapping(new_outer),
+                        );
+                    }
+                }
+            }
+
+            _ => {
+                // Unknown structure — YAML fallback
+                self.show_child_yaml_editor(ui, parent_idx, branch, child_idx);
+            }
+        }
+    }
+
+    /// Raw YAML textarea for child steps (fallback for compound/unknown steps).
+    fn show_child_yaml_editor(
+        &mut self,
+        ui: &mut egui::Ui,
+        parent_idx: usize,
+        branch: &str,
+        child_idx: usize,
+    ) {
+        // REF-6: lazily sync buffer with current child state so form edits that
+        // preceded this YAML view are reflected correctly.
+        if let Some(steps) = self.get_branch_steps(parent_idx, branch) {
+            if let Some(child) = steps.get(child_idx) {
+                let current_yaml = serde_yml::to_string(child).unwrap_or_default();
+                if self.child_edit_buf.trim() != current_yaml.trim() {
+                    self.child_edit_buf = current_yaml;
+                    self.child_parse_error = None;
+                }
+            }
+        }
+        let resp = ui.add(
+            egui::TextEdit::multiline(&mut self.child_edit_buf)
+                .code_editor()
+                .desired_rows(5)
+                .desired_width(f32::INFINITY),
+        );
+        if resp.changed() {
+            match serde_yml::from_str::<serde_yml::Value>(&self.child_edit_buf) {
+                Ok(new_child) => {
+                    self.child_parse_error = None;
+                    let branch_owned = branch.to_owned();
+                    self.push_undo();
+                    self.set_branch_step(parent_idx, &branch_owned, child_idx, new_child);
+                }
+                Err(e) => {
+                    self.child_parse_error = Some(e.to_string());
+                }
+            }
+        }
+        if let Some(ref err) = self.child_parse_error.clone() {
+            ui.colored_label(tokens::ERROR, format!("YAML エラー: {err}"));
+        }
+    }
+
 
     pub(crate) fn insert_yaml_snippet(&mut self, yaml: &str) {
         match serde_yml::from_str::<serde_yml::Value>(yaml) {
@@ -842,9 +1131,9 @@ impl EditorApp {
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
                 let fill = if self.ai_unread {
-                    egui::Color32::from_rgb(220, 80, 40)
+                    tokens::WARNING
                 } else {
-                    egui::Color32::from_rgb(60, 100, 200)
+                    tokens::ACCENT
                 };
                 let label = egui::RichText::new("💬")
                     .color(egui::Color32::WHITE)
@@ -1082,15 +1371,9 @@ impl EditorApp {
                         ui.weak("テスト中…");
                     } else if let Some((ok, ref msg)) = self.settings_test_result {
                         if ok {
-                            ui.colored_label(
-                                egui::Color32::from_rgb(80, 200, 80),
-                                format!("✓ {msg}"),
-                            );
+                            ui.colored_label(tokens::SUCCESS, format!("✓ {msg}"));
                         } else {
-                            ui.colored_label(
-                                egui::Color32::from_rgb(220, 60, 60),
-                                format!("✗ {msg}"),
-                            );
+                            ui.colored_label(tokens::ERROR, format!("✗ {msg}"));
                         }
                     }
                 });

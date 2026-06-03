@@ -28,3 +28,4 @@ serde = { workspace = true, features = ["derive"] }
 egui_commonmark = "0.22"
 dirs.workspace = true
 keyring.workspace = true
+tempfile.workspace = true

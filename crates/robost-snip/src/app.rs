@@ -7,7 +7,7 @@ use image::{imageops, RgbaImage};
 use robost_template::{Anchor, MaskRegion, Rect, TemplateMeta, WindowPoint};
 use robost_vision::{ScreenPoint, TemplateMatcher};
 use tray_icon::{
-    menu::{Menu, MenuEvent, MenuId, MenuItem},
+    menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem},
     TrayIcon, TrayIconBuilder,
 };
 
@@ -80,6 +80,16 @@ enum OverlayState {
 
 // ===== Tray app =====
 
+fn open_editor() {
+    let bin = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join("robost-editor")))
+        .unwrap_or_else(|| std::path::PathBuf::from("robost-editor"));
+    if let Err(e) = std::process::Command::new(&bin).spawn() {
+        tracing::error!("robost-editor の起動に失敗しました: {e}");
+    }
+}
+
 fn make_icon() -> tray_icon::Icon {
     const S: u32 = 16;
     let mut rgba = vec![0u8; (S * S * 4) as usize];
@@ -97,8 +107,10 @@ pub struct SnipApp {
     quit_id: MenuId,
     capture_id: MenuId,
     help_id: MenuId,
+    open_editor_id: MenuId,
     _hotkey_manager: GlobalHotKeyManager,
     capture_hotkey_id: u32,
+    open_editor_hotkey_id: u32,
     state: OverlayState,
     /// Popup shown to the user (error / success notification).
     popup_msg: Option<PopupMsg>,
@@ -115,14 +127,22 @@ pub struct SnipApp {
 impl SnipApp {
     pub fn new() -> Self {
         let menu = Menu::new();
-        let capture_item = MenuItem::new("キャプチャ開始 (Ctrl+Shift+C)", true, None);
+        let editor_item = MenuItem::new("エディターを開く (Ctrl+Shift+S)", true, None);
+        let open_editor_id = editor_item.id().clone();
+        let capture_item = MenuItem::new("テンプレート採取 (Ctrl+Shift+C)", true, None);
         let capture_id = capture_item.id().clone();
         let help_item = MenuItem::new("使い方", true, None);
         let help_id = help_item.id().clone();
-        let quit_item = MenuItem::new("robost-snip を終了", true, None);
+        let quit_item = MenuItem::new("終了", true, None);
         let quit_id = quit_item.id().clone();
-        menu.append_items(&[&capture_item, &help_item, &quit_item])
-            .expect("menu append");
+        menu.append_items(&[
+            &editor_item,
+            &capture_item,
+            &PredefinedMenuItem::separator(),
+            &help_item,
+            &quit_item,
+        ])
+        .expect("menu append");
 
         let tray = TrayIconBuilder::new()
             .with_icon(make_icon())
@@ -137,15 +157,23 @@ impl SnipApp {
         hotkey_manager
             .register(capture_hotkey)
             .expect("register hotkey");
+        let open_editor_hotkey =
+            HotKey::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyS);
+        let open_editor_hotkey_id = open_editor_hotkey.id();
+        hotkey_manager
+            .register(open_editor_hotkey)
+            .expect("register hotkey");
 
-        tracing::info!("tray icon created; Ctrl+Shift+C registered");
+        tracing::info!("tray icon created; Ctrl+Shift+C / Ctrl+Shift+S registered");
         Self {
             _tray: tray,
             quit_id,
             capture_id,
             help_id,
+            open_editor_id,
             _hotkey_manager: hotkey_manager,
             capture_hotkey_id,
+            open_editor_hotkey_id,
             state: OverlayState::Hidden,
             popup_msg: None,
             show_help: false,
@@ -259,8 +287,10 @@ impl SnipApp {
             return;
         }
 
-        let texture_id = match &self.state {
-            OverlayState::Selecting { texture, .. } => texture.id(),
+        let (texture_id, img_w, img_h) = match &self.state {
+            OverlayState::Selecting { texture, image, .. } => {
+                (texture.id(), image.width() as f32, image.height() as f32)
+            }
             _ => return,
         };
         let screen_rect = ctx.viewport_rect();
@@ -301,7 +331,7 @@ impl SnipApp {
                     egui::Align2::CENTER_TOP,
                     "選択範囲が小さすぎます。もう一度ドラッグしてください",
                     egui::FontId::proportional(16.0),
-                    egui::Color32::from_rgb(255, 220, 80),
+                    crate::WARNING,
                 );
             }
         }
@@ -342,9 +372,24 @@ impl SnipApp {
             painter.rect_stroke(
                 r,
                 0.0,
-                egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 180, 255)),
+                egui::Stroke::new(2.0, crate::ACCENT),
                 egui::StrokeKind::Middle,
             );
+
+            // Show pixel dimensions near cursor (DESIGN.md §3.3)
+            let scale_x = img_w / screen_rect.width();
+            let scale_y = img_h / screen_rect.height();
+            let px_w = (r.width() * scale_x).round() as u32;
+            let px_h = (r.height() * scale_y).round() as u32;
+            if let Some(cur) = pointer_pos {
+                hint_painter.text(
+                    cur + egui::vec2(10.0, 12.0),
+                    egui::Align2::LEFT_TOP,
+                    format!("{px_w} × {px_h} px"),
+                    egui::FontId::proportional(14.0),
+                    egui::Color32::WHITE,
+                );
+            }
         }
 
         if released {
@@ -434,7 +479,7 @@ impl SnipApp {
         let mut do_live_test = false;
 
         egui::Window::new("テンプレートエディター")
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -16.0))
             .collapsible(false)
             .resizable(true)
             .min_size(egui::vec2(460.0, 400.0))
@@ -816,7 +861,9 @@ impl SnipApp {
             }
             Err(msg) => {
                 tracing::error!("save failed: {msg}");
-                self.inline_error = Some(format!("保存に失敗しました: {msg}"));
+                self.inline_error = Some(format!(
+                    "保存に失敗しました: {msg}\n別のフォルダを選択するか、templates/ への書き込み権限を確認してください"
+                ));
                 // Editing state stays open so the user can retry or cancel.
             }
         }
@@ -924,6 +971,8 @@ impl eframe::App for SnipApp {
                 self.show_help = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            } else if event.id == self.open_editor_id {
+                open_editor();
             }
         }
 
@@ -934,6 +983,11 @@ impl eframe::App for SnipApp {
                 if event.id == self.capture_hotkey_id && event.state == HotKeyState::Pressed {
                     tracing::info!("Ctrl+Shift+C: starting capture");
                     self.start_capture(ctx);
+                } else if event.id == self.open_editor_hotkey_id
+                    && event.state == HotKeyState::Pressed
+                {
+                    tracing::info!("Ctrl+Shift+S: opening editor");
+                    open_editor();
                 }
             }
         }

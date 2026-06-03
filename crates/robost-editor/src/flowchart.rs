@@ -4,6 +4,7 @@ use eframe::egui;
 
 use crate::i18n::S;
 use crate::state::EditorApp;
+use crate::tokens;
 
 impl EditorApp {
     pub(crate) fn show_flowchart(&mut self, ui: &mut egui::Ui) {
@@ -177,7 +178,7 @@ impl EditorApp {
                 painter.rect_stroke(
                     node_rect.expand(1.5 * z),
                     5.0 * z,
-                    egui::Stroke::new(2.5 * z, egui::Color32::from_rgb(249, 226, 175)),
+                    egui::Stroke::new(2.5 * z, tokens::WARNING),
                     egui::StrokeKind::Outside,
                 );
             }

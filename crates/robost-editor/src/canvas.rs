@@ -8,7 +8,8 @@ use crate::flow_helpers::{
     step_summary, NODE_H, NODE_W,
 };
 use crate::state::EditorApp;
-use crate::types::{CanvasContextAction, ConfirmAction, ViewMode};
+use crate::tokens;
+use crate::types::{CanvasComment, CanvasContextAction, ConfirmAction, ViewMode};
 
 pub(crate) fn layout_path(scenario_path: &std::path::Path) -> std::path::PathBuf {
     let mut p = scenario_path.to_path_buf();
@@ -69,14 +70,26 @@ impl EditorApp {
         for (k, v) in &self.canvas_positions {
             positions.insert(k.to_string(), serde_json::json!([v.x, v.y]));
         }
-        let layout = serde_json::json!({ "positions": positions });
+        let comments_json: Vec<serde_json::Value> = self
+            .canvas_comments
+            .iter()
+            .map(|c| serde_json::to_value(c).unwrap_or(serde_json::Value::Null))
+            .collect();
+        let layout = serde_json::json!({
+            "positions": positions,
+            "comments": comments_json,
+        });
         if let Ok(text) = serde_json::to_string(&layout) {
-            let _ = std::fs::write(&lpath, text);
+            if let Err(e) = std::fs::write(&lpath, &text) {
+                tracing::warn!("canvas layout save failed: {e} — {}", lpath.display());
+            }
         }
     }
 
     pub(crate) fn load_canvas_layout(&mut self, scenario_path: &std::path::Path) {
         self.canvas_positions.clear();
+        self.canvas_comments.clear();
+        self.canvas_comment_next_id = 1;
         let lpath = layout_path(scenario_path);
         let Ok(text) = std::fs::read_to_string(&lpath) else {
             return;
@@ -84,18 +97,28 @@ impl EditorApp {
         let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) else {
             return;
         };
-        let Some(obj) = val["positions"].as_object() else {
-            return;
-        };
-        for (k, v) in obj {
-            let Ok(idx) = k.parse::<usize>() else {
-                continue;
-            };
-            let Some(arr) = v.as_array() else { continue };
-            if arr.len() == 2 {
-                let x = arr[0].as_f64().unwrap_or(0.0) as f32;
-                let y = arr[1].as_f64().unwrap_or(0.0) as f32;
-                self.canvas_positions.insert(idx, egui::pos2(x, y));
+        if let Some(obj) = val["positions"].as_object() {
+            for (k, v) in obj {
+                let Ok(idx) = k.parse::<usize>() else {
+                    continue;
+                };
+                let Some(arr) = v.as_array() else { continue };
+                if arr.len() == 2 {
+                    let x = arr[0].as_f64().unwrap_or(0.0) as f32;
+                    let y = arr[1].as_f64().unwrap_or(0.0) as f32;
+                    self.canvas_positions.insert(idx, egui::pos2(x, y));
+                }
+            }
+        }
+        if let Some(comments_arr) = val["comments"].as_array() {
+            for cv in comments_arr {
+                if let Ok(c) = serde_json::from_value::<CanvasComment>(cv.clone()) {
+                    let id = c.id;
+                    self.canvas_comments.push(c);
+                    if id >= self.canvas_comment_next_id {
+                        self.canvas_comment_next_id = id + 1;
+                    }
+                }
             }
         }
     }
@@ -134,7 +157,8 @@ impl EditorApp {
         // does not place content behind the minimap overlay.
         const MM_W: f32 = 160.0;
         const MM_MARGIN: f32 = 8.0;
-        let effective_w = if n >= 15 {
+        let minimap_active = n > 0 && (n >= 15 || self.settings.minimap_show);
+        let effective_w = if minimap_active {
             (viewport_size.x - MM_W - MM_MARGIN * 2.0).max(viewport_size.x * 0.5)
         } else {
             viewport_size.x
@@ -143,11 +167,9 @@ impl EditorApp {
         let zoom_y = viewport_size.y / content_h;
         self.canvas_zoom = zoom_x.min(zoom_y).clamp(0.25, 2.0);
 
-        // Center in the visible area (minimap occupies bottom-right when n >= 15)
-        const MM_W_FV: f32 = 160.0;
-        const MM_MARGIN_FV: f32 = 8.0;
-        let vis_w = if n >= 15 {
-            (viewport_size.x - MM_W_FV - MM_MARGIN_FV * 2.0).max(viewport_size.x * 0.5)
+        // Center in the visible area (minimap occupies bottom-right when active)
+        let vis_w = if minimap_active {
+            (viewport_size.x - MM_W - MM_MARGIN * 2.0).max(viewport_size.x * 0.5)
         } else {
             viewport_size.x
         };
@@ -314,6 +336,7 @@ impl EditorApp {
                 }
             }
         }
+        self.canvas_layout_dirty = true;
         self.save_canvas_layout();
     }
 
@@ -436,25 +459,35 @@ impl EditorApp {
                     .unwrap_or(false));
 
         // Dark canvas background
-        painter.rect_filled(resp.rect, 0.0, egui::Color32::from_rgb(26, 27, 30));
+        painter.rect_filled(resp.rect, 0.0, tokens::CANVAS_BG);
 
-        // Background dot grid (every 40px in canvas space, drawn as small dots)
+        // Background grid (every 40px in canvas space).
+        // Uses line_segment instead of circle_filled to avoid O(W*H/grid²) draw calls
+        // at low zoom — at z=0.25 circles would be ~20k calls per frame.
         {
             let grid = 40.0 * z;
-            let offset_x = (self.canvas_pan.x * z).rem_euclid(grid);
-            let offset_y = (self.canvas_pan.y * z).rem_euclid(grid);
-            let mut x = resp.rect.min.x + offset_x;
-            while x < resp.rect.max.x {
+            // Skip grid entirely when zoomed out below 20% (grid < 8px — invisible anyway)
+            if grid >= 8.0 {
+                let offset_x = (self.canvas_pan.x * z).rem_euclid(grid);
+                let offset_y = (self.canvas_pan.y * z).rem_euclid(grid);
+                let grid_color = egui::Color32::from_gray(42);
+                let stroke = egui::Stroke::new(1.0, grid_color);
+                let mut x = resp.rect.min.x + offset_x;
+                while x <= resp.rect.max.x {
+                    painter.line_segment(
+                        [egui::pos2(x, resp.rect.min.y), egui::pos2(x, resp.rect.max.y)],
+                        stroke,
+                    );
+                    x += grid;
+                }
                 let mut y = resp.rect.min.y + offset_y;
-                while y < resp.rect.max.y {
-                    painter.circle_filled(
-                        egui::pos2(x, y),
-                        1.0_f32.max(0.5 * z),
-                        egui::Color32::from_gray(50),
+                while y <= resp.rect.max.y {
+                    painter.line_segment(
+                        [egui::pos2(resp.rect.min.x, y), egui::pos2(resp.rect.max.x, y)],
+                        stroke,
                     );
                     y += grid;
                 }
-                x += grid;
             }
         }
 
@@ -525,6 +558,11 @@ impl EditorApp {
             self.multi_selected.clear();
             self.canvas_selection_anchor = None;
         }
+        // Middle-mouse pan (industry standard — Figma / Blender compatible)
+        if resp.dragged_by(egui::PointerButton::Middle) && !cursor_over_minimap {
+            self.canvas_pan += resp.drag_delta() / z;
+        }
+
         // Pan on background drag, or lasso when Shift is held (not over minimap).
         // Checking dragged_by (not just drag_started) handles the race condition where the
         // user presses Shift slightly after beginning a drag — the lasso starts from the
@@ -538,7 +576,7 @@ impl EditorApp {
                 // Start lasso (converts ongoing pan to lasso on Shift press)
                 let start = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
                 self.canvas_lasso = Some((start, start));
-                self.canvas_lasso_additive = ui.input(|i| i.modifiers.shift);
+                self.canvas_lasso_additive = true; // shift guard above guarantees true
             } else if let Some((start, _)) = self.canvas_lasso {
                 let cursor = resp.interact_pointer_pos().unwrap_or(resp.rect.min);
                 self.canvas_lasso = Some((start, cursor));
@@ -600,9 +638,10 @@ impl EditorApp {
             let stroke_color = if is_compound {
                 Color32::from_rgb(120, 100, 60)
             } else {
-                Color32::from_gray(70)
+                tokens::EDGE_COLOR
             };
-            let stroke_width = if is_compound { 1.0 * z } else { 1.5 * z };
+            // Ensure edges remain visible at extreme zoom-out (min 1px)
+            let stroke_width = if is_compound { (1.0 * z).max(1.0) } else { (1.5 * z).max(1.0) };
             painter.add(egui::Shape::CubicBezier(
                 CubicBezierShape::from_points_stroke(
                     [from, from + ctrl, to - ctrl, to],
@@ -693,18 +732,18 @@ impl EditorApp {
                         [from_p, from_p + ctrl, end_pos - ctrl, end_pos],
                         false,
                         Color32::TRANSPARENT,
-                        Stroke::new(2.0 * z, Color32::from_rgb(100, 180, 255)),
+                        Stroke::new(2.0 * z, tokens::ACCENT),
                     ),
                 ));
-                painter.circle_filled(from_p, 5.0 * z, Color32::from_rgb(100, 180, 255));
-                painter.circle_filled(end_pos, 5.0 * z, Color32::from_rgb(100, 180, 255));
+                painter.circle_filled(from_p, 5.0 * z, tokens::ACCENT);
+                painter.circle_filled(end_pos, 5.0 * z, tokens::ACCENT);
                 // Label anchored to the source port — doesn't move with cursor
                 painter.text(
                     from_p + egui::Vec2::new(10.0 * z, -12.0 * z),
                     egui::Align2::LEFT_BOTTOM,
                     "→ ここに移動",
                     egui::FontId::proportional(10.0 * z),
-                    egui::Color32::from_rgb(100, 200, 255),
+                    tokens::ACCENT,
                 );
             }
         }
@@ -717,7 +756,7 @@ impl EditorApp {
         let mut double_clicked_node: Option<usize> = None;
         let mut canvas_ctx_action: Option<CanvasContextAction> = None;
         let mut badge_toggle_idx: Option<usize> = None;
-        let mut panel_click_step: Option<usize> = None;
+        let mut panel_click_step: Option<(usize, String)> = None; // (parent_idx, branch_name)
         let mut edge_drag_start_idx: Option<usize> = None;
         let mut edge_drag_done = false;
         let mut edge_drag_pos_update: Option<egui::Pos2> = None;
@@ -794,8 +833,21 @@ impl EditorApp {
             // Right-click context menu
             node_resp.context_menu(|ui| {
                 let s = crate::i18n::S::for_lang(&self.settings.lang);
-                if ui.button(s.ctx_delete).clicked() {
-                    canvas_ctx_action = Some(CanvasContextAction::Delete(idx));
+                {
+                    let is_dis = crate::state::EditorApp::step_is_disabled(&self.steps[idx]);
+                    let toggle_label = if is_dis { "● 有効化" } else { "○ 無効化" };
+                    if ui.button(toggle_label).clicked() {
+                        canvas_ctx_action = Some(CanvasContextAction::ToggleEnabled(idx));
+                        ui.close();
+                    }
+                    ui.separator();
+                }
+                if ui.button(s.ctx_copy).clicked() {
+                    canvas_ctx_action = Some(CanvasContextAction::CopySelected);
+                    ui.close();
+                }
+                if ui.button(s.ctx_cut).clicked() {
+                    canvas_ctx_action = Some(CanvasContextAction::CutSelected);
                     ui.close();
                 }
                 if ui.button(s.ctx_duplicate).clicked() {
@@ -807,8 +859,22 @@ impl EditorApp {
                     ui.close();
                 }
                 ui.separator();
+                if ui.button(s.ctx_delete).clicked() {
+                    canvas_ctx_action = Some(CanvasContextAction::Delete(idx));
+                    ui.close();
+                }
+                ui.separator();
                 if ui.button(s.ctx_open_in_list).clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::OpenInList(idx));
+                    ui.close();
+                }
+                if self.run_child.is_none()
+                    && ui
+                        .button(format!("▶ ここから実行 (ステップ {}〜)", idx + 1))
+                        .on_hover_text("このステップ以降のみを実行します")
+                        .clicked()
+                {
+                    canvas_ctx_action = Some(CanvasContextAction::RunFrom(idx));
                     ui.close();
                 }
                 if self.multi_selected.len() >= 2 && self.multi_selected.contains(&idx) {
@@ -845,7 +911,7 @@ impl EditorApp {
                 if let Some(err_msg) = self.canvas_error_steps.get(&idx) {
                     let msg = err_msg.clone();
                     node_resp.show_tooltip_ui(|ui| {
-                        ui.colored_label(egui::Color32::from_rgb(220, 80, 80), &msg);
+                        ui.colored_label(tokens::ERROR, &msg);
                     });
                 } else if full_label.chars().count() > 32 {
                     node_resp.show_tooltip_ui(|ui| {
@@ -864,15 +930,22 @@ impl EditorApp {
             let selected = self.selected == Some(idx);
             let is_multi_only = self.multi_selected.contains(&idx) && !selected;
             let is_running = self.current_run_step == Some(idx);
+            let is_disabled = crate::state::EditorApp::step_is_disabled(step);
             let key = get_step_key(step);
-            let cat_color = category_color(step_key_category(key));
+            let cat_color = if is_disabled {
+                Color32::from_gray(55)
+            } else {
+                category_color(step_key_category(key))
+            };
             // Blend category color into base background
             let base_bg = if selected {
-                Color32::from_rgb(28, 52, 88)
+                tokens::NODE_BG_SELECTED
             } else if is_running {
-                Color32::from_rgb(80, 60, 10)
+                tokens::NODE_BG_RUNNING
+            } else if is_disabled {
+                Color32::from_gray(28)
             } else {
-                Color32::from_gray(40)
+                tokens::NODE_BG
             };
             let blended_bg = {
                 let [r0, g0, b0, _] = base_bg.to_array();
@@ -944,12 +1017,22 @@ impl EditorApp {
                 } else {
                     (NODE_H * z * 0.3, NODE_H * z * 0.68)
                 };
+                // Disabled overlay: "⊘" in top-right
+                if is_disabled && z >= 0.5 {
+                    painter.text(
+                        node_rect.right_top() + Vec2::new(-6.0 * z, 6.0 * z),
+                        Align2::RIGHT_TOP,
+                        "⊘",
+                        FontId::proportional((11.0 * z).max(9.0)),
+                        Color32::from_rgba_premultiplied(180, 80, 80, 200),
+                    );
+                }
                 painter.text(
                     node_rect.min + Vec2::new(10.0 * z, idx_y),
                     Align2::LEFT_CENTER,
                     format!("{}", idx + 1),
                     FontId::proportional((9.0 * z).max(9.0)),
-                    Color32::from_gray(185),
+                    if is_disabled { Color32::from_gray(90) } else { Color32::from_gray(185) },
                 );
                 const MAX_LABEL_CHARS: usize = 32;
                 let label = if full_label.chars().count() > MAX_LABEL_CHARS {
@@ -963,7 +1046,7 @@ impl EditorApp {
                     Align2::LEFT_CENTER,
                     label,
                     FontId::proportional((11.0 * z).max(10.0)),
-                    Color32::from_gray(228),
+                    if is_disabled { Color32::from_gray(100) } else { Color32::from_gray(228) },
                 );
                 // High-zoom third line: step type
                 if z >= 1.5 {
@@ -1050,7 +1133,35 @@ impl EditorApp {
                                 );
                             }
                             if row_resp.clicked() {
-                                panel_click_step = Some(idx);
+                                panel_click_step = Some((idx, label.to_string()));
+                            }
+                            // Small "+" on the right side of each branch row to add a step
+                            let add_btn_size = 14.0 * z;
+                            let add_btn_rect = Rect::from_min_size(
+                                egui::Pos2::new(
+                                    node_rect.max.x - add_btn_size - 4.0 * z,
+                                    row_y + (row_h - add_btn_size) / 2.0,
+                                ),
+                                Vec2::splat(add_btn_size),
+                            );
+                            let add_resp = ui.allocate_rect(add_btn_rect, Sense::click());
+                            let add_color = if add_resp.hovered() {
+                                tokens::ACCENT
+                            } else {
+                                Color32::from_gray(120)
+                            };
+                            painter.text(
+                                add_btn_rect.center(),
+                                Align2::CENTER_CENTER,
+                                "+",
+                                FontId::proportional(10.0 * z),
+                                add_color,
+                            );
+                            if add_resp.clicked() {
+                                // Open add-step picker targeting this specific branch
+                                self.add_branch_target = Some((idx, label.to_string()));
+                                self.add_menu_open = true;
+                                self.add_menu_just_opened = true;
                             }
                             let text_color = if row_resp.hovered() {
                                 Color32::from_rgb(220, 210, 180)
@@ -1084,7 +1195,7 @@ impl EditorApp {
                 painter.rect_stroke(
                     node_rect.expand(2.0 * z),
                     4.0 * z,
-                    egui::Stroke::new((2.0 * z).max(1.0), egui::Color32::from_rgb(249, 226, 175)),
+                    egui::Stroke::new((2.0 * z).max(1.0), tokens::WARNING),
                     egui::StrokeKind::Outside,
                 );
             }
@@ -1092,7 +1203,7 @@ impl EditorApp {
                 painter.rect_stroke(
                     node_rect.expand((2.0 * z).max(1.0)),
                     4.0 * z,
-                    egui::Stroke::new((2.0 * z).max(1.0), egui::Color32::from_rgb(220, 60, 60)),
+                    egui::Stroke::new((2.0 * z).max(1.0), tokens::ERROR),
                     egui::StrokeKind::Outside,
                 );
             }
@@ -1104,9 +1215,9 @@ impl EditorApp {
             {
                 let stripe = egui::Rect::from_min_size(
                     node_rect.min,
-                    Vec2::new((3.0 * z).max(2.0), NODE_H * z),
+                    Vec2::new((6.0 * z).max(3.0), NODE_H * z),
                 );
-                painter.rect_filled(stripe, 4.0 * z, Color32::from_rgb(50, 185, 100));
+                painter.rect_filled(stripe, 4.0 * z, tokens::SUCCESS);
             }
 
             // Output port dot at bottom-center (edge drag / reorder)
@@ -1158,7 +1269,7 @@ impl EditorApp {
                             egui::pos2(node_rect.min.x, line_y),
                             egui::pos2(node_rect.max.x, line_y),
                         ],
-                        egui::Stroke::new(2.5 * z, egui::Color32::from_rgb(80, 200, 120)),
+                        egui::Stroke::new(2.5 * z, tokens::SUCCESS),
                     );
                     // Small diamond at the left end
                     let d = 4.0 * z;
@@ -1170,7 +1281,7 @@ impl EditorApp {
                             egui::pos2(cx, line_y + d),
                             egui::pos2(cx - d, line_y),
                         ],
-                        egui::Color32::from_rgb(80, 200, 120),
+                        tokens::SUCCESS,
                         egui::Stroke::NONE,
                     ));
                 }
@@ -1355,9 +1466,16 @@ impl EditorApp {
                 self.expanded_steps.insert(idx);
             }
         }
-        if let Some(idx) = panel_click_step {
+        if let Some((idx, branch_name)) = panel_click_step {
+            // Switch to List view and open the branch editor directly.
+            // This gives a direct path from the canvas expand badge to the
+            // branch property form, avoiding the manual "find step → open
+            // accordion" detour.
+            use crate::types::ViewMode;
+            self.view_mode = ViewMode::List;
             self.select_step(idx);
-            // Stay in canvas; just select the node (don't force List view)
+            self.selected_child = Some((branch_name, 0));
+            self.scroll_to_selected = true;
         }
 
         // Background right-click menu (shown when clicking empty canvas space, not on a node)
@@ -1375,6 +1493,16 @@ impl EditorApp {
                 self.add_menu_open = true;
                 self.add_menu_just_opened = true;
                 self.add_filter.clear();
+                ui.close();
+            }
+            if ui.button("📝 コメントを追加").clicked() {
+                if let Some(click_screen) = ui.input(|i| i.pointer.interact_pos()) {
+                    let canvas_pos = egui::pos2(
+                        (click_screen.x - origin.x) / z - self.canvas_pan.x,
+                        (click_screen.y - origin.y) / z - self.canvas_pan.y,
+                    );
+                    canvas_ctx_action = Some(CanvasContextAction::AddComment(canvas_pos));
+                }
                 ui.close();
             }
             ui.separator();
@@ -1444,6 +1572,21 @@ impl EditorApp {
                     self.scroll_to_selected = true;
                     self.selected_child = None;
                 }
+                CanvasContextAction::RunFrom(idx) => {
+                    self.run_from_step(idx);
+                }
+                CanvasContextAction::CopySelected => self.copy_selected_steps(),
+                CanvasContextAction::CutSelected => {
+                    self.copy_selected_steps();
+                    self.delete_selected_steps();
+                }
+                CanvasContextAction::ToggleEnabled(idx) => {
+                    if idx < self.steps.len() {
+                        self.push_undo();
+                        Self::toggle_step_enabled(&mut self.steps[idx]);
+                        self.dirty = true;
+                    }
+                }
                 CanvasContextAction::Paste => self.paste_steps(),
                 CanvasContextAction::AlignLeft => self.canvas_align_left(),
                 CanvasContextAction::AlignTop => self.canvas_align_top(),
@@ -1453,35 +1596,93 @@ impl EditorApp {
                     self.multi_selected = (0..self.steps.len()).collect();
                     self.selected = self.multi_selected.iter().min().cloned();
                 }
+                CanvasContextAction::AddComment(pos) => {
+                    let id = self.canvas_comment_next_id;
+                    self.canvas_comment_next_id += 1;
+                    self.canvas_comments.push(CanvasComment {
+                        id,
+                        x: pos.x,
+                        y: pos.y,
+                        w: 180.0,
+                        h: 80.0,
+                        text: String::new(),
+                        color: [255, 235, 100, 200],
+                    });
+                    self.canvas_editing_comment = Some(self.canvas_comments.len() - 1);
+                    self.canvas_layout_dirty = true;
+                }
             }
         }
 
-        // Empty state hint
+        // Empty state hint + add-step button
         if n == 0 {
             let s = crate::i18n::S::for_lang(&self.settings.lang);
-            let (msg, cta) = if self.path.is_none() {
-                (
-                    s.empty_canvas_no_file,
-                    "Cmd+N で新規シナリオ / Cmd+O で開く",
-                )
-            } else {
-                (s.empty_no_steps, "Cmd+Shift+A でステップを追加")
-            };
             let center = resp.rect.center();
+            if self.path.is_none() {
+                painter.text(
+                    center + egui::vec2(0.0, -14.0),
+                    Align2::CENTER_CENTER,
+                    s.empty_canvas_no_file,
+                    FontId::proportional(13.0),
+                    Color32::from_gray(100),
+                );
+                painter.text(
+                    center + egui::vec2(0.0, 10.0),
+                    Align2::CENTER_CENTER,
+                    "Cmd+N で新規シナリオ / Cmd+O で開く",
+                    FontId::proportional(11.0),
+                    Color32::from_gray(65),
+                );
+            } else {
+                // Clickable "add first step" button in the canvas center
+                egui::Area::new(egui::Id::new("canvas_add_first_step"))
+                    .fixed_pos(center + egui::vec2(-70.0, -18.0))
+                    .order(egui::Order::Foreground)
+                    .show(ui.ctx(), |ui| {
+                        if ui
+                            .add(
+                                egui::Button::new("＋ ステップを追加")
+                                    .min_size(egui::vec2(140.0, 36.0)),
+                            )
+                            .on_hover_text("Cmd+Shift+A でも追加できます")
+                            .clicked()
+                        {
+                            self.add_menu_open = true;
+                            self.add_menu_just_opened = true;
+                        }
+                    });
+            }
             painter.text(
-                center + egui::vec2(0.0, -10.0),
+                center + egui::vec2(0.0, 34.0),
                 Align2::CENTER_CENTER,
-                msg,
-                FontId::proportional(13.0),
-                Color32::from_gray(100),
+                "? キーでキーボードショートカット一覧",
+                FontId::proportional(10.0),
+                Color32::from_gray(50),
             );
-            painter.text(
-                center + egui::vec2(0.0, 14.0),
-                Align2::CENTER_CENTER,
-                cta,
-                FontId::proportional(11.0),
-                Color32::from_gray(65),
-            );
+        }
+
+        // Persistent "+" button below the last node — always visible so users can
+        // always add at the end without hunting for an edge midpoint.
+        if n > 0 && !screen_positions.is_empty() {
+            let last_top = screen_positions[n - 1];
+            let btn_center = last_top + egui::vec2(NODE_W * z / 2.0, NODE_H * z + 14.0 * z);
+            egui::Area::new(egui::Id::new("canvas_add_after_last"))
+                .fixed_pos(btn_center - egui::vec2(14.0, 14.0))
+                .order(egui::Order::Foreground)
+                .show(ui.ctx(), |ui| {
+                    if ui
+                        .add(
+                            egui::Button::new("+")
+                                .min_size(egui::Vec2::splat(28.0))
+                                .corner_radius(egui::CornerRadius::same(14)),
+                        )
+                        .on_hover_text("末尾にステップを追加 (Cmd+Shift+A)")
+                        .clicked()
+                    {
+                        self.add_menu_open = true;
+                        self.add_menu_just_opened = true;
+                    }
+                });
         }
 
         // Draw active lasso rectangle
@@ -1523,6 +1724,160 @@ impl EditorApp {
             }
         }
 
+        // ── Canvas comment nodes (sticky notes) ──────────────────────────────
+        {
+            let mut delete_comment_idx: Option<usize> = None;
+            let mut drag_comment: Option<(usize, egui::Pos2)> = None;
+            let mut edit_comment: Option<usize> = None;
+            let n_comments = self.canvas_comments.len();
+
+            for ci in 0..n_comments {
+                let c = &self.canvas_comments[ci];
+                let screen_x = origin.x + (c.x + self.canvas_pan.x) * z;
+                let screen_y = origin.y + (c.y + self.canvas_pan.y) * z;
+                let screen_w = c.w * z;
+                let screen_h = c.h * z;
+                let comment_rect = egui::Rect::from_min_size(
+                    egui::pos2(screen_x, screen_y),
+                    egui::vec2(screen_w, screen_h),
+                );
+                if !resp.rect.intersects(comment_rect) {
+                    continue;
+                }
+
+                let [cr, cg, cb, ca] = c.color;
+                let fill = egui::Color32::from_rgba_premultiplied(
+                    (cr as u16 * ca as u16 / 255) as u8,
+                    (cg as u16 * ca as u16 / 255) as u8,
+                    (cb as u16 * ca as u16 / 255) as u8,
+                    ca,
+                );
+                painter.rect_filled(comment_rect, 3.0 * z, fill);
+                painter.rect_stroke(
+                    comment_rect,
+                    3.0 * z,
+                    egui::Stroke::new(1.0, egui::Color32::from_rgba_premultiplied(180, 160, 50, 200)),
+                    egui::StrokeKind::Inside,
+                );
+
+                let is_editing = self.canvas_editing_comment == Some(ci);
+
+                if is_editing && z >= 0.5 {
+                    // Inline text editor — rendered via egui Area
+                    let edit_pos = comment_rect.min + egui::vec2(4.0 * z, 4.0 * z);
+                    let text_ref = &mut self.canvas_comments[ci].text;
+                    let te = egui::TextEdit::multiline(text_ref)
+                        .desired_width(screen_w - 8.0 * z)
+                        .desired_rows(((screen_h - 8.0 * z) / 14.0).max(1.0) as usize)
+                        .font(egui::FontId::proportional((11.0 * z).max(9.0)));
+                    let te_resp = ui.put(
+                        egui::Rect::from_min_size(edit_pos, egui::vec2(screen_w - 8.0 * z, screen_h - 8.0 * z)),
+                        te,
+                    );
+                    if te_resp.lost_focus() {
+                        self.canvas_editing_comment = None;
+                        self.canvas_layout_dirty = true;
+                    }
+                } else if z >= 0.4 {
+                    // Display text
+                    let text_rect = comment_rect.shrink(4.0 * z);
+                    painter.text(
+                        text_rect.min,
+                        egui::Align2::LEFT_TOP,
+                        &c.text,
+                        egui::FontId::proportional((11.0 * z).max(9.0)),
+                        egui::Color32::from_gray(30),
+                    );
+                }
+
+                // 📝 label in top-right corner
+                if z >= 0.5 {
+                    painter.text(
+                        comment_rect.right_top() + egui::vec2(-4.0 * z, 2.0 * z),
+                        egui::Align2::RIGHT_TOP,
+                        "📝",
+                        egui::FontId::proportional(9.0 * z),
+                        egui::Color32::from_rgba_premultiplied(100, 80, 0, 180),
+                    );
+                }
+
+                let comment_resp = ui.allocate_rect(comment_rect, egui::Sense::click_and_drag());
+
+                if comment_resp.drag_started() {
+                    let cursor = ui.input(|i| i.pointer.interact_pos()).unwrap_or(comment_rect.min);
+                    let offset = cursor - comment_rect.min;
+                    self.canvas_comment_drag = Some((ci, offset));
+                }
+                if comment_resp.dragged() {
+                    if let Some((drag_ci, offset)) = self.canvas_comment_drag {
+                        if drag_ci == ci {
+                            if let Some(cursor) = ui.input(|i| i.pointer.interact_pos()) {
+                                let new_screen = cursor - offset;
+                                drag_comment = Some((
+                                    ci,
+                                    egui::pos2(
+                                        (new_screen.x - origin.x) / z - self.canvas_pan.x,
+                                        (new_screen.y - origin.y) / z - self.canvas_pan.y,
+                                    ),
+                                ));
+                            }
+                        }
+                    }
+                }
+                if comment_resp.drag_stopped() {
+                    self.canvas_comment_drag = None;
+                    self.canvas_layout_dirty = true;
+                }
+                if comment_resp.double_clicked() {
+                    edit_comment = Some(ci);
+                }
+                comment_resp.context_menu(|ui| {
+                    if ui.button("🗑 削除").clicked() {
+                        delete_comment_idx = Some(ci);
+                        ui.close();
+                    }
+                    ui.separator();
+                    let colors: &[(&str, [u8; 4])] = &[
+                        ("🟡 黄", [255, 235, 100, 200]),
+                        ("🔵 青", [100, 160, 255, 200]),
+                        ("🟢 緑", [100, 220, 130, 200]),
+                        ("🔴 赤", [255, 120, 100, 200]),
+                    ];
+                    for (label, color) in colors {
+                        if ui.button(*label).clicked() {
+                            self.canvas_comments[ci].color = *color;
+                            self.canvas_layout_dirty = true;
+                            ui.close();
+                        }
+                    }
+                });
+            }
+
+            // Apply deferred comment mutations
+            if let Some((ci, new_pos)) = drag_comment {
+                if ci < self.canvas_comments.len() {
+                    self.canvas_comments[ci].x = new_pos.x;
+                    self.canvas_comments[ci].y = new_pos.y;
+                }
+            }
+            if let Some(ci) = edit_comment {
+                self.canvas_editing_comment = Some(ci);
+            }
+            if let Some(ci) = delete_comment_idx {
+                if ci < self.canvas_comments.len() {
+                    self.canvas_comments.remove(ci);
+                    if self.canvas_editing_comment == Some(ci) {
+                        self.canvas_editing_comment = None;
+                    } else if let Some(edit_idx) = self.canvas_editing_comment {
+                        if edit_idx > ci {
+                            self.canvas_editing_comment = Some(edit_idx - 1);
+                        }
+                    }
+                    self.canvas_layout_dirty = true;
+                }
+            }
+        }
+
         // Minimap (shown when there are 15+ steps; layout data precomputed above)
         if minimap_active {
             let mm_inner = mm_rect.shrink(MM_PAD);
@@ -1559,7 +1914,11 @@ impl EditorApp {
                     egui::vec2((NODE_W * mm_scale).max(2.0), (NODE_H * mm_scale).max(2.0)),
                 );
                 let is_sel = self.selected == Some(i) || self.multi_selected.contains(&i);
-                let node_color = if is_sel {
+                let node_color = if self.current_run_step == Some(i) {
+                    tokens::WARNING
+                } else if self.canvas_error_steps.contains_key(&i) {
+                    tokens::ERROR
+                } else if is_sel {
                     Color32::from_rgb(100, 140, 255)
                 } else {
                     // Reflect the same category color used on canvas, darkened for minimap scale
@@ -1736,6 +2095,31 @@ impl EditorApp {
             self.canvas_search = search_text;
         }
 
+        // Persistent "?" button at bottom-right (left of minimap) — DESIGN.md §6 discoverability
+        {
+            let btn_size = 24.0;
+            let btn_pos = egui::pos2(
+                resp.rect.max.x - MM_W - MM_MARGIN - btn_size - 6.0,
+                resp.rect.max.y - MM_H - MM_MARGIN - btn_size - 6.0,
+            );
+            egui::Area::new(egui::Id::new("canvas_help_fab"))
+                .fixed_pos(btn_pos)
+                .order(egui::Order::Foreground)
+                .show(ui.ctx(), |ui| {
+                    if ui
+                        .add(
+                            egui::Button::new("?")
+                                .min_size(egui::Vec2::splat(btn_size))
+                                .corner_radius(egui::CornerRadius::same(12)),
+                        )
+                        .on_hover_text("キーボードショートカット一覧 (?)")
+                        .clicked()
+                    {
+                        self.canvas_help_open = !self.canvas_help_open;
+                    }
+                });
+        }
+
         // Canvas keyboard shortcut help overlay (toggled by `?`)
         if self.canvas_help_open {
             egui::Window::new("キャンバス ショートカット")
@@ -1752,7 +2136,7 @@ impl EditorApp {
                                 ("Ctrl+スクロール / ピンチ", "ズーム"),
                                 ("Cmd+0", "全体表示 (fit to view)"),
                                 ("Cmd+1", "100% ズーム + 中央"),
-                                ("背景ドラッグ", "パン"),
+                                ("背景ドラッグ / 中ボタンドラッグ", "パン"),
                                 ("Shift+背景ドラッグ", "ラッソ選択"),
                                 ("クリック", "選択"),
                                 ("Cmd+クリック", "選択をトグル"),

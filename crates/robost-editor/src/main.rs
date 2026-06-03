@@ -11,11 +11,38 @@ mod property_panel;
 mod settings;
 mod state;
 mod step_templates;
+mod tokens;
 mod types;
 
 use state::EditorApp;
 
 // ---- main -----------------------------------------------------------------
+
+fn apply_style(ctx: &egui::Context) {
+    let mut style = (*ctx.style()).clone();
+
+    // ACCENT blue selection highlight (DESIGN.md §1.1)
+    style.visuals.selection.bg_fill = tokens::ACCENT.gamma_multiply(0.45);
+
+    // Consistent corner radii (DESIGN.md §3 / Appendix B)
+    style.visuals.window_corner_radius = tokens::ROUNDING_MD;
+    style.visuals.menu_corner_radius = tokens::ROUNDING_MD;
+    for ws in [
+        &mut style.visuals.widgets.inactive,
+        &mut style.visuals.widgets.hovered,
+        &mut style.visuals.widgets.active,
+        &mut style.visuals.widgets.open,
+        &mut style.visuals.widgets.noninteractive,
+    ] {
+        ws.corner_radius = tokens::ROUNDING_SM;
+    }
+
+    // Base spacing (DESIGN.md §3.1)
+    style.spacing.item_spacing = egui::vec2(tokens::SPACING_SM, tokens::SPACING_XS);
+    style.spacing.button_padding = egui::vec2(tokens::SPACING_SM, tokens::SPACING_XS);
+
+    ctx.set_style(style);
+}
 
 fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
@@ -74,6 +101,7 @@ fn main() -> Result<()> {
         native_options,
         Box::new(move |cc| {
             cc.egui_ctx.set_visuals(egui::Visuals::dark());
+            apply_style(&cc.egui_ctx);
             setup_fonts(&cc.egui_ctx);
             egui_extras::install_image_loaders(&cc.egui_ctx);
             let mut app = EditorApp::default();

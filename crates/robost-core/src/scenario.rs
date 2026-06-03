@@ -353,6 +353,12 @@ pub enum ScenarioStep {
 
     // --- wait_until ---
     WaitUntil(WaitUntilStep),
+
+    /// A step that has `enabled: false` in the YAML. The engine skips it transparently.
+    /// Serialization note: round-trips through `{<step_key>: ..., enabled: false}` YAML,
+    /// not through the derived `{"disabled": ...}` form — use Scenario::from_yaml only.
+    #[serde(skip)]
+    Disabled(Box<ScenarioStep>),
 }
 
 // ── existing step types ────────────────────────────────────────────────────
@@ -2906,7 +2912,27 @@ impl<'de> serde::de::Visitor<'de> for ScenarioStepVisitor {
             "wait_until" => ScenarioStep::WaitUntil(map.next_value()?),
             other => return Err(A::Error::unknown_variant(other, KNOWN_VARIANTS)),
         };
-        Ok(step)
+
+        // Consume remaining top-level metadata entries after the step key-value.
+        // `enabled: false` marks the step as disabled; other unknown keys are ignored
+        // for forward compatibility.
+        let mut enabled = true;
+        while let Some(meta_key) = map.next_key::<String>()? {
+            match meta_key.as_str() {
+                "enabled" => {
+                    enabled = map.next_value::<bool>().unwrap_or(true);
+                }
+                _ => {
+                    let _: serde::de::IgnoredAny = map.next_value()?;
+                }
+            }
+        }
+
+        if enabled {
+            Ok(step)
+        } else {
+            Ok(ScenarioStep::Disabled(Box::new(step)))
+        }
     }
 }
 
@@ -2932,19 +2958,22 @@ impl Scenario {
 impl ScenarioStep {
     /// Returns true for composite/flow-control steps that manage their own inner retries.
     pub fn is_flow(&self) -> bool {
-        matches!(
-            self,
-            Self::Group(_)
-                | Self::If(_)
-                | Self::Switch(_)
-                | Self::Repeat(_)
-                | Self::While(_)
-                | Self::DoWhile(_)
-                | Self::TryCatch(_)
-                | Self::Foreach(_)
-                | Self::SubScenario(_)
-                | Self::CallScenario(_)
-        )
+        match self {
+            Self::Disabled(_) => false,
+            _ => matches!(
+                self,
+                Self::Group(_)
+                    | Self::If(_)
+                    | Self::Switch(_)
+                    | Self::Repeat(_)
+                    | Self::While(_)
+                    | Self::DoWhile(_)
+                    | Self::TryCatch(_)
+                    | Self::Foreach(_)
+                    | Self::SubScenario(_)
+                    | Self::CallScenario(_)
+            ),
+        }
     }
 
     /// Short name for debug display.
@@ -3133,6 +3162,7 @@ impl ScenarioStep {
             #[cfg(feature = "ftp")]
             Self::FtpMkdir(_) => "ftp_mkdir",
             Self::WaitUntil(_) => "wait_until",
+            Self::Disabled(inner) => inner.name(),
         }
     }
 }
@@ -4530,5 +4560,38 @@ steps:
         assert_eq!(wga.attr.as_deref(), Some("href"));
         assert_eq!(wga.timeout_ms, 3000);
         assert_eq!(wga.save_as, "links");
+    }
+
+    #[test]
+    fn enabled_false_wraps_in_disabled() {
+        let yaml = r#"
+name: test
+steps:
+  - wait_ms: 500
+  - click_image:
+      template: "btn.png"
+    enabled: false
+  - wait_ms: 100
+"#;
+        let s = Scenario::from_yaml(yaml).unwrap();
+        assert_eq!(s.steps.len(), 3);
+        assert!(matches!(s.steps[0], ScenarioStep::WaitMs(500)));
+        let ScenarioStep::Disabled(inner) = &s.steps[1] else {
+            panic!("expected Disabled, got {:?}", s.steps[1].name());
+        };
+        assert_eq!(inner.name(), "click_image");
+        assert!(matches!(s.steps[2], ScenarioStep::WaitMs(100)));
+    }
+
+    #[test]
+    fn enabled_true_is_not_wrapped() {
+        let yaml = r#"
+name: test
+steps:
+  - wait_ms: 200
+    enabled: true
+"#;
+        let s = Scenario::from_yaml(yaml).unwrap();
+        assert!(matches!(s.steps[0], ScenarioStep::WaitMs(200)));
     }
 }

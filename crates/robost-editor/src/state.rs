@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use crate::flow_helpers::{build_scenario_yaml, collect_nodes, parse_scenario_steps, NODE_H, NODE_W};
 use crate::settings::{load_settings, AppSettings};
 use crate::types::{
-    AiMessage, BottomTab, ConfirmAction, EditorState, FlowNode, LogEntry, LogLevel, PropView,
-    Toast, ValidationIssue, ViewMode,
+    AiMessage, BottomTab, CanvasComment, ConfirmAction, EditorState, FlowNode, LogEntry, LogLevel,
+    PropView, Toast, ValidationIssue, ViewMode,
 };
 
 pub(crate) struct EditorApp {
@@ -35,6 +35,13 @@ pub(crate) struct EditorApp {
     pub(crate) last_progress_check: std::time::Instant,
     pub(crate) dirty: bool,
     pub(crate) run_child: Option<std::process::Child>,
+    /// Receives stderr lines from the rpa child process in real time.
+    pub(crate) stderr_rx: Option<std::sync::mpsc::Receiver<String>>,
+    /// Temp YAML file held for cleanup after the run ends (BUG-2).
+    pub(crate) run_tmp_file: Option<std::path::PathBuf>,
+    /// Step offset used when `run_from_step` runs a slice — maps rpa progress
+    /// indices (0-relative to the slice) back to original canvas indices (BUG-1).
+    pub(crate) run_from_offset: usize,
     pub(crate) prop_view: PropView,
     pub(crate) selected_child: Option<(String, usize)>,
     pub(crate) child_edit_buf: String,
@@ -107,6 +114,16 @@ pub(crate) struct EditorApp {
     pub(crate) canvas_search_open: bool,
     /// Whether the canvas keyboard shortcut help overlay is visible.
     pub(crate) canvas_help_open: bool,
+    /// Sticky-note comments on the canvas (persisted in .layout.json, not scenario YAML).
+    pub(crate) canvas_comments: Vec<CanvasComment>,
+    /// Index into canvas_comments of the comment being dragged, and the drag offset.
+    pub(crate) canvas_comment_drag: Option<(usize, egui::Vec2)>,
+    /// Index into canvas_comments of the comment being edited (double-clicked).
+    pub(crate) canvas_editing_comment: Option<usize>,
+    /// Counter for generating unique comment IDs.
+    pub(crate) canvas_comment_next_id: u64,
+    /// Problem count from the previous frame — used to detect when new errors appear.
+    pub(crate) prev_problem_count: usize,
 }
 
 impl Default for EditorApp {
@@ -135,6 +152,9 @@ impl Default for EditorApp {
             last_progress_check: std::time::Instant::now(),
             dirty: false,
             run_child: None,
+            stderr_rx: None,
+            run_tmp_file: None,
+            run_from_offset: 0,
             prop_view: PropView::Form,
             selected_child: None,
             child_edit_buf: String::new(),
@@ -185,6 +205,11 @@ impl Default for EditorApp {
             canvas_search: String::new(),
             canvas_search_open: false,
             canvas_help_open: false,
+            canvas_comments: Vec::new(),
+            canvas_comment_drag: None,
+            canvas_editing_comment: None,
+            canvas_comment_next_id: 1,
+            prev_problem_count: 0,
         }
     }
 }
@@ -233,6 +258,18 @@ impl EditorApp {
     }
 
     pub(crate) fn load_file_path(&mut self, p: &std::path::Path) {
+        // SEC-6: reject unreasonably large files to prevent YAML alias amplification
+        const MAX_YAML_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
+        if let Ok(meta) = std::fs::metadata(p) {
+            if meta.len() > MAX_YAML_BYTES {
+                self.log_err(format!(
+                    "ファイルが大きすぎます ({:.1} MB > 10 MB): {}",
+                    meta.len() as f64 / 1_048_576.0,
+                    p.display()
+                ));
+                return;
+            }
+        }
         match std::fs::read_to_string(p) {
             Ok(text) => match parse_scenario_steps(&text) {
                 Ok((name, vars, steps)) => {
@@ -249,9 +286,9 @@ impl EditorApp {
                     self.canvas_positions.clear();
                     self.load_canvas_layout(p);
                 }
-                Err(e) => self.log_err(format!("構文エラー: {e}")),
+                Err(e) => self.log_err(format!("構文エラー: {e} — YAML のインデントやコロンを確認してください")),
             },
-            Err(e) => self.log_err(format!("読み込みエラー: {e}")),
+            Err(e) => self.log_err(format!("読み込みエラー: {e} — ファイルが存在し読み取り可能か確認してください")),
         }
     }
 
@@ -274,6 +311,18 @@ impl EditorApp {
             .add_filter("YAML", &["yaml", "yml"])
             .pick_file()
         {
+            // SEC-6: size guard matches load_file_path
+            const MAX_YAML_BYTES: u64 = 10 * 1024 * 1024;
+            if let Ok(meta) = std::fs::metadata(&p) {
+                if meta.len() > MAX_YAML_BYTES {
+                    self.log_err(format!(
+                        "ファイルが大きすぎます ({:.1} MB > 10 MB): {}",
+                        meta.len() as f64 / 1_048_576.0,
+                        p.display()
+                    ));
+                    return;
+                }
+            }
             match std::fs::read_to_string(&p) {
                 Ok(text) => match parse_scenario_steps(&text) {
                     Ok((name, vars, steps)) => {
@@ -307,9 +356,9 @@ impl EditorApp {
                     self.log_ok(format!("保存しました: {}", path.display()));
                     self.save_canvas_layout();
                 }
-                Err(e) => self.log_err(format!("書き込みエラー: {e}")),
+                Err(e) => self.log_err(format!("書き込みエラー: {e} — 保存先フォルダの書き込み権限を確認してください")),
             },
-            Err(e) => self.log_err(format!("シリアライズエラー: {e}")),
+            Err(e) => self.log_err(format!("シリアライズエラー: {e} — ステップの値に不正な文字が含まれている可能性があります")),
         }
     }
 
@@ -446,6 +495,8 @@ impl EditorApp {
             if *i < self.steps.len() {
                 self.steps.remove(*i);
                 Self::canvas_shift_positions(&mut self.canvas_positions, *i, -1);
+                // BUG-4: keep form_edit_buffers in sync after bulk delete
+                Self::form_edit_buffers_shift(&mut self.form_edit_buffers, *i, -1);
             }
         }
         self.multi_selected.clear();
@@ -481,11 +532,17 @@ impl EditorApp {
         self.run_child = None;
         self.run_progress_file = None;
         self.current_run_step = None;
+        // Clean up temp YAML files (BUG-2 / SEC-1)
+        if let Some(ref p) = self.run_tmp_file {
+            let _ = std::fs::remove_file(p);
+        }
+        self.run_tmp_file = None;
+        self.run_from_offset = 0;
     }
 
     pub(crate) fn run_selection(&mut self) {
         if self.multi_selected.is_empty() {
-            self.log_err("実行するステップが選択されていません");
+            self.log_err("実行するステップが選択されていません — Ctrl+クリックで複数選択後に Ctrl+Shift+F5 を押してください");
             return;
         }
         self.flush_edit();
@@ -495,49 +552,38 @@ impl EditorApp {
             .into_iter()
             .filter_map(|i| self.steps.get(i).cloned())
             .collect();
-        let tmp_path =
-            std::env::temp_dir().join(format!("robost_selection_{}.yaml", std::process::id()));
-        match build_scenario_yaml(&self.name, &serde_yml::Mapping::new(), &selected_steps) {
-            Ok(yaml) => {
-                if let Err(e) = std::fs::write(&tmp_path, &yaml) {
-                    self.log_err(format!("一時ファイル書き込み失敗: {e}"));
-                    return;
-                }
-            }
+        let yaml = match build_scenario_yaml(&self.name, &serde_yml::Mapping::new(), &selected_steps) {
+            Ok(y) => y,
             Err(e) => {
-                self.log_err(format!("YAML生成失敗: {e}"));
+                self.log_err(format!("YAML生成失敗: {e} — ステップの値を確認してください"));
                 return;
             }
-        }
+        };
+        let tmp_path = match write_tmp_yaml(&yaml) {
+            Ok(p) => p,
+            Err(e) => {
+                self.log_err(format!("一時ファイル書き込み失敗: {e}"));
+                return;
+            }
+        };
         let progress_file =
             std::env::temp_dir().join(format!("robost_progress_{}.json", std::process::id()));
         let _ = std::fs::remove_file(&progress_file);
         self.run_progress_file = Some(progress_file.clone());
+        self.run_from_offset = 0;
         self.current_run_step = None;
         self.canvas_error_steps.clear();
         self.canvas_completed_steps.clear();
-        let rpa_bin = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.join("rpa")))
-            .unwrap_or_else(|| std::path::PathBuf::from("rpa"));
-        match std::process::Command::new(&rpa_bin)
-            .args([
-                "run",
-                &tmp_path.to_string_lossy(),
-                "--progress",
-                &progress_file.to_string_lossy(),
-            ])
-            .spawn()
-        {
-            Ok(child) => {
+        match spawn_rpa(&tmp_path, &progress_file) {
+            Ok((child, rx)) => {
+                self.run_tmp_file = Some(tmp_path);
                 self.run_child = Some(child);
-                self.log_ok(format!(
-                    "{}ステップを実行中 (選択範囲)",
-                    self.multi_selected.len()
-                ));
+                self.stderr_rx = Some(rx);
+                self.log_ok(format!("{}ステップを実行中 (選択範囲)", self.multi_selected.len()));
             }
             Err(e) => {
                 self.run_progress_file = None;
+                let _ = std::fs::remove_file(&tmp_path);
                 self.log_err(format!("起動に失敗しました: {e}"));
             }
         }
@@ -546,42 +592,50 @@ impl EditorApp {
     pub(crate) fn run_scenario(&mut self) {
         self.stop_run();
         self.flush_edit();
-        if self.path.is_none() {
-            self.save_file();
-        }
-        let Some(ref path) = self.path else {
-            self.log_err("実行するにはまず保存してください");
-            return;
+        // Use a temp file for unsaved scenarios so users can test without being
+        // Use a temp file for unsaved scenarios so first run never forces a save dialog.
+        let (run_path, is_tmp) = if let Some(ref p) = self.path {
+            (p.clone(), false)
+        } else {
+            let yaml = match build_scenario_yaml(&self.name, &self.scenario_vars, &self.steps) {
+                Ok(y) => y,
+                Err(e) => {
+                    self.log_err(format!("YAML生成失敗: {e} — ステップの値を確認してください"));
+                    return;
+                }
+            };
+            match write_tmp_yaml(&yaml) {
+                Ok(p) => (p, true),
+                Err(e) => {
+                    self.log_err(format!("一時ファイル書き込み失敗: {e}"));
+                    return;
+                }
+            }
         };
         let progress_file =
             std::env::temp_dir().join(format!("robost_progress_{}.json", std::process::id()));
         let _ = std::fs::remove_file(&progress_file);
         self.run_progress_file = Some(progress_file.clone());
+        self.run_from_offset = 0;
         self.current_run_step = None;
         self.canvas_error_steps.clear();
         self.canvas_completed_steps.clear();
-        // Prefer the `rpa` binary in the same directory as this editor to avoid PATH hijacking.
-        let rpa_bin = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.join("rpa")))
-            .unwrap_or_else(|| std::path::PathBuf::from("rpa"));
-        match std::process::Command::new(&rpa_bin)
-            .args([
-                "run",
-                &path.to_string_lossy(),
-                "--progress",
-                &progress_file.to_string_lossy(),
-            ])
-            .spawn()
-        {
-            Ok(child) => {
+        match spawn_rpa(&run_path, &progress_file) {
+            Ok((child, rx)) => {
+                if is_tmp {
+                    self.run_tmp_file = Some(run_path);
+                }
                 self.run_child = Some(child);
+                self.stderr_rx = Some(rx);
                 self.log_ok("rpa を起動しました");
             }
             Err(e) => {
                 self.run_progress_file = None;
+                if is_tmp {
+                    let _ = std::fs::remove_file(&run_path);
+                }
                 let hint = if e.kind() == std::io::ErrorKind::NotFound {
-                    "\n  ヒント: rpa コマンドが見つかりません。\
+                    "\n  ヒント: rpa バイナリがエディタと同じディレクトリにありません。\
                      cargo install robost-cli でインストールしてください。"
                 } else {
                     ""
@@ -591,16 +645,130 @@ impl EditorApp {
         }
     }
 
+    /// Run only steps[start_idx..] (BUG-1: sets `run_from_offset` so canvas
+    /// progress highlighting maps rpa indices back to original step indices).
+    pub(crate) fn run_from_step(&mut self, start_idx: usize) {
+        self.stop_run();
+        self.flush_edit();
+        let steps_from: Vec<serde_yml::Value> =
+            self.steps.get(start_idx..).unwrap_or(&[]).to_vec();
+        if steps_from.is_empty() {
+            self.log_err(format!(
+                "ステップ {} 以降に実行するステップがありません",
+                start_idx + 1
+            ));
+            return;
+        }
+        let yaml = match build_scenario_yaml(&self.name, &serde_yml::Mapping::new(), &steps_from) {
+            Ok(y) => y,
+            Err(e) => {
+                self.log_err(format!("YAML生成失敗: {e}"));
+                return;
+            }
+        };
+        let tmp_path = match write_tmp_yaml(&yaml) {
+            Ok(p) => p,
+            Err(e) => {
+                self.log_err(format!("一時ファイル書き込み失敗: {e}"));
+                return;
+            }
+        };
+        let progress_file =
+            std::env::temp_dir().join(format!("robost_progress_{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&progress_file);
+        self.run_progress_file = Some(progress_file.clone());
+        self.run_from_offset = start_idx; // BUG-1: rpa reports 0-based indices into the slice
+        self.current_run_step = None;
+        self.canvas_error_steps.clear();
+        self.canvas_completed_steps.clear();
+        match spawn_rpa(&tmp_path, &progress_file) {
+            Ok((child, rx)) => {
+                self.run_tmp_file = Some(tmp_path);
+                self.run_child = Some(child);
+                self.stderr_rx = Some(rx);
+                self.log_ok(format!(
+                    "ステップ {} 〜 {} を実行中",
+                    start_idx + 1,
+                    self.steps.len()
+                ));
+            }
+            Err(e) => {
+                self.run_progress_file = None;
+                let _ = std::fs::remove_file(&tmp_path);
+                self.log_err(format!("起動に失敗しました: {e}"));
+            }
+        }
+    }
+
     pub(crate) fn build_flow_nodes(&self) -> Vec<FlowNode> {
         let mut nodes = Vec::new();
         collect_nodes(&self.steps, 0, &self.expanded_steps, &mut nodes);
         nodes
     }
+}
+
+// ── Private helpers ──────────────────────────────────────────────────────────
+
+/// Spawn the `rpa` binary with stderr piped.
+/// Resolves the binary next to the current executable (never falls back to PATH
+/// to avoid PATH-hijacking — SEC-5). Returns the child handle and a receiver
+/// that delivers stderr lines as they arrive (REF-1).
+fn spawn_rpa(
+    yaml_path: &std::path::Path,
+    progress_path: &std::path::Path,
+) -> std::io::Result<(std::process::Child, std::sync::mpsc::Receiver<String>)> {
+    let rpa_bin = std::env::current_exe()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))?
+        .parent()
+        .ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "cannot determine rpa directory")
+        })?
+        .join("rpa");
+
+    let mut child = std::process::Command::new(&rpa_bin)
+        .args([
+            "run",
+            &yaml_path.to_string_lossy(),
+            "--progress",
+            &progress_path.to_string_lossy(),
+        ])
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    if let Some(stderr) = child.stderr.take() {
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            for line in std::io::BufReader::new(stderr).lines().map_while(Result::ok) {
+                if tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+    Ok((child, rx))
+}
+
+/// Write `yaml` to a secure temp file (mode 0o600, random name — SEC-1 / SEC-3).
+/// Returns the path; caller must delete after use.
+fn write_tmp_yaml(yaml: &str) -> std::io::Result<std::path::PathBuf> {
+    use std::io::Write;
+    let mut f = tempfile::Builder::new()
+        .prefix("robost_")
+        .suffix(".yaml")
+        .tempfile()?;
+    f.write_all(yaml.as_bytes())?;
+    let (_, path) = f.keep().map_err(|e| e.error)?;
+    Ok(path)
+}
+
+impl EditorApp {
 
     pub(crate) fn snapshot(&self) -> EditorState {
         EditorState {
             name: self.name.clone(),
             steps: self.steps.clone(),
+            scenario_vars: self.scenario_vars.clone(),
             selected: self.selected,
             selected_child: self.selected_child.clone(),
             canvas_positions: self
@@ -618,6 +786,7 @@ impl EditorApp {
     pub(crate) fn restore(&mut self, state: EditorState) {
         self.name = state.name;
         self.steps = state.steps;
+        self.scenario_vars = state.scenario_vars;
         self.selected = state.selected;
         self.selected_child = state.selected_child;
         self.canvas_positions = state
@@ -794,6 +963,31 @@ impl EditorApp {
         self.mutate_branch(parent_idx, branch_name, move |seq| {
             seq.push(new_step);
         });
+    }
+
+    /// Returns `true` if the step has `enabled: false`.
+    pub(crate) fn step_is_disabled(step: &serde_yml::Value) -> bool {
+        step.as_mapping()
+            .and_then(|m| m.get("enabled"))
+            .and_then(|v| v.as_bool())
+            .map(|b| !b)
+            .unwrap_or(false)
+    }
+
+    /// Toggle `enabled: false` on a step value. Does not push undo — callers must.
+    pub(crate) fn toggle_step_enabled(step: &mut serde_yml::Value) {
+        let Some(map) = step.as_mapping_mut() else { return };
+        let key = serde_yml::Value::String("enabled".to_owned());
+        let is_disabled = map
+            .get(&key)
+            .and_then(|v| v.as_bool())
+            .map(|b| !b)
+            .unwrap_or(false);
+        if is_disabled {
+            map.remove(&key);
+        } else {
+            map.insert(key, serde_yml::Value::Bool(false));
+        }
     }
 
     pub(crate) fn collect_var_refs_from_value<F: FnMut(&str)>(val: &serde_yml::Value, cb: &mut F) {

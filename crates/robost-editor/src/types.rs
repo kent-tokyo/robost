@@ -1,5 +1,7 @@
 // ---- shared types -----------------------------------------------------------
 
+use crate::tokens;
+
 
 // ---- AI message -------------------------------------------------------------
 
@@ -153,12 +155,17 @@ pub(crate) enum CanvasContextAction {
     Delete(usize),
     Duplicate(usize),
     OpenInList(usize),
+    RunFrom(usize),
+    CopySelected,
+    CutSelected,
+    ToggleEnabled(usize),
     Paste,
     AlignLeft,
     AlignTop,
     DistributeH,
     DistributeV,
     SelectAll,
+    AddComment(egui::Pos2),
 }
 
 #[derive(PartialEq, Clone, Copy, Default)]
@@ -213,8 +220,8 @@ impl LogLevel {
     pub(crate) fn color(self) -> egui::Color32 {
         match self {
             LogLevel::Info => egui::Color32::LIGHT_GRAY,
-            LogLevel::Ok => egui::Color32::from_rgb(100, 220, 100),
-            LogLevel::Error => egui::Color32::from_rgb(255, 100, 100),
+            LogLevel::Ok => tokens::SUCCESS,
+            LogLevel::Error => tokens::ERROR,
         }
     }
 }
@@ -236,6 +243,7 @@ pub(crate) struct Toast {
 pub(crate) struct EditorState {
     pub(crate) name: String,
     pub(crate) steps: Vec<serde_yml::Value>,
+    pub(crate) scenario_vars: serde_yml::Mapping,
     pub(crate) selected: Option<usize>,
     pub(crate) selected_child: Option<(String, usize)>,
     pub(crate) canvas_positions: Vec<(usize, [f32; 2])>,
@@ -243,6 +251,20 @@ pub(crate) struct EditorState {
     pub(crate) canvas_pan: [f32; 2],
     pub(crate) multi_selected: Vec<usize>,
     pub(crate) expanded_steps: Vec<usize>,
+}
+
+// ---- canvas comment (sticky note) -------------------------------------------
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct CanvasComment {
+    pub(crate) id: u64,
+    pub(crate) x: f32,
+    pub(crate) y: f32,
+    pub(crate) w: f32,
+    pub(crate) h: f32,
+    pub(crate) text: String,
+    /// RGBA color packed as [r, g, b, a]
+    pub(crate) color: [u8; 4],
 }
 
 // ---- drag-and-drop payload --------------------------------------------------
@@ -264,5 +286,6 @@ pub(crate) enum StepAction {
     MoveUp(usize),
     MoveDown(usize),
     Delete(usize),
+    ToggleEnabled(usize),
 }
 

@@ -62,6 +62,11 @@ impl eframe::App for EditorApp {
             }
         }
         if self.run_child.is_none()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::R))
+        {
+            self.run_scenario();
+        }
+        if self.run_child.is_none()
             && ctx.input_mut(|i| {
                 i.consume_key(
                     egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
@@ -215,13 +220,16 @@ impl eframe::App for EditorApp {
                 );
             }
         }
-        if !self.add_menu_open
-            && self.confirm_dialog.is_none()
+        // Cmd+F: open canvas search (standard convention); step add is Cmd+Shift+A only
+        if self.view_mode == ViewMode::Canvas
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F))
         {
-            self.add_menu_open = true;
-            self.add_menu_just_opened = true;
-            self.add_filter.clear();
+            if self.canvas_search_open {
+                self.canvas_search_open = false;
+                self.canvas_search.clear();
+            } else {
+                self.canvas_search_open = true;
+            }
         }
         if !self.add_menu_open
             && self.confirm_dialog.is_none()
@@ -426,6 +434,10 @@ impl eframe::App for EditorApp {
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::O)) {
             self.open_file();
         }
+        // Cmd+, = Settings (standard macOS/app convention)
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Comma)) {
+            self.settings_open = true;
+        }
 
         // ── Confirm dialog (modal) ────────────────────────────────────────────
         if let Some(action) = self.confirm_dialog.clone() {
@@ -453,6 +465,8 @@ impl eframe::App for EditorApp {
             };
             let mut yes = false;
             let mut no = false;
+            // Enter and Escape both cancel — Undo exists so accidental deletion risk is high.
+            // The user must explicitly click "はい" to confirm.
             egui::Modal::new(egui::Id::new("confirm_modal")).show(ctx, |ui| {
                 ui.set_min_width(240.0);
                 ui.strong("確認");
@@ -463,11 +477,14 @@ impl eframe::App for EditorApp {
                     if ui.button("はい").clicked() {
                         yes = true;
                     }
-                    if ui.button("キャンセル").clicked() {
+                    let cancel_btn = ui.button("キャンセル");
+                    if cancel_btn.clicked() {
                         no = true;
                     }
+                    // Auto-focus cancel button so Enter/Space triggers cancel, not confirm
+                    if !yes { cancel_btn.request_focus(); }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.weak("Enter / Esc: キャンセル");
+                        ui.weak("Esc: キャンセル");
                     });
                 });
             });
@@ -505,10 +522,7 @@ impl eframe::App for EditorApp {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 }
-            } else if no
-                || ctx.input(|i| i.key_pressed(egui::Key::Escape))
-                || ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter))
-            {
+            } else if no || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.confirm_dialog = None;
             }
         }
@@ -532,31 +546,38 @@ impl eframe::App for EditorApp {
             self.run_child = None;
             self.run_progress_file = None;
             let last_run_step = self.current_run_step;
+            let offset = self.run_from_offset; // BUG-1: rpa indices are slice-relative
             self.current_run_step = None;
             if status.success() {
-                for i in 0..self.steps.len() {
+                // Mark all steps from offset..end as completed
+                for i in offset..self.steps.len() {
                     self.canvas_completed_steps.insert(i);
                 }
                 self.log_ok("実行が完了しました");
             } else {
                 let code = status.code().unwrap_or(-1);
-                if let Some(step_idx) = last_run_step {
+                if let Some(slice_step) = last_run_step {
+                    let orig_step = offset + slice_step;
                     self.canvas_error_steps
-                        .insert(step_idx, format!("終了コード: {code}"));
-                    for i in 0..step_idx {
+                        .insert(orig_step, format!("終了コード: {code}"));
+                    for i in offset..orig_step {
                         self.canvas_completed_steps.insert(i);
                     }
                 }
-                self.log_err(format!("実行に失敗しました (終了コード: {code})"));
+                self.log_err(format!("実行に失敗しました (終了コード: {code}) — ログパネルでシナリオのエラーを確認してください"));
             }
         }
         if self.last_progress_check.elapsed() > std::time::Duration::from_millis(100) {
             if let Some(ref f) = self.run_progress_file {
                 if let Ok(s) = std::fs::read_to_string(f) {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
-                        self.current_run_step = v["step"].as_u64().map(|n| n as usize);
+                        // BUG-1: rpa emits 0-based step index relative to the slice;
+                        // add offset to get original canvas index.
+                        let offset = self.run_from_offset;
+                        self.current_run_step =
+                            v["step"].as_u64().map(|n| offset + n as usize);
                         if let Some(curr) = self.current_run_step {
-                            for i in 0..curr {
+                            for i in offset..curr {
                                 self.canvas_completed_steps.insert(i);
                             }
                         }
@@ -567,6 +588,24 @@ impl eframe::App for EditorApp {
         }
         if self.run_child.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+        // Drain rpa stderr lines into the log panel in real time (BUG-3: request
+        // a repaint if any lines arrived so the UI updates even on exit frame).
+        let stderr_lines: Vec<String> = self
+            .stderr_rx
+            .as_ref()
+            .map(|rx| std::iter::from_fn(|| rx.try_recv().ok()).collect())
+            .unwrap_or_default();
+        if !stderr_lines.is_empty() {
+            for line in stderr_lines {
+                // SEC-4: redact lines that likely contain secret values
+                let redacted = redact_secret_line(&line);
+                self.log_err(format!("rpa: {redacted}"));
+            }
+            ctx.request_repaint();
+        }
+        if self.run_child.is_none() {
+            self.stderr_rx = None;
         }
 
         // ── AI response polling ───────────────────────────────────────────────
@@ -724,6 +763,11 @@ impl eframe::App for EditorApp {
                         ui.close();
                         self.save_file_as();
                     }
+                    ui.separator();
+                    if ui.button(s.menu_settings).clicked() {
+                        ui.close();
+                        self.settings_open = true;
+                    }
                 });
                 ui.menu_button(s.menu_edit, |ui| {
                     ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
@@ -849,11 +893,6 @@ impl eframe::App for EditorApp {
                         ui.close();
                     }
                     ui.separator();
-                    if ui.button(s.menu_settings).clicked() {
-                        ui.close();
-                        self.settings_open = true;
-                    }
-                    ui.separator();
                     if ui.button(s.menu_about).clicked() {
                         ui.close();
                         self.about_open = true;
@@ -913,6 +952,13 @@ impl eframe::App for EditorApp {
                     .clicked()
                 {
                     self.run_scenario();
+                }
+                if ui
+                    .button("📷 採取")
+                    .on_hover_text("テンプレート採取ツールを起動 (Ctrl+Shift+C でキャプチャ)")
+                    .clicked()
+                {
+                    open_snip();
                 }
                 ui.separator();
                 if ui
@@ -1091,6 +1137,13 @@ impl eframe::App for EditorApp {
             .default_height(160.0)
             .show(ctx, |ui| {
                 let problem_count = self.validate_scenario().len();
+                // Auto-switch to Problems tab when new errors appear
+                if problem_count > self.prev_problem_count
+                    && self.bottom_tab != BottomTab::Problems
+                {
+                    self.bottom_tab = BottomTab::Problems;
+                }
+                self.prev_problem_count = problem_count;
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.bottom_tab, BottomTab::Variables, s.panel_vars);
                     ui.selectable_value(&mut self.bottom_tab, BottomTab::Log, s.panel_log);
@@ -1098,7 +1151,7 @@ impl eframe::App for EditorApp {
                         self.log.clear();
                     }
                     let problems_label = if problem_count > 0 {
-                        format!("{} ({})", s.tab_problems, problem_count)
+                        format!("⚠ {} ({})", s.tab_problems, problem_count)
                     } else {
                         s.tab_problems.to_owned()
                     };
@@ -1296,6 +1349,7 @@ impl eframe::App for EditorApp {
                                     let is_multi = self.multi_selected.contains(&i);
                                     let is_primary = self.selected == Some(i);
                                     let is_running = self.current_run_step == Some(i);
+                                    let is_disabled = crate::state::EditorApp::step_is_disabled(&self.steps[i]);
                                     let is_var_match = if let Some(ref vh) = self.var_highlight {
                                         let pattern = format!("{{{{ {vh} }}}}");
                                         serde_yml::to_string(&self.steps[i])
@@ -1307,9 +1361,11 @@ impl eframe::App for EditorApp {
 
                                     let drag_id = egui::Id::new(("step_drag", i));
                                     let label_text = if is_running {
-                                        format!("▶ {i}: {summary}")
+                                        format!("▶ {}: {summary}", i + 1)
+                                    } else if is_disabled {
+                                        format!("⊘ {}: {summary}", i + 1)
                                     } else {
-                                        format!("{i}: {summary}")
+                                        format!("{}: {summary}", i + 1)
                                     };
 
                                     let drag_indices = if self.multi_selected.contains(&i)
@@ -1328,20 +1384,48 @@ impl eframe::App for EditorApp {
                                             DragPayload::ReorderStep(drag_indices),
                                             |ui| {
                                                 ui.horizontal(|ui| {
+                                                    ui.set_min_height(crate::tokens::STEP_ROW_HEIGHT); // DESIGN.md §3.2
                                                     let bar_color = if is_running {
-                                                        egui::Color32::from_rgb(249, 226, 175)
+                                                        crate::tokens::WARNING
                                                     } else {
                                                         color
                                                     };
                                                     ui.colored_label(bar_color, "▌");
-                                                    let resp = ui
-                                                        .selectable_label(is_primary, &label_text);
+                                                    // Enable/disable toggle
+                                                    let toggle_icon = if is_disabled { "○" } else { "●" };
+                                                    let toggle_color = if is_disabled {
+                                                        egui::Color32::from_gray(90)
+                                                    } else {
+                                                        egui::Color32::from_gray(160)
+                                                    };
+                                                    if ui.add(
+                                                        egui::Label::new(
+                                                            egui::RichText::new(toggle_icon)
+                                                                .color(toggle_color)
+                                                                .size(10.0),
+                                                        ).sense(egui::Sense::click()),
+                                                    )
+                                                    .on_hover_text(if is_disabled { "クリックで有効化" } else { "クリックで無効化" })
+                                                    .clicked() {
+                                                        action = Some(StepAction::ToggleEnabled(i));
+                                                    }
+                                                    let label_richtext = if is_disabled {
+                                                        egui::RichText::new(&label_text)
+                                                            .color(egui::Color32::from_gray(100))
+                                                            .strikethrough()
+                                                    } else {
+                                                        egui::RichText::new(&label_text)
+                                                    };
+                                                    let resp = ui.selectable_label(
+                                                        is_primary,
+                                                        label_richtext,
+                                                    );
                                                     if is_multi && !is_primary && !is_running {
                                                         ui.painter().rect_filled(
                                                             resp.rect.expand2(egui::vec2(2.0, 1.0)),
                                                             2.0,
                                                             egui::Color32::from_rgba_premultiplied(
-                                                                60, 100, 200, 60,
+                                                                0, 28, 50, 60, // ACCENT #0078D4 @ 24% alpha
                                                             ),
                                                         );
                                                     }
@@ -1562,6 +1646,13 @@ impl eframe::App for EditorApp {
                                 self.confirm_dialog = Some(ConfirmAction::DeleteStep(i));
                             }
                         }
+                        StepAction::ToggleEnabled(i) => {
+                            if i < self.steps.len() {
+                                self.push_undo();
+                                Self::toggle_step_enabled(&mut self.steps[i]);
+                                self.dirty = true;
+                            }
+                        }
                     }
                 }
 
@@ -1702,11 +1793,11 @@ impl eframe::App for EditorApp {
                 // Inline parse error banner
                 if let Some(ref err) = self.parse_error.clone() {
                     egui::Frame::new()
-                        .fill(egui::Color32::from_rgb(80, 20, 20))
+                        .fill(crate::tokens::ERROR.gamma_multiply(0.35))
                         .inner_margin(egui::Margin::symmetric(8, 4))
                         .show(ui, |ui| {
                             ui.colored_label(
-                                egui::Color32::from_rgb(255, 130, 130),
+                                egui::Color32::from_rgb(255, 160, 150), // tokens::ERROR の明るいトーン
                                 format!("⚠ 構文エラー: {err}"),
                             );
                         });
@@ -1964,7 +2055,7 @@ impl eframe::App for EditorApp {
                             self.log_info("ステップを追加しました");
                         }
                     }
-                    Err(e) => self.log_err(format!("テンプレートエラー: {e}")),
+                    Err(e) => self.log_err(format!("テンプレートエラー: {e} — ステップテンプレートの YAML 構文を確認してください")),
                 }
             }
             if close {
@@ -2066,5 +2157,32 @@ impl eframe::App for EditorApp {
             self.save_canvas_layout();
             self.canvas_layout_dirty = false;
         }
+    }
+}
+
+fn open_snip() {
+    let bin = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join("robost-snip")))
+        .unwrap_or_else(|| std::path::PathBuf::from("robost-snip"));
+    if let Err(e) = std::process::Command::new(&bin).spawn() {
+        tracing::error!("robost-snip の起動に失敗しました: {e}");
+    }
+}
+
+/// SEC-4: replace any line that looks like it contains a secret value with a
+/// redacted placeholder before writing to the visible log panel.
+fn redact_secret_line(line: &str) -> std::borrow::Cow<'_, str> {
+    let lower = line.to_ascii_lowercase();
+    if lower.contains("password")
+        || lower.contains("passwd")
+        || lower.contains("secret")
+        || lower.contains("token")
+        || lower.contains("api_key")
+        || lower.contains("apikey")
+    {
+        "[redacted — line may contain secret value]".into()
+    } else {
+        line.into()
     }
 }

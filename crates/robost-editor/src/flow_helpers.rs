@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use crate::step_templates::STEP_TEMPLATES;
 use crate::types::{category_color, step_key_category, FlowNode};
 
-pub(crate) fn get_inner_steps(step: &serde_yml::Value) -> Vec<(&'static str, Vec<serde_yml::Value>)> {
+pub(crate) fn get_inner_steps(step: &serde_yml::Value) -> Vec<(String, Vec<serde_yml::Value>)> {
     let m = match step.as_mapping() {
         Some(m) => m,
         None => return vec![],
@@ -17,10 +17,10 @@ pub(crate) fn get_inner_steps(step: &serde_yml::Value) -> Vec<(&'static str, Vec
         "if" => {
             let mut out = vec![];
             if let Some(seq) = m.get("then").and_then(|v| v.as_sequence()) {
-                out.push(("then", seq.clone()));
+                out.push(("then".to_owned(), seq.clone()));
             }
             if let Some(seq) = m.get("else").and_then(|v| v.as_sequence()) {
-                out.push(("else", seq.clone()));
+                out.push(("else".to_owned(), seq.clone()));
             }
             out
         }
@@ -31,7 +31,7 @@ pub(crate) fn get_inner_steps(step: &serde_yml::Value) -> Vec<(&'static str, Vec
                 .and_then(|im| im.get("do"))
                 .and_then(|v| v.as_sequence())
             {
-                vec![("do", seq.clone())]
+                vec![("do".to_owned(), seq.clone())]
             } else {
                 vec![]
             }
@@ -41,10 +41,10 @@ pub(crate) fn get_inner_steps(step: &serde_yml::Value) -> Vec<(&'static str, Vec
             let mut out = vec![];
             if let Some(im) = inner {
                 if let Some(seq) = im.get("try").and_then(|v| v.as_sequence()) {
-                    out.push(("try", seq.clone()));
+                    out.push(("try".to_owned(), seq.clone()));
                 }
                 if let Some(seq) = im.get("catch").and_then(|v| v.as_sequence()) {
-                    out.push(("catch", seq.clone()));
+                    out.push(("catch".to_owned(), seq.clone()));
                 }
             }
             out
@@ -56,7 +56,7 @@ pub(crate) fn get_inner_steps(step: &serde_yml::Value) -> Vec<(&'static str, Vec
                 .and_then(|im| im.get("steps"))
                 .and_then(|v| v.as_sequence())
             {
-                vec![("steps", seq.clone())]
+                vec![("steps".to_owned(), seq.clone())]
             } else {
                 vec![]
             }
@@ -67,17 +67,27 @@ pub(crate) fn get_inner_steps(step: &serde_yml::Value) -> Vec<(&'static str, Vec
             if let Some(im) = inner {
                 if let Some(cases) = im.get("cases").and_then(|v| v.as_sequence()) {
                     for case in cases {
+                        let when_label = case
+                            .as_mapping()
+                            .and_then(|cm| cm.get("when"))
+                            .map(|w| match w {
+                                serde_yml::Value::String(s) => format!("case: {s}"),
+                                serde_yml::Value::Number(n) => format!("case: {n}"),
+                                serde_yml::Value::Bool(b) => format!("case: {b}"),
+                                _ => "case".to_owned(),
+                            })
+                            .unwrap_or_else(|| "case".to_owned());
                         if let Some(steps) = case
                             .as_mapping()
                             .and_then(|cm| cm.get("do"))
                             .and_then(|v| v.as_sequence())
                         {
-                            out.push(("case", steps.clone()));
+                            out.push((when_label, steps.clone()));
                         }
                     }
                 }
                 if let Some(seq) = im.get("default").and_then(|v| v.as_sequence()) {
-                    out.push(("default", seq.clone()));
+                    out.push(("default".to_owned(), seq.clone()));
                 }
             }
             out
@@ -102,9 +112,26 @@ pub(crate) fn default_canvas_cols(n: usize) -> usize {
     ((n as f32).sqrt() as usize + 1).clamp(4, 8)
 }
 
+/// Maximum visual depth in Flow view — deeper branches are shown as a count
+/// summary to prevent runaway indentation (DESIGN.md §F).
+const MAX_RENDER_DEPTH: usize = 4;
+
 pub(crate) fn collect_nodes(
     steps: &[serde_yml::Value],
     depth: usize,
+    expanded: &HashSet<usize>,
+    nodes: &mut Vec<FlowNode>,
+) {
+    collect_nodes_impl(steps, depth, None, expanded, nodes);
+}
+
+/// Inner recursive worker.
+/// `root_idx`: the depth-0 ancestor's step index, used for click-to-select on
+/// nested nodes so that clicking any branch child selects the parent step.
+fn collect_nodes_impl(
+    steps: &[serde_yml::Value],
+    depth: usize,
+    root_idx: Option<usize>,
     expanded: &HashSet<usize>,
     nodes: &mut Vec<FlowNode>,
 ) {
@@ -116,12 +143,19 @@ pub(crate) fn collect_nodes(
             key,
             "if" | "foreach" | "repeat" | "while" | "do_while" | "try_catch" | "group" | "switch"
         );
-        let step_idx = i;
+
+        // depth-0: expandable via toggle (key = step index for canvas compatibility).
+        // depth 1+: compound steps always show their children inline — no toggle
+        // needed, avoids key-stability issues with the shared expanded_steps set.
         let (expand_key, is_expanded) = if depth == 0 && is_compound {
             (Some(i), expanded.contains(&i))
+        } else if depth > 0 && is_compound {
+            (None, true)
         } else {
             (None, false)
         };
+
+        let step_idx = root_idx.unwrap_or(i);
         let label = if depth == 0 {
             format!("{i}  {summary}")
         } else {
@@ -138,10 +172,10 @@ pub(crate) fn collect_nodes(
             is_header: false,
         });
 
-        if depth == 0 && is_compound && is_expanded {
+        if is_compound && is_expanded {
             for (branch_name, branch_steps) in get_inner_steps(step) {
                 nodes.push(FlowNode {
-                    step_idx: i,
+                    step_idx,
                     depth: depth + 1,
                     label: format!("─ {branch_name}:"),
                     color: egui::Color32::from_gray(100),
@@ -149,18 +183,26 @@ pub(crate) fn collect_nodes(
                     is_expanded: false,
                     is_header: true,
                 });
-                for inner in &branch_steps {
-                    let inner_color = category_color(step_key_category(get_step_key(inner)));
+                if depth + 2 > MAX_RENDER_DEPTH {
+                    // Show a collapsed summary instead of recursing deeper
                     nodes.push(FlowNode {
-                        step_idx: i,
+                        step_idx,
                         depth: depth + 2,
-                        label: step_summary(inner),
-                        color: inner_color,
+                        label: format!("… {} ステップ (折りたたみ)", branch_steps.len()),
+                        color: egui::Color32::from_gray(80),
                         expand_key: None,
                         is_expanded: false,
                         is_header: false,
                     });
+                    continue;
                 }
+                collect_nodes_impl(
+                    &branch_steps,
+                    depth + 2,
+                    Some(step_idx),
+                    expanded,
+                    nodes,
+                );
             }
         }
     }
@@ -194,12 +236,16 @@ pub(crate) fn step_summary(v: &serde_yml::Value) -> String {
             serde_yml::Value::Number(n) => n.to_string(),
             serde_yml::Value::Bool(b) => b.to_string(),
             serde_yml::Value::Mapping(m) => {
-                if let Some((sk, sv)) = m.iter().next() {
-                    format!(
-                        "{}: {}",
-                        sk.as_str().unwrap_or("?"),
-                        sv.as_str().unwrap_or("…")
-                    )
+                // Show the first value directly — the step display name already
+                // conveys the type, so repeating the sub-key name ("template",
+                // "text", etc.) is redundant noise in the node label.
+                if let Some((_sk, sv)) = m.iter().next() {
+                    match sv {
+                        serde_yml::Value::String(s) => s.clone(),
+                        serde_yml::Value::Number(n) => n.to_string(),
+                        serde_yml::Value::Bool(b) => b.to_string(),
+                        _ => "…".into(),
+                    }
                 } else {
                     "{}".into()
                 }

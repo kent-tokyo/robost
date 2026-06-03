@@ -504,6 +504,12 @@ impl ScenarioEngine {
             for (i, step) in steps.iter().enumerate() {
                 self.check_cancelled()?;
 
+                // Skip steps marked with `enabled: false` in the scenario YAML
+                if let crate::scenario::ScenarioStep::Disabled(inner) = step {
+                    info!(step = i, name = inner.name(), "step disabled — skipping");
+                    continue;
+                }
+
                 let span = tracing::info_span!("step", index = i);
                 let _g = span.enter();
 
@@ -1509,6 +1515,10 @@ impl ScenarioEngine {
                 self.wait_until(s, vars).await?;
                 Ok(Flow::Done)
             }
+
+            // Disabled steps are skipped in run_steps before reaching run_step,
+            // but this arm keeps the match exhaustive.
+            ScenarioStep::Disabled(_) => Ok(Flow::Done),
         }
     }
 
