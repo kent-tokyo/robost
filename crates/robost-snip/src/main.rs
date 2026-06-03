@@ -26,9 +26,10 @@ fn setup_fonts(ctx: &eframe::egui::Context) {
 
     for path in candidates {
         if let Ok(data) = std::fs::read(path) {
-            fonts
-                .font_data
-                .insert("cjk".to_owned(), eframe::egui::FontData::from_owned(data).into());
+            fonts.font_data.insert(
+                "cjk".to_owned(),
+                eframe::egui::FontData::from_owned(data).into(),
+            );
             fonts
                 .families
                 .entry(eframe::egui::FontFamily::Proportional)

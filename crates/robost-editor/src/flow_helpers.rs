@@ -196,13 +196,7 @@ fn collect_nodes_impl(
                     });
                     continue;
                 }
-                collect_nodes_impl(
-                    &branch_steps,
-                    depth + 2,
-                    Some(step_idx),
-                    expanded,
-                    nodes,
-                );
+                collect_nodes_impl(&branch_steps, depth + 2, Some(step_idx), expanded, nodes);
             }
         }
     }
@@ -277,7 +271,9 @@ pub(crate) fn step_matches(step: &serde_yml::Value, query: &str) -> bool {
             .contains(query)
 }
 
-pub(crate) fn parse_scenario_steps(text: &str) -> Result<(String, serde_yml::Mapping, Vec<serde_yml::Value>)> {
+pub(crate) fn parse_scenario_steps(
+    text: &str,
+) -> Result<(String, serde_yml::Mapping, Vec<serde_yml::Value>)> {
     let doc: serde_yml::Value = serde_yml::from_str(text)?;
     let name = doc
         .get("name")

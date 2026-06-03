@@ -482,7 +482,9 @@ impl eframe::App for EditorApp {
                         no = true;
                     }
                     // Auto-focus cancel button so Enter/Space triggers cancel, not confirm
-                    if !yes { cancel_btn.request_focus(); }
+                    if !yes {
+                        cancel_btn.request_focus();
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.weak("Esc: キャンセル");
                     });
@@ -574,8 +576,7 @@ impl eframe::App for EditorApp {
                         // BUG-1: rpa emits 0-based step index relative to the slice;
                         // add offset to get original canvas index.
                         let offset = self.run_from_offset;
-                        self.current_run_step =
-                            v["step"].as_u64().map(|n| offset + n as usize);
+                        self.current_run_step = v["step"].as_u64().map(|n| offset + n as usize);
                         if let Some(curr) = self.current_run_step {
                             for i in offset..curr {
                                 self.canvas_completed_steps.insert(i);
@@ -1138,8 +1139,7 @@ impl eframe::App for EditorApp {
             .show(ctx, |ui| {
                 let problem_count = self.validate_scenario().len();
                 // Auto-switch to Problems tab when new errors appear
-                if problem_count > self.prev_problem_count
-                    && self.bottom_tab != BottomTab::Problems
+                if problem_count > self.prev_problem_count && self.bottom_tab != BottomTab::Problems
                 {
                     self.bottom_tab = BottomTab::Problems;
                 }
@@ -1349,7 +1349,8 @@ impl eframe::App for EditorApp {
                                     let is_multi = self.multi_selected.contains(&i);
                                     let is_primary = self.selected == Some(i);
                                     let is_running = self.current_run_step == Some(i);
-                                    let is_disabled = crate::state::EditorApp::step_is_disabled(&self.steps[i]);
+                                    let is_disabled =
+                                        crate::state::EditorApp::step_is_disabled(&self.steps[i]);
                                     let is_var_match = if let Some(ref vh) = self.var_highlight {
                                         let pattern = format!("{{{{ {vh} }}}}");
                                         serde_yml::to_string(&self.steps[i])
@@ -1384,7 +1385,9 @@ impl eframe::App for EditorApp {
                                             DragPayload::ReorderStep(drag_indices),
                                             |ui| {
                                                 ui.horizontal(|ui| {
-                                                    ui.set_min_height(crate::tokens::STEP_ROW_HEIGHT); // DESIGN.md §3.2
+                                                    ui.set_min_height(
+                                                        crate::tokens::STEP_ROW_HEIGHT,
+                                                    ); // DESIGN.md §3.2
                                                     let bar_color = if is_running {
                                                         crate::tokens::WARNING
                                                     } else {
@@ -1392,21 +1395,29 @@ impl eframe::App for EditorApp {
                                                     };
                                                     ui.colored_label(bar_color, "▌");
                                                     // Enable/disable toggle
-                                                    let toggle_icon = if is_disabled { "○" } else { "●" };
+                                                    let toggle_icon =
+                                                        if is_disabled { "○" } else { "●" };
                                                     let toggle_color = if is_disabled {
                                                         egui::Color32::from_gray(90)
                                                     } else {
                                                         egui::Color32::from_gray(160)
                                                     };
-                                                    if ui.add(
-                                                        egui::Label::new(
-                                                            egui::RichText::new(toggle_icon)
-                                                                .color(toggle_color)
-                                                                .size(10.0),
-                                                        ).sense(egui::Sense::click()),
-                                                    )
-                                                    .on_hover_text(if is_disabled { "クリックで有効化" } else { "クリックで無効化" })
-                                                    .clicked() {
+                                                    if ui
+                                                        .add(
+                                                            egui::Label::new(
+                                                                egui::RichText::new(toggle_icon)
+                                                                    .color(toggle_color)
+                                                                    .size(10.0),
+                                                            )
+                                                            .sense(egui::Sense::click()),
+                                                        )
+                                                        .on_hover_text(if is_disabled {
+                                                            "クリックで有効化"
+                                                        } else {
+                                                            "クリックで無効化"
+                                                        })
+                                                        .clicked()
+                                                    {
                                                         action = Some(StepAction::ToggleEnabled(i));
                                                     }
                                                     let label_richtext = if is_disabled {
@@ -1425,7 +1436,8 @@ impl eframe::App for EditorApp {
                                                             resp.rect.expand2(egui::vec2(2.0, 1.0)),
                                                             2.0,
                                                             egui::Color32::from_rgba_premultiplied(
-                                                                0, 28, 50, 60, // ACCENT #0078D4 @ 24% alpha
+                                                                0, 28, 50,
+                                                                60, // ACCENT #0078D4 @ 24% alpha
                                                             ),
                                                         );
                                                     }

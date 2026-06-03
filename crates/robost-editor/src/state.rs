@@ -4,7 +4,9 @@ use eframe::egui;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 
-use crate::flow_helpers::{build_scenario_yaml, collect_nodes, parse_scenario_steps, NODE_H, NODE_W};
+use crate::flow_helpers::{
+    build_scenario_yaml, collect_nodes, parse_scenario_steps, NODE_H, NODE_W,
+};
 use crate::settings::{load_settings, AppSettings};
 use crate::types::{
     AiMessage, BottomTab, CanvasComment, ConfirmAction, EditorState, FlowNode, LogEntry, LogLevel,
@@ -286,9 +288,13 @@ impl EditorApp {
                     self.canvas_positions.clear();
                     self.load_canvas_layout(p);
                 }
-                Err(e) => self.log_err(format!("構文エラー: {e} — YAML のインデントやコロンを確認してください")),
+                Err(e) => self.log_err(format!(
+                    "構文エラー: {e} — YAML のインデントやコロンを確認してください"
+                )),
             },
-            Err(e) => self.log_err(format!("読み込みエラー: {e} — ファイルが存在し読み取り可能か確認してください")),
+            Err(e) => self.log_err(format!(
+                "読み込みエラー: {e} — ファイルが存在し読み取り可能か確認してください"
+            )),
         }
     }
 
@@ -356,9 +362,13 @@ impl EditorApp {
                     self.log_ok(format!("保存しました: {}", path.display()));
                     self.save_canvas_layout();
                 }
-                Err(e) => self.log_err(format!("書き込みエラー: {e} — 保存先フォルダの書き込み権限を確認してください")),
+                Err(e) => self.log_err(format!(
+                    "書き込みエラー: {e} — 保存先フォルダの書き込み権限を確認してください"
+                )),
             },
-            Err(e) => self.log_err(format!("シリアライズエラー: {e} — ステップの値に不正な文字が含まれている可能性があります")),
+            Err(e) => self.log_err(format!(
+                "シリアライズエラー: {e} — ステップの値に不正な文字が含まれている可能性があります"
+            )),
         }
     }
 
@@ -552,13 +562,16 @@ impl EditorApp {
             .into_iter()
             .filter_map(|i| self.steps.get(i).cloned())
             .collect();
-        let yaml = match build_scenario_yaml(&self.name, &serde_yml::Mapping::new(), &selected_steps) {
-            Ok(y) => y,
-            Err(e) => {
-                self.log_err(format!("YAML生成失敗: {e} — ステップの値を確認してください"));
-                return;
-            }
-        };
+        let yaml =
+            match build_scenario_yaml(&self.name, &serde_yml::Mapping::new(), &selected_steps) {
+                Ok(y) => y,
+                Err(e) => {
+                    self.log_err(format!(
+                        "YAML生成失敗: {e} — ステップの値を確認してください"
+                    ));
+                    return;
+                }
+            };
         let tmp_path = match write_tmp_yaml(&yaml) {
             Ok(p) => p,
             Err(e) => {
@@ -579,7 +592,10 @@ impl EditorApp {
                 self.run_tmp_file = Some(tmp_path);
                 self.run_child = Some(child);
                 self.stderr_rx = Some(rx);
-                self.log_ok(format!("{}ステップを実行中 (選択範囲)", self.multi_selected.len()));
+                self.log_ok(format!(
+                    "{}ステップを実行中 (選択範囲)",
+                    self.multi_selected.len()
+                ));
             }
             Err(e) => {
                 self.run_progress_file = None;
@@ -600,7 +616,9 @@ impl EditorApp {
             let yaml = match build_scenario_yaml(&self.name, &self.scenario_vars, &self.steps) {
                 Ok(y) => y,
                 Err(e) => {
-                    self.log_err(format!("YAML生成失敗: {e} — ステップの値を確認してください"));
+                    self.log_err(format!(
+                        "YAML生成失敗: {e} — ステップの値を確認してください"
+                    ));
                     return;
                 }
             };
@@ -650,8 +668,7 @@ impl EditorApp {
     pub(crate) fn run_from_step(&mut self, start_idx: usize) {
         self.stop_run();
         self.flush_edit();
-        let steps_from: Vec<serde_yml::Value> =
-            self.steps.get(start_idx..).unwrap_or(&[]).to_vec();
+        let steps_from: Vec<serde_yml::Value> = self.steps.get(start_idx..).unwrap_or(&[]).to_vec();
         if steps_from.is_empty() {
             self.log_err(format!(
                 "ステップ {} 以降に実行するステップがありません",
@@ -721,7 +738,10 @@ fn spawn_rpa(
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))?
         .parent()
         .ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::NotFound, "cannot determine rpa directory")
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "cannot determine rpa directory",
+            )
         })?
         .join("rpa");
 
@@ -739,7 +759,10 @@ fn spawn_rpa(
     if let Some(stderr) = child.stderr.take() {
         std::thread::spawn(move || {
             use std::io::BufRead;
-            for line in std::io::BufReader::new(stderr).lines().map_while(Result::ok) {
+            for line in std::io::BufReader::new(stderr)
+                .lines()
+                .map_while(Result::ok)
+            {
                 if tx.send(line).is_err() {
                     break;
                 }
@@ -763,7 +786,6 @@ fn write_tmp_yaml(yaml: &str) -> std::io::Result<std::path::PathBuf> {
 }
 
 impl EditorApp {
-
     pub(crate) fn snapshot(&self) -> EditorState {
         EditorState {
             name: self.name.clone(),
@@ -938,7 +960,13 @@ impl EditorApp {
         });
     }
 
-    pub(crate) fn swap_branch_steps(&mut self, parent_idx: usize, branch_name: &str, a: usize, b: usize) {
+    pub(crate) fn swap_branch_steps(
+        &mut self,
+        parent_idx: usize,
+        branch_name: &str,
+        a: usize,
+        b: usize,
+    ) {
         self.mutate_branch(parent_idx, branch_name, move |seq| {
             if a < seq.len() && b < seq.len() {
                 seq.swap(a, b);
@@ -946,7 +974,12 @@ impl EditorApp {
         });
     }
 
-    pub(crate) fn remove_branch_step(&mut self, parent_idx: usize, branch_name: &str, child_idx: usize) {
+    pub(crate) fn remove_branch_step(
+        &mut self,
+        parent_idx: usize,
+        branch_name: &str,
+        child_idx: usize,
+    ) {
         self.mutate_branch(parent_idx, branch_name, move |seq| {
             if child_idx < seq.len() {
                 seq.remove(child_idx);
@@ -976,7 +1009,9 @@ impl EditorApp {
 
     /// Toggle `enabled: false` on a step value. Does not push undo — callers must.
     pub(crate) fn toggle_step_enabled(step: &mut serde_yml::Value) {
-        let Some(map) = step.as_mapping_mut() else { return };
+        let Some(map) = step.as_mapping_mut() else {
+            return;
+        };
         let key = serde_yml::Value::String("enabled".to_owned());
         let is_disabled = map
             .get(&key)

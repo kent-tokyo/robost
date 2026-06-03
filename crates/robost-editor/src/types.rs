@@ -2,7 +2,6 @@
 
 use crate::tokens;
 
-
 // ---- AI message -------------------------------------------------------------
 
 #[derive(Clone)]
@@ -288,4 +287,3 @@ pub(crate) enum StepAction {
     Delete(usize),
     ToggleEnabled(usize),
 }
-

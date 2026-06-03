@@ -38,7 +38,11 @@ impl EditorApp {
         }
     }
 
-    pub(crate) fn canvas_shift_positions(positions: &mut HashMap<usize, egui::Pos2>, at: usize, delta: isize) {
+    pub(crate) fn canvas_shift_positions(
+        positions: &mut HashMap<usize, egui::Pos2>,
+        at: usize,
+        delta: isize,
+    ) {
         let mut keys: Vec<usize> = positions.keys().cloned().collect();
         if delta > 0 {
             // Sort descending so we don't clobber higher indices when shifting up
@@ -184,7 +188,11 @@ impl EditorApp {
 
     /// Shift `@N` numeric suffixes in form_edit_buffers when steps are inserted (delta>0)
     /// or removed (delta<0) at position `at`. Mirrors canvas_shift_positions behaviour.
-    pub(crate) fn form_edit_buffers_shift(buffers: &mut HashMap<String, String>, at: usize, delta: isize) {
+    pub(crate) fn form_edit_buffers_shift(
+        buffers: &mut HashMap<String, String>,
+        at: usize,
+        delta: isize,
+    ) {
         // Keys have format "{field}@{step_idx}" or "{field}@{step_idx}@{suffix}".
         // We extract the step index as the segment between the first '@' and the
         // next '@' (or end of string), so compound keys like "keys@5@add" are handled.
@@ -387,8 +395,8 @@ impl EditorApp {
     }
 
     pub(crate) fn show_canvas(&mut self, ui: &mut egui::Ui) {
+        use crate::types::{category_color, step_key_category};
         use egui::{epaint::CubicBezierShape, Align2, Color32, FontId, Rect, Sense, Stroke, Vec2};
-        use crate::types::{step_key_category, category_color};
 
         // Pre-compute search state so it can be used throughout without borrow conflicts
         let search_query = self.canvas_search.to_lowercase();
@@ -475,7 +483,10 @@ impl EditorApp {
                 let mut x = resp.rect.min.x + offset_x;
                 while x <= resp.rect.max.x {
                     painter.line_segment(
-                        [egui::pos2(x, resp.rect.min.y), egui::pos2(x, resp.rect.max.y)],
+                        [
+                            egui::pos2(x, resp.rect.min.y),
+                            egui::pos2(x, resp.rect.max.y),
+                        ],
                         stroke,
                     );
                     x += grid;
@@ -483,7 +494,10 @@ impl EditorApp {
                 let mut y = resp.rect.min.y + offset_y;
                 while y <= resp.rect.max.y {
                     painter.line_segment(
-                        [egui::pos2(resp.rect.min.x, y), egui::pos2(resp.rect.max.x, y)],
+                        [
+                            egui::pos2(resp.rect.min.x, y),
+                            egui::pos2(resp.rect.max.x, y),
+                        ],
                         stroke,
                     );
                     y += grid;
@@ -641,7 +655,11 @@ impl EditorApp {
                 tokens::EDGE_COLOR
             };
             // Ensure edges remain visible at extreme zoom-out (min 1px)
-            let stroke_width = if is_compound { (1.0 * z).max(1.0) } else { (1.5 * z).max(1.0) };
+            let stroke_width = if is_compound {
+                (1.0 * z).max(1.0)
+            } else {
+                (1.5 * z).max(1.0)
+            };
             painter.add(egui::Shape::CubicBezier(
                 CubicBezierShape::from_points_stroke(
                     [from, from + ctrl, to - ctrl, to],
@@ -835,7 +853,11 @@ impl EditorApp {
                 let s = crate::i18n::S::for_lang(&self.settings.lang);
                 {
                     let is_dis = crate::state::EditorApp::step_is_disabled(&self.steps[idx]);
-                    let toggle_label = if is_dis { "● 有効化" } else { "○ 無効化" };
+                    let toggle_label = if is_dis {
+                        "● 有効化"
+                    } else {
+                        "○ 無効化"
+                    };
                     if ui.button(toggle_label).clicked() {
                         canvas_ctx_action = Some(CanvasContextAction::ToggleEnabled(idx));
                         ui.close();
@@ -1032,7 +1054,11 @@ impl EditorApp {
                     Align2::LEFT_CENTER,
                     format!("{}", idx + 1),
                     FontId::proportional((9.0 * z).max(9.0)),
-                    if is_disabled { Color32::from_gray(90) } else { Color32::from_gray(185) },
+                    if is_disabled {
+                        Color32::from_gray(90)
+                    } else {
+                        Color32::from_gray(185)
+                    },
                 );
                 const MAX_LABEL_CHARS: usize = 32;
                 let label = if full_label.chars().count() > MAX_LABEL_CHARS {
@@ -1046,7 +1072,11 @@ impl EditorApp {
                     Align2::LEFT_CENTER,
                     label,
                     FontId::proportional((11.0 * z).max(10.0)),
-                    if is_disabled { Color32::from_gray(100) } else { Color32::from_gray(228) },
+                    if is_disabled {
+                        Color32::from_gray(100)
+                    } else {
+                        Color32::from_gray(228)
+                    },
                 );
                 // High-zoom third line: step type
                 if z >= 1.5 {
@@ -1756,7 +1786,10 @@ impl EditorApp {
                 painter.rect_stroke(
                     comment_rect,
                     3.0 * z,
-                    egui::Stroke::new(1.0, egui::Color32::from_rgba_premultiplied(180, 160, 50, 200)),
+                    egui::Stroke::new(
+                        1.0,
+                        egui::Color32::from_rgba_premultiplied(180, 160, 50, 200),
+                    ),
                     egui::StrokeKind::Inside,
                 );
 
@@ -1771,7 +1804,10 @@ impl EditorApp {
                         .desired_rows(((screen_h - 8.0 * z) / 14.0).max(1.0) as usize)
                         .font(egui::FontId::proportional((11.0 * z).max(9.0)));
                     let te_resp = ui.put(
-                        egui::Rect::from_min_size(edit_pos, egui::vec2(screen_w - 8.0 * z, screen_h - 8.0 * z)),
+                        egui::Rect::from_min_size(
+                            edit_pos,
+                            egui::vec2(screen_w - 8.0 * z, screen_h - 8.0 * z),
+                        ),
                         te,
                     );
                     if te_resp.lost_focus() {
@@ -1804,7 +1840,9 @@ impl EditorApp {
                 let comment_resp = ui.allocate_rect(comment_rect, egui::Sense::click_and_drag());
 
                 if comment_resp.drag_started() {
-                    let cursor = ui.input(|i| i.pointer.interact_pos()).unwrap_or(comment_rect.min);
+                    let cursor = ui
+                        .input(|i| i.pointer.interact_pos())
+                        .unwrap_or(comment_rect.min);
                     let offset = cursor - comment_rect.min;
                     self.canvas_comment_drag = Some((ci, offset));
                 }

@@ -809,7 +809,14 @@ impl EditorApp {
             "template", "file", "path", "src", "dest", "local", "remote", "sub",
         ];
         const COMPOUND_KEYS: &[&str] = &[
-            "if", "foreach", "repeat", "while", "do_while", "try_catch", "group", "switch",
+            "if",
+            "foreach",
+            "repeat",
+            "while",
+            "do_while",
+            "try_catch",
+            "group",
+            "switch",
         ];
 
         let child_steps = match self.get_branch_steps(parent_idx, branch) {
@@ -893,10 +900,8 @@ impl EditorApp {
                                         if let Ok(nv) =
                                             serde_yml::from_str::<serde_yml::Value>(&buf)
                                         {
-                                            new_inner.insert(
-                                                serde_yml::Value::String(fk.clone()),
-                                                nv,
-                                            );
+                                            new_inner
+                                                .insert(serde_yml::Value::String(fk.clone()), nv);
                                             changed = true;
                                         }
                                     }
@@ -918,10 +923,8 @@ impl EditorApp {
                                         .chars()
                                         .take(48)
                                         .collect();
-                                    ui.weak(
-                                        egui::RichText::new(preview).monospace().size(10.0),
-                                    )
-                                    .on_hover_text("複雑な値は YAML タブで編集してください");
+                                    ui.weak(egui::RichText::new(preview).monospace().size(10.0))
+                                        .on_hover_text("複雑な値は YAML タブで編集してください");
                                 }
                             });
                             ui.end_row();
@@ -1058,7 +1061,6 @@ impl EditorApp {
             ui.colored_label(tokens::ERROR, format!("YAML エラー: {err}"));
         }
     }
-
 
     pub(crate) fn insert_yaml_snippet(&mut self, yaml: &str) {
         match serde_yml::from_str::<serde_yml::Value>(yaml) {
