@@ -12,13 +12,18 @@ use crate::flow_helpers::{
 use crate::i18n::S;
 use crate::settings::save_settings;
 use crate::state::EditorApp;
-use crate::step_templates::{StepTemplate, STEP_TEMPLATES};
+use crate::step_templates::{step_icon, StepTemplate, STEP_TEMPLATES};
 use crate::types::{
     category_color, step_key_category, AiMessage, BottomTab, ConfirmAction, DragPayload, LogEntry,
     LogLevel, PropView, StepAction, ViewMode,
 };
 
 impl eframe::App for EditorApp {
+    fn ui(&mut self, _ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Panels are created via ctx below — no-op here.
+    }
+
+    #[allow(deprecated)]
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let s = S::for_lang(&self.settings.lang);
         if self.bottom_tab != BottomTab::Variables {
@@ -1317,7 +1322,12 @@ impl eframe::App for EditorApp {
                             ui.weak("一致するノードがありません");
                         }
                         for t in matches {
-                            let label = egui::RichText::new(t.display_name).size(11.0);
+                            let label = egui::RichText::new(format!(
+                                "{} {}",
+                                step_icon(t.name),
+                                t.display_name
+                            ))
+                            .size(11.0);
                             let drag_id = egui::Id::new(("palette_drag", t.name));
                             let resp = ui
                                 .dnd_drag_source(drag_id, DragPayload::NewStep(t.yaml), |ui| {
@@ -1348,7 +1358,12 @@ impl eframe::App for EditorApp {
                                 .open(force)
                                 .show(ui, |ui| {
                                     for t in STEP_TEMPLATES.iter().filter(|t| t.category == cat) {
-                                        let label = egui::RichText::new(t.display_name).size(11.0);
+                                        let label = egui::RichText::new(format!(
+                                            "{} {}",
+                                            step_icon(t.name),
+                                            t.display_name
+                                        ))
+                                        .size(11.0);
                                         let drag_id = egui::Id::new(("palette_drag", t.name));
                                         let resp = ui
                                             .dnd_drag_source(

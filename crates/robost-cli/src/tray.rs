@@ -330,6 +330,9 @@ impl TrayApp {
 }
 
 impl eframe::App for TrayApp {
+    fn ui(&mut self, _ui: &mut egui::Ui, _frame: &mut eframe::Frame) {}
+
+    #[allow(deprecated)]
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Sync status from background thread.
         let current = self.shared_status.lock().unwrap().clone();

@@ -19,7 +19,7 @@ use state::EditorApp;
 // ---- main -----------------------------------------------------------------
 
 fn apply_style(ctx: &egui::Context) {
-    let mut style = (*ctx.style()).clone();
+    let mut style = (*ctx.global_style()).clone();
 
     // ACCENT blue selection highlight (DESIGN.md §1.1)
     style.visuals.selection.bg_fill = tokens::ACCENT.gamma_multiply(0.45);
@@ -41,11 +41,14 @@ fn apply_style(ctx: &egui::Context) {
     style.spacing.item_spacing = egui::vec2(tokens::SPACING_SM, tokens::SPACING_XS);
     style.spacing.button_padding = egui::vec2(tokens::SPACING_SM, tokens::SPACING_XS);
 
-    ctx.set_style(style);
+    ctx.set_global_style(style);
 }
 
 fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
+
+    // Phosphor icon font (embedded in egui-phosphor crate)
+    egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
 
     let candidates: &[&str] = &[
         // macOS

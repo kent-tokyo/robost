@@ -204,3 +204,132 @@ pub(crate) const STEP_TEMPLATES: &[StepTemplate] = &[
     StepTemplate { category: "ユーティリティ", display_name: "URL を開く",        name: "url_open",       yaml: "url_open:\n  url: \"https://example.com\"\n" },
     StepTemplate { category: "ユーティリティ", display_name: "デスクトップ通知",  name: "notify",         yaml: "notify:\n  title: 完了\n  message: 処理が完了しました\n" },
 ];
+
+/// Return a Phosphor Regular icon character for the given step key.
+pub(crate) fn step_icon(name: &str) -> &'static str {
+    use egui_phosphor::regular as ph;
+    match name {
+        // AI
+        "ai_create" => ph::ROBOT,
+        // 制御フロー
+        "if" => ph::GIT_BRANCH,
+        "foreach" => ph::REPEAT,
+        "repeat" => ph::ARROWS_CLOCKWISE,
+        "while" => ph::ARROW_CLOCKWISE,
+        "do_while" => ph::ARROW_ARC_LEFT,
+        "try_catch" => ph::SHIELD,
+        "group" => ph::FOLDER,
+        "switch" => ph::ARROWS_SPLIT,
+        "sub_scenario" | "call_scenario" => ph::FLOW_ARROW,
+        "exit" => ph::DOOR,
+        "break" => ph::STOP,
+        "continue" => ph::SKIP_FORWARD,
+        // 画像操作
+        "wait_image" => ph::EYE,
+        "click_image" => ph::CURSOR_CLICK,
+        "find_image" => ph::MAGNIFYING_GLASS,
+        "match_rect" => ph::SELECTION,
+        "wait_no_image" => ph::PROHIBIT,
+        "wait_change" => ph::MONITOR,
+        "ocr_match" => ph::SCAN,
+        "ml_detect" => ph::BRAIN,
+        "screenshot_save" => ph::CAMERA,
+        "get_pixel_color" | "wait_color" => ph::PAINT_BUCKET,
+        "window_control" => ph::APP_WINDOW,
+        // 入力操作
+        "type" | "press" | "key_combo" => ph::KEYBOARD,
+        "click_in_window" => ph::CURSOR,
+        // 待機
+        "wait_ms" => ph::TIMER,
+        "wait_window" => ph::CLOCK,
+        "wait_until" | "wait_process" => ph::HOURGLASS,
+        // 変数
+        "set" => ph::PACKAGE,
+        "copy_var" => ph::COPY,
+        "get_datetime" => ph::CALENDAR,
+        "get_username" => ph::USER,
+        "calc" => ph::CALCULATOR,
+        "increment" => ph::PLUS_CIRCLE,
+        "to_fullwidth" | "to_halfwidth" => ph::TRANSLATE,
+        "import_vars" => ph::DOWNLOAD,
+        "save_vars" => ph::FLOPPY_DISK,
+        "load_vars" => ph::UPLOAD,
+        // クリップボード
+        "clipboard_set" | "clipboard_get" => ph::CLIPBOARD_TEXT,
+        // ダイアログ
+        "dialog_wait" => ph::CHAT_TEXT,
+        "dialog_input" => ph::NOTE_PENCIL,
+        "dialog_select" => ph::LIST_BULLETS,
+        // スクリプト
+        "shell" | "script" => ph::TERMINAL_WINDOW,
+        // ライブラリ
+        "library" => ph::PUZZLE_PIECE,
+        // ファイル
+        "file_copy" => ph::COPY,
+        "file_move" => ph::ARROW_SQUARE_OUT,
+        "file_delete" | "dir_delete" => ph::TRASH,
+        "file_rename" => ph::PENCIL_SIMPLE,
+        "file_exists" | "dir_exists" => ph::QUESTION,
+        "file_read" => ph::BOOK_OPEN,
+        "file_write" | "file_append" | "log_write" => ph::FILE_TEXT,
+        "file_size" | "file_modified_at" | "file_list" => ph::FILE_SEARCH,
+        "dir_create" => ph::FOLDER,
+        "zip_compress" | "zip_extract" | "zip_list" => ph::FILE_PLUS,
+        "ftp_upload" => ph::UPLOAD,
+        "ftp_download" => ph::DOWNLOAD,
+        "ftp_list" | "ftp_delete" | "ftp_mkdir" => ph::LINK_SIMPLE,
+        // Excel
+        "excel_read_sheet" | "excel_read_range" | "excel_read_cell" => ph::TABLE,
+        "excel_write_cell" | "excel_write_range" => ph::PENCIL_SIMPLE,
+        "excel_get_dims" | "excel_find_row" => ph::MAGNIFYING_GLASS,
+        "excel_add_sheet" | "excel_delete_sheet" | "excel_rename_sheet" => ph::COLUMNS,
+        // データ
+        "db_query" | "db_query_one" | "db_execute" => ph::DATABASE,
+        "pdf_extract_text" | "pdf_page_count" => ph::FILE_TEXT,
+        // 文字列
+        "string_replace" | "string_trim" | "string_upper" | "string_lower" | "string_substring"
+        | "string_length" | "string_split" | "string_join" | "string_regex" | "string_format"
+        | "string_contains" | "string_starts_with" | "string_ends_with" | "string_index_of"
+        | "string_count" => ph::QUOTES,
+        // 日付
+        "date_format" | "date_add" | "date_diff" => ph::CALENDAR,
+        // JSON
+        "json_parse" | "json_stringify" => ph::HASH_STRAIGHT,
+        // パス
+        "path_join" | "path_basename" | "path_dirname" => ph::PATH,
+        "env_get" => ph::LEAF,
+        // マウス
+        "mouse_move" | "mouse_click_xy" | "mouse_drag" | "mouse_scroll" | "mouse_hover" => {
+            ph::MOUSE
+        }
+        // プロセス
+        "process_start" | "process_kill" | "process_exists" => ph::GEAR,
+        // HTTP
+        "http_get" | "http_post" | "http_put" | "http_patch" | "http_delete" => ph::GLOBE,
+        // メール
+        "mail_send" | "mail_receive" => ph::ENVELOPE,
+        // Web
+        "web_open" | "web_close" | "web_get_url" | "web_get_title" | "web_scroll"
+        | "web_switch_frame" => ph::GLOBE_SIMPLE,
+        "web_click" | "web_select" | "web_alert" => ph::CURSOR_CLICK,
+        "web_type" | "web_execute_js" => ph::TERMINAL_WINDOW,
+        "web_wait" | "web_wait_text" => ph::TIMER,
+        "web_screenshot" => ph::CAMERA,
+        "web_get" | "web_get_all" => ph::LIST,
+        // UIA
+        "uia_get" | "uia_set" | "uia_click" | "uia_find" | "uia_wait" | "uia_select"
+        | "uia_get_children" | "uia_check" => ph::SLIDERS,
+        // CSV
+        "csv_read" | "csv_write" => ph::TABLE,
+        // リスト
+        "list_length" | "list_get" | "list_push" | "list_remove" | "list_contains" => {
+            ph::LIST_NUMBERS
+        }
+        // ユーティリティ
+        "base64_encode" | "base64_decode" => ph::HASH,
+        "to_number" | "to_string" | "var_type" | "number_random" => ph::ARROWS_LEFT_RIGHT,
+        "url_open" => ph::GLOBE,
+        "notify" => ph::BELL,
+        _ => ph::SPARKLE,
+    }
+}
