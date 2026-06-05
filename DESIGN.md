@@ -83,7 +83,9 @@ style.visuals = base;
 
 Microsoft guideline: *Set tone and improve readability through consistent typefaces and hierarchy*
 
-Since egui does not use system fonts, **Noto Sans / Noto Sans JP** are bundled with the application.
+**Phase 1 (current):** CJK font support via OS-path probing (`setup_fonts()` searches standard system font directories on macOS, Windows, and Linux). This avoids adding a large binary asset (~4 MB) to the repository in the early phase.
+
+**Phase 2:** Embed **Noto Sans / Noto Sans JP** using `include_bytes!()` so the binary is fully self-contained. The font file should be stored in `crates/robost-editor/assets/NotoSansJP-Regular.ttf` and committed to the repo.
 
 ### 2.1 Type Scale
 
@@ -112,7 +114,10 @@ Microsoft guideline: *Create a balanced and predictable layout through shape, si
 - Base unit: **4 px**
 - Element spacing: one of 4 / 8 / 12 / 16 / 24 / 32 px
 - Corner radius: controls 4 px, panels 8 px, modals 12 px
-- Panel minimum width: 240 px, recommended width: 320 px
+- Panel minimum widths (scenario editor):
+  - Node palette panel: min 200 px, default 220 px
+  - Step list panel: min 240 px (DESIGN.md §3.1 general guideline)
+  - Inspector / central area: remaining width
 
 ### 3.2 Component Sizes
 
@@ -120,7 +125,7 @@ Microsoft guideline: *Create a balanced and predictable layout through shape, si
 |--------------|---------|------|
 | Button (primary) | 32 px | min-width: 80 px |
 | Text field | 32 px | |
-| Step row (scenario editor) | 48 px | Includes margin for drag handle |
+| Step row (scenario editor) | 32 px | Compact density; drag handle overlay on hover |
 | Tray menu item | 32 px | |
 | Snip selection handle | 10×10 px | For visibility |
 
@@ -352,8 +357,9 @@ Microsoft guideline: *Reduce cognitive load and aid understanding through clear,
 
 - Define tokens centrally in `egui::Style` — do not hardcode values
 - Use `egui::Context::set_pixels_per_point()` to correctly reflect DPI
-- Embed font files in the binary via `include_bytes!()`
+- **Font embedding** (Phase 2): Embed font files in the binary via `include_bytes!()`. In Phase 1, OS-path probing is used.
 - Use `egui_extras`'s `TableBuilder` for virtualized scrolling in the step list (to support large scenarios)
+- **AccessKit**: eframe 0.34 integrates AccessKit automatically via the winit backend. No additional configuration is required in `NativeOptions`. Keyboard navigation and screen reader support are available by default.
 
 ## Appendix B: Design Tokens (Provisional)
 

@@ -1328,8 +1328,8 @@ impl eframe::App for EditorApp {
         let mut palette_insert: Option<&'static str> = None;
         egui::SidePanel::left("step_palette")
             .resizable(true)
-            .default_width(200.0)
-            .min_width(140.0)
+            .default_width(220.0)
+            .min_width(200.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.heading(s.panel_nodes);
@@ -1453,7 +1453,7 @@ impl eframe::App for EditorApp {
 
         // ── Left: step list ───────────────────────────────────────────────
         egui::SidePanel::left("steps_panel")
-            .min_width(210.0)
+            .min_width(240.0)
             .show(ctx, |ui| {
                 ui.heading(s.panel_steps);
                 ui.separator();
