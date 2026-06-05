@@ -2010,10 +2010,15 @@ impl eframe::App for EditorApp {
                 let key = get_step_key(&self.steps[idx]);
                 let cat = step_key_category(key);
                 let color = category_color(cat);
-                // Title row — truncate to avoid overlapping the tab row below
+                // Single row: title (truncated, fixed width) + tabs on the right
                 ui.horizontal(|ui| {
                     ui.colored_label(color, "▌");
-                    ui.add(
+                    // Reserve ~140px for the two tab buttons; title gets the rest
+                    let tab_reserved = 140.0_f32;
+                    let title_w = (ui.available_width() - tab_reserved).max(30.0);
+                    let row_h = ui.spacing().interact_size.y;
+                    ui.add_sized(
+                        [title_w, row_h],
                         egui::Label::new(
                             egui::RichText::new(format!(
                                 "ステップ {}  —  {}",
@@ -2024,9 +2029,6 @@ impl eframe::App for EditorApp {
                         )
                         .truncate(),
                     );
-                });
-                // Tab row — right-aligned so it never overlaps the title
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.selectable_value(&mut self.prop_view, PropView::Yaml, "YAML");
                     ui.selectable_value(&mut self.prop_view, PropView::Form, "フォーム");
                 });
