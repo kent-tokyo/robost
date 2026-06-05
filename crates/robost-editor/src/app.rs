@@ -982,8 +982,9 @@ impl eframe::App for EditorApp {
 
         // ── Toolbar ──────────────────────────────────────────────────────────
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
+            // ── Row 1: view selector + file ops + scenario name ──────────────
             ui.horizontal(|ui| {
-                // ── View selector — leftmost so it's always visible ───────────
+                // View selector — always visible on the left
                 if ui
                     .selectable_value(&mut self.view_mode, ViewMode::List, s.menu_list)
                     .clicked()
@@ -1005,7 +1006,6 @@ impl eframe::App for EditorApp {
                     self.ensure_canvas_layout();
                 }
                 ui.separator();
-                // ── File / edit buttons ───────────────────────────────────────
                 if ui.button("📂 開く").clicked() {
                     self.open_file();
                 }
@@ -1035,13 +1035,16 @@ impl eframe::App for EditorApp {
                     }
                 });
                 ui.separator();
-                // ── Scenario name (flexible width) ────────────────────────────
+                // Scenario name — takes remaining width on row 1
                 ui.label(format!("{}:", s.scenario_name_label));
                 if ui.text_edit_singleline(&mut self.name).changed() {
                     self.dirty = true;
                 }
-                ui.separator();
-                // ── Run / Snip ────────────────────────────────────────────────
+            });
+
+            // ── Row 2: execution + view-specific controls + theme ────────────
+            ui.horizontal(|ui| {
+                // ── Run / Stop ────────────────────────────────────────────────
                 if self.run_child.is_some() {
                     if ui
                         .button(format!("⏹ {}", s.btn_stop))
@@ -1057,6 +1060,7 @@ impl eframe::App for EditorApp {
                 {
                     self.run_scenario();
                 }
+                // ── Snip ─────────────────────────────────────────────────────
                 if ui
                     .button(s.btn_snip)
                     .on_hover_text(s.btn_snip_tooltip)
@@ -1064,6 +1068,7 @@ impl eframe::App for EditorApp {
                 {
                     open_snip();
                 }
+                // ── Canvas-specific controls ──────────────────────────────────
                 if self.view_mode == ViewMode::Canvas {
                     ui.separator();
                     if ui.button(s.canvas_reset).clicked() {
