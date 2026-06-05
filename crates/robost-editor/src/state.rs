@@ -144,7 +144,7 @@ impl Default for EditorApp {
             add_menu_selected_idx: 0,
             log: Vec::new(),
             toasts: Vec::new(),
-            view_mode: ViewMode::List,
+            view_mode: ViewMode::Canvas,
             expanded_steps: HashSet::new(),
             undo_stack: VecDeque::new(),
             redo_stack: VecDeque::new(),

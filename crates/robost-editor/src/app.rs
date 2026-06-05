@@ -966,6 +966,29 @@ impl eframe::App for EditorApp {
         // ── Toolbar ──────────────────────────────────────────────────────────
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             ui.horizontal(|ui| {
+                // ── View selector — leftmost so it's always visible ───────────
+                if ui
+                    .selectable_value(&mut self.view_mode, ViewMode::List, s.menu_list)
+                    .clicked()
+                {
+                    // nothing extra
+                }
+                if ui
+                    .selectable_value(&mut self.view_mode, ViewMode::Flow, s.menu_flow)
+                    .clicked()
+                {
+                    self.selected_child = None;
+                    self.scroll_to_selected = true;
+                }
+                if ui
+                    .selectable_value(&mut self.view_mode, ViewMode::Canvas, s.menu_canvas)
+                    .clicked()
+                {
+                    self.selected_child = None;
+                    self.ensure_canvas_layout();
+                }
+                ui.separator();
+                // ── File / edit buttons ───────────────────────────────────────
                 if ui.button("📂 開く").clicked() {
                     self.open_file();
                 }
@@ -995,11 +1018,13 @@ impl eframe::App for EditorApp {
                     }
                 });
                 ui.separator();
+                // ── Scenario name (flexible width) ────────────────────────────
                 ui.label(format!("{}:", s.scenario_name_label));
                 if ui.text_edit_singleline(&mut self.name).changed() {
                     self.dirty = true;
                 }
                 ui.separator();
+                // ── Run / Snip ────────────────────────────────────────────────
                 if self.run_child.is_some() {
                     if ui
                         .button(format!("⏹ {}", s.btn_stop))
@@ -1016,32 +1041,11 @@ impl eframe::App for EditorApp {
                     self.run_scenario();
                 }
                 if ui
-                    .button("📷 採取")
-                    .on_hover_text("テンプレート採取ツールを起動 (Ctrl+Shift+C でキャプチャ)")
+                    .button(s.btn_snip)
+                    .on_hover_text(s.btn_snip_tooltip)
                     .clicked()
                 {
                     open_snip();
-                }
-                ui.separator();
-                if ui
-                    .selectable_value(&mut self.view_mode, ViewMode::List, s.menu_list)
-                    .clicked()
-                {
-                    // nothing extra
-                }
-                if ui
-                    .selectable_value(&mut self.view_mode, ViewMode::Flow, s.menu_flow)
-                    .clicked()
-                {
-                    self.selected_child = None;
-                    self.scroll_to_selected = true;
-                }
-                if ui
-                    .selectable_value(&mut self.view_mode, ViewMode::Canvas, s.menu_canvas)
-                    .clicked()
-                {
-                    self.selected_child = None;
-                    self.ensure_canvas_layout();
                 }
                 if self.view_mode == ViewMode::Canvas {
                     ui.separator();
