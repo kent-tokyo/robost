@@ -81,27 +81,45 @@ style.visuals = base;
 
 ## 2. Typography
 
-Microsoft guideline: *Set tone and improve readability through consistent typefaces and hierarchy*
+Microsoft guideline: *Set tone and improve readability through consistent typefaces and reviewer*
 
-**Phase 1 (current):** CJK font support via OS-path probing (`setup_fonts()` searches standard system font directories on macOS, Windows, and Linux). This avoids adding a large binary asset (~4 MB) to the repository in the early phase.
+### 2.0 Font Strategy
 
-**Phase 2:** Embed **Noto Sans / Noto Sans JP** using `include_bytes!()` so the binary is fully self-contained. The font file should be stored in `crates/robost-editor/assets/NotoSansJP-Regular.ttf` and committed to the repo.
+#### Phase 1 — OS-path probing (current)
+
+`setup_fonts()` searches standard system font directories at startup. The first match wins and is inserted **before** egui's bundled Ubuntu-Light, so its weight and metrics apply to both CJK and Latin glyphs consistently.
+
+| Platform | Priority order |
+|----------|---------------|
+| macOS | ヒラギノ角ゴシック W3 → Hiragino Sans GB → Arial Unicode |
+| Windows | Meiryo → Yu Gothic R → MS Gothic |
+| Linux | Noto Sans CJK (opentype or truetype) |
+
+**Why insert before Ubuntu-Light?** Ubuntu-Light is a very thin weight (Light = ~300). Inserting the system font first gives consistent stroke weight across Latin and CJK characters, which significantly improves readability on high-DPI displays.
+
+#### Phase 2 — Bundled font (planned)
+
+Embed **Noto Sans JP Regular** (`include_bytes!()`) so the binary is fully self-contained and renders identically on every OS. Store the font file at `crates/robost-editor/assets/NotoSansJP-Regular.ttf`.
 
 ### 2.1 Type Scale
 
-| Role | Size | Weight | Usage |
-|--------|--------|---------|------|
-| `Display` | 28 px | SemiBold | Window title |
-| `Title` | 20 px | SemiBold | Panel heading |
-| `Body` | 14 px | Regular | General text, labels |
-| `Caption` | 12 px | Regular | Metadata, hints |
-| `Monospace` | 13 px | Regular | Scenario YAML, log output |
+Sizes are set explicitly via `ctx.set_global_style()` in `setup_fonts()`.
+
+| egui TextStyle | Size | Usage |
+|--------|--------|------|
+| `Heading` | 18 px | Panel headings |
+| `Body` | 14 px | General text, labels, buttons |
+| `Small` | 11 px | Metadata, palette icons, hints |
+| `Monospace` | 13 px | Scenario YAML, log output |
+
+> Note: The `Display` (28 px) style from the original spec is not used by egui's built-in widgets and is reserved for future custom rendering.
 
 ### 2.2 Rules
 
 - UI labels use sentence case (capitalize only the first letter). `"Save File"` ✗ → `"Save file"` ✓
 - When wrapping long text, use `line-height: 1.5` as the baseline
 - Scenario YAML is always displayed in monospace. Never use a proportional font.
+- Do NOT reduce `noninteractive` widget fg_stroke opacity — egui uses this state for all body labels, not just disabled controls. Disabled button appearance is handled by egui's `add_enabled(false, …)` API.
 
 ---
 
