@@ -398,6 +398,70 @@ impl EditorApp {
         use crate::types::{category_color, step_key_category};
         use egui::{epaint::CubicBezierShape, Align2, Color32, FontId, Rect, Sense, Stroke, Vec2};
 
+        // ── Theme-aware canvas colors ────────────────────────────────────────
+        // All canvas rendering derives from these locals so the canvas
+        // renders correctly in both dark and light mode.
+        let dark = ui.visuals().dark_mode;
+        let cv_bg = if dark {
+            tokens::CANVAS_BG
+        } else {
+            Color32::from_gray(245)
+        };
+        let node_bg = if dark {
+            tokens::NODE_BG
+        } else {
+            Color32::from_gray(252)
+        };
+        let node_bg_disabled = if dark {
+            Color32::from_gray(28)
+        } else {
+            Color32::from_gray(235)
+        };
+        let node_bg_selected = if dark {
+            tokens::NODE_BG_SELECTED
+        } else {
+            Color32::from_rgb(210, 230, 255)
+        };
+        let node_bg_running = if dark {
+            tokens::NODE_BG_RUNNING
+        } else {
+            Color32::from_rgb(255, 245, 200)
+        };
+        let node_border = if dark {
+            Color32::from_gray(68)
+        } else {
+            Color32::from_gray(200)
+        };
+        let shadow_color = if dark {
+            Color32::from_rgba_premultiplied(0, 0, 0, 60)
+        } else {
+            Color32::from_rgba_premultiplied(0, 0, 0, 18)
+        };
+        let node_text = if dark {
+            Color32::from_gray(185)
+        } else {
+            Color32::from_gray(40)
+        };
+        let node_text_dim = if dark {
+            Color32::from_gray(90)
+        } else {
+            Color32::from_gray(175)
+        };
+        let node_text_minimal = if dark {
+            Color32::from_gray(160)
+        } else {
+            Color32::from_gray(120)
+        };
+        // Start/End terminal pill colors
+        let start_pill_bg = tokens::SUCCESS; // #107C10 — readable in both modes
+        let start_pill_text = Color32::WHITE;
+        let end_pill_bg = if dark {
+            Color32::from_rgb(55, 55, 70)
+        } else {
+            Color32::from_rgb(140, 140, 155)
+        };
+        let end_pill_text = Color32::WHITE;
+
         // Pre-compute search state so it can be used throughout without borrow conflicts
         let search_query = self.canvas_search.to_lowercase();
         let search_active = !search_query.is_empty();
@@ -466,8 +530,8 @@ impl EditorApp {
                     .map(|p| mm_rect.contains(p))
                     .unwrap_or(false));
 
-        // Dark canvas background
-        painter.rect_filled(resp.rect, 0.0, tokens::CANVAS_BG);
+        // Canvas background (theme-aware)
+        painter.rect_filled(resp.rect, 0.0, cv_bg);
 
         // Background grid (every 40px in canvas space).
         // Uses line_segment instead of circle_filled to avoid O(W*H/grid²) draw calls
@@ -627,7 +691,7 @@ impl EditorApp {
             painter.rect_filled(
                 Rect::from_center_size(start_c, Vec2::new(SE_W * z, SE_H * z)),
                 SE_H * z / 2.0,
-                Color32::from_rgb(20, 110, 50),
+                start_pill_bg,
             );
             if z >= 0.5 {
                 painter.text(
@@ -635,7 +699,7 @@ impl EditorApp {
                     Align2::CENTER_CENTER,
                     "▶  開始",
                     FontId::proportional(10.0 * z),
-                    Color32::from_gray(220),
+                    start_pill_text,
                 );
             }
             // Edge Start → first node
@@ -661,7 +725,7 @@ impl EditorApp {
             painter.rect_filled(
                 Rect::from_center_size(end_c, Vec2::new(SE_W * z, SE_H * z)),
                 SE_H * z / 2.0,
-                Color32::from_rgb(55, 55, 70),
+                end_pill_bg,
             );
             if z >= 0.5 {
                 painter.text(
@@ -669,7 +733,7 @@ impl EditorApp {
                     Align2::CENTER_CENTER,
                     "■  終了",
                     FontId::proportional(10.0 * z),
-                    Color32::from_gray(185),
+                    end_pill_text,
                 );
             }
             // Edge last node → End
@@ -804,7 +868,11 @@ impl EditorApp {
                             Align2::CENTER_CENTER,
                             "+",
                             FontId::proportional(10.0 * z),
-                            Color32::from_gray(220),
+                            if dark {
+                                Color32::from_gray(220)
+                            } else {
+                                Color32::from_gray(80)
+                            },
                         );
                     }
                 }
@@ -1040,19 +1108,23 @@ impl EditorApp {
             let is_disabled = crate::state::EditorApp::step_is_disabled(step);
             let key = get_step_key(step);
             let cat_color = if is_disabled {
-                Color32::from_gray(55)
+                if dark {
+                    Color32::from_gray(55)
+                } else {
+                    Color32::from_gray(185)
+                }
             } else {
                 category_color(step_key_category(key))
             };
             // Blend category color into base background
             let base_bg = if selected {
-                tokens::NODE_BG_SELECTED
+                node_bg_selected
             } else if is_running {
-                tokens::NODE_BG_RUNNING
+                node_bg_running
             } else if is_disabled {
-                Color32::from_gray(28)
+                node_bg_disabled
             } else {
-                tokens::NODE_BG
+                node_bg
             };
             let blended_bg = {
                 let [r0, g0, b0, _] = base_bg.to_array();
@@ -1068,16 +1140,12 @@ impl EditorApp {
             } else if is_multi_only {
                 (Color32::from_rgb(75, 115, 215), (1.5 * z).max(1.0))
             } else {
-                (Color32::from_gray(68), 1.0)
+                (node_border, 1.0)
             };
 
             // Drop shadow (offset 3px down-right)
             let shadow_rect = node_rect.translate(egui::vec2(3.0 * z, 3.0 * z));
-            painter.rect_filled(
-                shadow_rect,
-                4.0 * z,
-                Color32::from_rgba_premultiplied(0, 0, 0, 60),
-            );
+            painter.rect_filled(shadow_rect, 4.0 * z, shadow_color);
 
             painter.rect_filled(node_rect, 4.0 * z, blended_bg);
             painter.rect_stroke(
@@ -1122,7 +1190,7 @@ impl EditorApp {
                     Align2::CENTER_CENTER,
                     "✕",
                     FontId::proportional(8.0 * z),
-                    Color32::WHITE,
+                    Color32::WHITE, // White on red delete button for high contrast
                 );
             }
 
@@ -1138,7 +1206,7 @@ impl EditorApp {
                     Align2::CENTER_CENTER,
                     format!("{}", idx + 1),
                     FontId::proportional(10.0 * z),
-                    Color32::from_gray(160),
+                    node_text_minimal,
                 );
             } else {
                 let (idx_y, label_y) = if z >= 1.5 {
@@ -1162,9 +1230,9 @@ impl EditorApp {
                     format!("{}", idx + 1),
                     FontId::proportional((9.0 * z).max(9.0)),
                     if is_disabled {
-                        Color32::from_gray(90)
+                        node_text_dim
                     } else {
-                        Color32::from_gray(185)
+                        node_text
                     },
                 );
                 const MAX_LABEL_CHARS: usize = 32;
