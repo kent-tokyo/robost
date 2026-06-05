@@ -740,170 +740,218 @@ impl eframe::App for EditorApp {
         }
 
         // ── Menu bar ─────────────────────────────────────────────────────────
+        #[allow(deprecated)]
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button(s.menu_file, |ui| {
-                    if ui.button(s.menu_new).clicked() {
-                        ui.close();
-                        if !self.dirty {
-                            self.name = "new_scenario".into();
-                            self.steps.clear();
-                            self.scenario_vars.clear();
-                            self.selected = None;
-                            self.path = None;
-                            self.dirty = false;
-                        } else {
-                            self.confirm_dialog = Some(ConfirmAction::NewFile);
-                        }
-                    }
-                    if ui.button(s.menu_open).clicked() {
-                        ui.close();
-                        self.open_file();
-                    }
-                    ui.separator();
-                    if ui.button(s.menu_save).clicked() {
-                        ui.close();
-                        self.save_file();
-                    }
-                    if ui.button(s.menu_save_as).clicked() {
-                        ui.close();
-                        self.save_file_as();
-                    }
-                    ui.separator();
-                    if ui.button(s.menu_settings).clicked() {
-                        ui.close();
-                        self.settings_open = true;
-                    }
-                });
-                ui.menu_button(s.menu_edit, |ui| {
-                    ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
-                        if ui.button(s.menu_undo).clicked() {
+            ui.horizontal(|ui| {
+                let sty = ui.style_mut();
+                sty.spacing.button_padding = egui::vec2(2.0, 0.0);
+                sty.visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
+                sty.visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
+                sty.visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
+                sty.visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
+                ui.set_min_size(egui::vec2(
+                    ui.available_width(),
+                    ui.spacing().interact_size.y,
+                ));
+
+                let bar_id = ui.id();
+
+                // FILE
+                {
+                    let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
+                    let r = ui.add(egui::Button::new(s.menu_file));
+                    bs.bar_menu(&r, |ui| {
+                        if ui.button(s.menu_new).clicked() {
                             ui.close();
-                            self.undo();
-                        }
-                    });
-                    ui.add_enabled_ui(!self.redo_stack.is_empty(), |ui| {
-                        if ui.button(s.menu_redo).clicked() {
-                            ui.close();
-                            self.redo();
-                        }
-                    });
-                    ui.separator();
-                    if ui.button(s.menu_add_step).clicked() {
-                        ui.close();
-                        self.add_menu_open = true;
-                        self.add_menu_just_opened = true;
-                        self.add_filter.clear();
-                    }
-                    ui.separator();
-                    let has_sel = !self.multi_selected.is_empty();
-                    let has_clip = !self.step_clipboard.is_empty();
-                    ui.add_enabled_ui(has_sel, |ui| {
-                        if ui.button(s.menu_copy).clicked() {
-                            ui.close();
-                            self.copy_selected_steps();
-                        }
-                    });
-                    ui.add_enabled_ui(has_sel, |ui| {
-                        if ui.button(s.menu_cut).clicked() {
-                            ui.close();
-                            self.copy_selected_steps();
-                            self.delete_selected_steps();
-                        }
-                    });
-                    ui.add_enabled_ui(has_clip, |ui| {
-                        if ui.button(s.menu_paste).clicked() {
-                            ui.close();
-                            self.paste_steps();
-                        }
-                    });
-                    ui.add_enabled_ui(has_sel, |ui| {
-                        if ui.button(s.menu_duplicate).clicked() {
-                            ui.close();
-                            self.copy_selected_steps();
-                            self.paste_steps();
-                        }
-                    });
-                    ui.separator();
-                    ui.add_enabled_ui(has_sel, |ui| {
-                        if ui.button(s.menu_delete_step).clicked() {
-                            ui.close();
-                            if self.multi_selected.len() > 1 {
-                                let count = self.multi_selected.len();
-                                self.confirm_dialog = Some(ConfirmAction::DeleteSteps(count));
-                            } else if let Some(idx) = self.selected {
-                                self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
+                            if !self.dirty {
+                                self.name = "new_scenario".into();
+                                self.steps.clear();
+                                self.scenario_vars.clear();
+                                self.selected = None;
+                                self.path = None;
+                                self.dirty = false;
+                            } else {
+                                self.confirm_dialog = Some(ConfirmAction::NewFile);
                             }
                         }
+                        if ui.button(s.menu_open).clicked() {
+                            ui.close();
+                            self.open_file();
+                        }
+                        ui.separator();
+                        if ui.button(s.menu_save).clicked() {
+                            ui.close();
+                            self.save_file();
+                        }
+                        if ui.button(s.menu_save_as).clicked() {
+                            ui.close();
+                            self.save_file_as();
+                        }
+                        ui.separator();
+                        if ui.button(s.menu_settings).clicked() {
+                            ui.close();
+                            self.settings_open = true;
+                        }
                     });
-                });
-                ui.menu_button(s.menu_view, |ui| {
-                    if ui
-                        .selectable_label(self.view_mode == ViewMode::List, s.menu_list)
-                        .clicked()
-                    {
-                        self.view_mode = ViewMode::List;
-                        ui.close();
-                    }
-                    if ui
-                        .selectable_label(self.view_mode == ViewMode::Flow, s.menu_flow)
-                        .clicked()
-                    {
-                        self.view_mode = ViewMode::Flow;
-                        self.selected_child = None;
-                        ui.close();
-                    }
-                    if ui
-                        .selectable_label(self.view_mode == ViewMode::Canvas, s.menu_canvas)
-                        .clicked()
-                    {
-                        self.view_mode = ViewMode::Canvas;
-                        self.selected_child = None;
-                        self.ensure_canvas_layout();
-                        ui.close();
-                    }
-                    ui.separator();
-                    if ui
-                        .selectable_label(self.ai_panel_open, s.menu_ai_panel)
-                        .clicked()
-                    {
-                        self.ai_panel_open = !self.ai_panel_open;
-                        ui.close();
-                    }
-                });
-                ui.menu_button(s.menu_run_menu, |ui| {
-                    if self.run_child.is_some() {
-                        if ui.button(s.menu_stop).clicked() {
-                            ui.close();
-                            self.stop_run();
-                        }
-                    } else {
-                        if ui.button(s.menu_run).clicked() {
-                            ui.close();
-                            self.run_scenario();
-                        }
-                        ui.add_enabled_ui(!self.multi_selected.is_empty(), |ui| {
-                            if ui.button("Run Selection  Cmd+Shift+F5").clicked() {
+                    bs.store(ui.ctx(), bar_id);
+                }
+
+                // EDIT
+                {
+                    let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
+                    let r = ui.add(egui::Button::new(s.menu_edit));
+                    bs.bar_menu(&r, |ui| {
+                        ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
+                            if ui.button(s.menu_undo).clicked() {
                                 ui.close();
-                                self.run_selection();
+                                self.undo();
                             }
                         });
-                    }
-                });
-                ui.menu_button(s.menu_help, |ui| {
-                    if ui
-                        .selectable_label(self.manual_open, s.menu_manual)
-                        .clicked()
-                    {
-                        self.manual_open = !self.manual_open;
-                        ui.close();
-                    }
-                    ui.separator();
-                    if ui.button(s.menu_about).clicked() {
-                        ui.close();
-                        self.about_open = true;
-                    }
-                });
+                        ui.add_enabled_ui(!self.redo_stack.is_empty(), |ui| {
+                            if ui.button(s.menu_redo).clicked() {
+                                ui.close();
+                                self.redo();
+                            }
+                        });
+                        ui.separator();
+                        if ui.button(s.menu_add_step).clicked() {
+                            ui.close();
+                            self.add_menu_open = true;
+                            self.add_menu_just_opened = true;
+                            self.add_filter.clear();
+                        }
+                        ui.separator();
+                        let has_sel = !self.multi_selected.is_empty();
+                        let has_clip = !self.step_clipboard.is_empty();
+                        ui.add_enabled_ui(has_sel, |ui| {
+                            if ui.button(s.menu_copy).clicked() {
+                                ui.close();
+                                self.copy_selected_steps();
+                            }
+                        });
+                        ui.add_enabled_ui(has_sel, |ui| {
+                            if ui.button(s.menu_cut).clicked() {
+                                ui.close();
+                                self.copy_selected_steps();
+                                self.delete_selected_steps();
+                            }
+                        });
+                        ui.add_enabled_ui(has_clip, |ui| {
+                            if ui.button(s.menu_paste).clicked() {
+                                ui.close();
+                                self.paste_steps();
+                            }
+                        });
+                        ui.add_enabled_ui(has_sel, |ui| {
+                            if ui.button(s.menu_duplicate).clicked() {
+                                ui.close();
+                                self.copy_selected_steps();
+                                self.paste_steps();
+                            }
+                        });
+                        ui.separator();
+                        ui.add_enabled_ui(has_sel, |ui| {
+                            if ui.button(s.menu_delete_step).clicked() {
+                                ui.close();
+                                if self.multi_selected.len() > 1 {
+                                    let count = self.multi_selected.len();
+                                    self.confirm_dialog = Some(ConfirmAction::DeleteSteps(count));
+                                } else if let Some(idx) = self.selected {
+                                    self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
+                                }
+                            }
+                        });
+                    });
+                    bs.store(ui.ctx(), bar_id);
+                }
+
+                // VIEW
+                {
+                    let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
+                    let r = ui.add(egui::Button::new(s.menu_view));
+                    bs.bar_menu(&r, |ui| {
+                        if ui
+                            .selectable_label(self.view_mode == ViewMode::List, s.menu_list)
+                            .clicked()
+                        {
+                            self.view_mode = ViewMode::List;
+                            ui.close();
+                        }
+                        if ui
+                            .selectable_label(self.view_mode == ViewMode::Flow, s.menu_flow)
+                            .clicked()
+                        {
+                            self.view_mode = ViewMode::Flow;
+                            self.selected_child = None;
+                            ui.close();
+                        }
+                        if ui
+                            .selectable_label(self.view_mode == ViewMode::Canvas, s.menu_canvas)
+                            .clicked()
+                        {
+                            self.view_mode = ViewMode::Canvas;
+                            self.selected_child = None;
+                            self.ensure_canvas_layout();
+                            ui.close();
+                        }
+                        ui.separator();
+                        if ui
+                            .selectable_label(self.ai_panel_open, s.menu_ai_panel)
+                            .clicked()
+                        {
+                            self.ai_panel_open = !self.ai_panel_open;
+                            ui.close();
+                        }
+                    });
+                    bs.store(ui.ctx(), bar_id);
+                }
+
+                // RUN
+                {
+                    let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
+                    let r = ui.add(egui::Button::new(s.menu_run_menu));
+                    bs.bar_menu(&r, |ui| {
+                        if self.run_child.is_some() {
+                            if ui.button(s.menu_stop).clicked() {
+                                ui.close();
+                                self.stop_run();
+                            }
+                        } else {
+                            if ui.button(s.menu_run).clicked() {
+                                ui.close();
+                                self.run_scenario();
+                            }
+                            ui.add_enabled_ui(!self.multi_selected.is_empty(), |ui| {
+                                if ui.button("Run Selection  Cmd+Shift+F5").clicked() {
+                                    ui.close();
+                                    self.run_selection();
+                                }
+                            });
+                        }
+                    });
+                    bs.store(ui.ctx(), bar_id);
+                }
+
+                // HELP
+                {
+                    let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
+                    let r = ui.add(egui::Button::new(s.menu_help));
+                    bs.bar_menu(&r, |ui| {
+                        if ui
+                            .selectable_label(self.manual_open, s.menu_manual)
+                            .clicked()
+                        {
+                            self.manual_open = !self.manual_open;
+                            ui.close();
+                        }
+                        ui.separator();
+                        if ui.button(s.menu_about).clicked() {
+                            ui.close();
+                            self.about_open = true;
+                        }
+                    });
+                    bs.store(ui.ctx(), bar_id);
+                }
             });
         });
 
