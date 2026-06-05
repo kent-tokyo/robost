@@ -1797,7 +1797,34 @@ impl eframe::App for EditorApp {
                 return;
             }
             if self.view_mode == ViewMode::Canvas {
-                self.show_canvas(ui);
+                let drop_screen_pos = ui.input(|i| i.pointer.hover_pos());
+                let (canvas_outer, released) =
+                    ui.dnd_drop_zone::<DragPayload, _>(egui::Frame::default(), |ui| {
+                        self.show_canvas(ui);
+                    });
+                if let Some(payload) = released {
+                    if let DragPayload::NewStep(yaml) = *payload {
+                        if let Ok(v) = serde_yml::from_str::<serde_yml::Value>(yaml) {
+                            self.push_undo();
+                            let idx = self.steps.len();
+                            self.steps.push(v);
+                            let z = self.canvas_zoom;
+                            let origin = canvas_outer.response.rect.min;
+                            let canvas_pos = if let Some(sp) = drop_screen_pos {
+                                let rel = sp - origin;
+                                egui::pos2(
+                                    rel.x / z - self.canvas_pan.x,
+                                    rel.y / z - self.canvas_pan.y,
+                                )
+                            } else {
+                                default_canvas_pos(idx, default_canvas_cols(idx + 1))
+                            };
+                            self.canvas_positions.insert(idx, canvas_pos);
+                            self.select_step(idx);
+                            self.log_info("ノードをドロップしました");
+                        }
+                    }
+                }
                 return;
             }
 

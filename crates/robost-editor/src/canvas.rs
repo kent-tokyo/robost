@@ -837,7 +837,13 @@ impl EditorApp {
                         | "group"
                         | "switch"
                 );
-                if is_cpd && z >= 0.7 && badge_rect.contains(click_pos) {
+                // ✕ delete button in top-right corner (visible on hover at z >= 0.6)
+                let x_btn_center = node_rect.min + Vec2::new(NODE_W * z - 9.0 * z, 9.0 * z);
+                let x_btn_rect =
+                    egui::Rect::from_center_size(x_btn_center, egui::vec2(14.0 * z, 14.0 * z));
+                if z >= 0.6 && x_btn_rect.contains(click_pos) {
+                    canvas_ctx_action = Some(CanvasContextAction::Delete(idx));
+                } else if is_cpd && z >= 0.7 && badge_rect.contains(click_pos) {
                     badge_toggle_idx = Some(idx);
                 } else {
                     let (shift, cmd) = ui.input(|i| (i.modifiers.shift, i.modifiers.command));
@@ -1016,6 +1022,28 @@ impl EditorApp {
                     4.0 * z,
                     Stroke::new(1.0, Color32::from_rgb(120, 140, 160)),
                     egui::StrokeKind::Outside,
+                );
+            }
+
+            // ✕ delete button — top-right corner, visible on hover at z >= 0.6
+            if hovered && z >= 0.6 {
+                let x_center = node_rect.min + Vec2::new(NODE_W * z - 9.0 * z, 9.0 * z);
+                let x_is_hovered = ui
+                    .input(|i| i.pointer.hover_pos())
+                    .map(|p| p.distance(x_center) <= 7.0 * z)
+                    .unwrap_or(false);
+                let x_bg = if x_is_hovered {
+                    Color32::from_rgb(210, 60, 60)
+                } else {
+                    Color32::from_rgba_premultiplied(160, 60, 60, 180)
+                };
+                painter.circle_filled(x_center, 7.0 * z, x_bg);
+                painter.text(
+                    x_center,
+                    Align2::CENTER_CENTER,
+                    "✕",
+                    FontId::proportional(8.0 * z),
+                    Color32::WHITE,
                 );
             }
 
