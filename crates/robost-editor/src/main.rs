@@ -18,8 +18,14 @@ use state::EditorApp;
 
 // ---- main -----------------------------------------------------------------
 
-fn apply_style(ctx: &egui::Context) {
+pub(crate) fn apply_style(ctx: &egui::Context, theme: &settings::Theme) {
     let mut style = (*ctx.global_style()).clone();
+
+    // Base visuals — light or dark — applied first so overlays below take effect on top.
+    style.visuals = match theme {
+        settings::Theme::Light => egui::Visuals::light(),
+        settings::Theme::Dark => egui::Visuals::dark(),
+    };
 
     // ACCENT blue selection highlight (DESIGN.md §1.1)
     style.visuals.selection.bg_fill = tokens::ACCENT.gamma_multiply(0.45);
@@ -103,11 +109,11 @@ fn main() -> Result<()> {
         "robost-editor",
         native_options,
         Box::new(move |cc| {
-            cc.egui_ctx.set_visuals(egui::Visuals::dark());
-            apply_style(&cc.egui_ctx);
+            // Build the app first so we can read the persisted theme before styling.
+            let mut app = EditorApp::default();
+            apply_style(&cc.egui_ctx, &app.settings.theme);
             setup_fonts(&cc.egui_ctx);
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            let mut app = EditorApp::default();
             if let Some(p) = initial_path {
                 app.load_file_path(&p);
             }

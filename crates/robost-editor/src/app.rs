@@ -1162,6 +1162,23 @@ impl eframe::App for EditorApp {
                     }
                     ui.label(format!("{:.0}%", self.flow_zoom * 100.0));
                 }
+
+                // ── Theme toggle (right-aligned) ──────────────────────────
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    use crate::settings::Theme;
+                    let (icon, tooltip) = match self.settings.theme {
+                        Theme::Light => ("🌙", "ダークモードに切り替え"),
+                        Theme::Dark => ("☀", "ライトモードに切り替え"),
+                    };
+                    if ui.button(icon).on_hover_text(tooltip).clicked() {
+                        self.settings.theme = match self.settings.theme {
+                            Theme::Light => Theme::Dark,
+                            Theme::Dark => Theme::Light,
+                        };
+                        crate::apply_style(ui.ctx(), &self.settings.theme);
+                        save_settings(&self.settings);
+                    }
+                });
             });
             // Status bar row: last log entry right-aligned
             ui.horizontal(|ui| {

@@ -8,6 +8,13 @@ pub(crate) enum AiProvider {
     OpenAI,
 }
 
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize, Default)]
+pub(crate) enum Theme {
+    #[default]
+    Light,
+    Dark,
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct AppSettings {
     pub(crate) provider: AiProvider,
@@ -19,6 +26,8 @@ pub(crate) struct AppSettings {
     pub(crate) canvas_snap: bool,
     #[serde(default)]
     pub(crate) minimap_show: bool,
+    #[serde(default)]
+    pub(crate) theme: Theme,
 }
 
 impl Default for AppSettings {
@@ -30,6 +39,7 @@ impl Default for AppSettings {
             lang: Lang::default(),
             canvas_snap: false,
             minimap_show: false,
+            theme: Theme::default(),
         }
     }
 }
