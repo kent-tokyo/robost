@@ -70,7 +70,8 @@ jobs:
           ARCHIVE_EDITOR: ${{ matrix.archive_editor }}
           ARCHIVE_CLI: ${{ matrix.archive_cli }}
         run: |
-          tar czf "$ARCHIVE_EDITOR" -C "target/$TARGET/release" "$BIN_EDITOR"
+          # Editor archive bundles rpa alongside so the Run button works out of the box
+          tar czf "$ARCHIVE_EDITOR" -C "target/$TARGET/release" "$BIN_EDITOR" "$BIN_CLI"
           tar czf "$ARCHIVE_CLI"   -C "target/$TARGET/release" "$BIN_CLI"
 
       - name: Package (Windows)
@@ -83,7 +84,10 @@ jobs:
           ARCHIVE_EDITOR: ${{ matrix.archive_editor }}
           ARCHIVE_CLI: ${{ matrix.archive_cli }}
         run: |
-          Compress-Archive -Path "target\$env:TARGET\release\$env:BIN_EDITOR" `
+          # Editor archive bundles rpa.exe alongside so the Run button works out of the box
+          Compress-Archive `
+            -Path @("target\$env:TARGET\release\$env:BIN_EDITOR",
+                    "target\$env:TARGET\release\$env:BIN_CLI") `
             -DestinationPath $env:ARCHIVE_EDITOR
           Compress-Archive -Path "target\$env:TARGET\release\$env:BIN_CLI" `
             -DestinationPath $env:ARCHIVE_CLI
