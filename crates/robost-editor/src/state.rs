@@ -277,10 +277,13 @@ impl EditorApp {
         match std::fs::read_to_string(p) {
             Ok(text) => match parse_scenario_steps(&text) {
                 Ok((name, vars, steps)) => {
+                    self.stop_run();
                     self.name = name;
                     self.scenario_vars = vars;
                     self.steps = steps;
                     self.selected = None;
+                    self.multi_selected.clear();
+                    self.selected_child = None;
                     self.edit_buf.clear();
                     self.path = Some(p.to_path_buf());
                     self.dirty = false;
@@ -334,10 +337,13 @@ impl EditorApp {
             match std::fs::read_to_string(&p) {
                 Ok(text) => match parse_scenario_steps(&text) {
                     Ok((name, vars, steps)) => {
+                        self.stop_run();
                         self.name = name;
                         self.scenario_vars = vars;
                         self.steps = steps;
                         self.selected = None;
+                        self.multi_selected.clear();
+                        self.selected_child = None;
                         self.edit_buf.clear();
                         self.path = Some(p.clone());
                         self.dirty = false;
@@ -509,6 +515,12 @@ impl EditorApp {
                 Self::canvas_shift_positions(&mut self.canvas_positions, *i, -1);
                 // BUG-4: keep form_edit_buffers in sync after bulk delete
                 Self::form_edit_buffers_shift(&mut self.form_edit_buffers, *i, -1);
+                Self::canvas_shift_run_state(
+                    &mut self.canvas_error_steps,
+                    &mut self.canvas_completed_steps,
+                    &mut self.expanded_steps,
+                    *i,
+                );
             }
         }
         self.multi_selected.clear();

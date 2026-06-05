@@ -143,7 +143,9 @@ impl eframe::App for EditorApp {
             self.copy_selected_steps();
             self.paste_steps();
         }
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+        if self.confirm_dialog.is_none()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+        {
             self.add_menu_open = false;
             if self.view_mode == ViewMode::Canvas {
                 if self.canvas_help_open {
@@ -505,10 +507,13 @@ impl eframe::App for EditorApp {
                 match action {
                     ConfirmAction::OpenFile => self.do_open_file(),
                     ConfirmAction::NewFile => {
+                        self.stop_run();
                         self.name = "new_scenario".into();
                         self.steps.clear();
                         self.scenario_vars.clear();
                         self.selected = None;
+                        self.multi_selected.clear();
+                        self.selected_child = None;
                         self.path = None;
                         self.dirty = false;
                     }
@@ -517,6 +522,12 @@ impl eframe::App for EditorApp {
                             self.push_undo();
                             self.steps.remove(idx);
                             Self::canvas_shift_positions(&mut self.canvas_positions, idx, -1);
+                            Self::canvas_shift_run_state(
+                                &mut self.canvas_error_steps,
+                                &mut self.canvas_completed_steps,
+                                &mut self.expanded_steps,
+                                idx,
+                            );
                             self.selected = None;
                             self.multi_selected.clear();
                             self.edit_buf.clear();
@@ -581,6 +592,12 @@ impl eframe::App for EditorApp {
                 }
                 self.log_err(format!("実行に失敗しました (終了コード: {code}) — ログパネルでシナリオのエラーを確認してください"));
             }
+            // Clean up temp YAML and reset offset (mirrors stop_run())
+            if let Some(ref p) = self.run_tmp_file {
+                let _ = std::fs::remove_file(p);
+            }
+            self.run_tmp_file = None;
+            self.run_from_offset = 0;
         }
         if self.last_progress_check.elapsed() > std::time::Duration::from_millis(100) {
             if let Some(ref f) = self.run_progress_file {
@@ -1760,6 +1777,7 @@ impl eframe::App for EditorApp {
                                 })
                                 .collect();
                             self.form_edit_buffers.clear();
+                            self.dirty = true;
                         }
                         StepAction::MoveDown(i) => {
                             self.push_undo();
@@ -1790,6 +1808,7 @@ impl eframe::App for EditorApp {
                                 })
                                 .collect();
                             self.form_edit_buffers.clear();
+                            self.dirty = true;
                         }
                         StepAction::Delete(i) => {
                             if self.multi_selected.len() > 1 {
@@ -1970,6 +1989,11 @@ impl eframe::App for EditorApp {
             }
 
             if let Some(idx) = self.selected {
+                // Bounds-check: idx may be stale after file load or step deletion
+                if idx >= self.steps.len() {
+                    self.selected = None;
+                    return;
+                }
                 // Inline parse error banner
                 if let Some(ref err) = self.parse_error.clone() {
                     egui::Frame::new()

@@ -67,6 +67,39 @@ impl EditorApp {
         }
     }
 
+    /// Shift run-state indices in `canvas_error_steps`, `canvas_completed_steps`,
+    /// and `expanded_steps` when a step at `at` is deleted (delta == -1 only).
+    /// Call this once per deleted index, in high-to-low order (mirrors
+    /// `canvas_shift_positions`).
+    pub(crate) fn canvas_shift_run_state(
+        error_steps: &mut std::collections::HashMap<usize, String>,
+        completed_steps: &mut std::collections::HashSet<usize>,
+        expanded: &mut std::collections::HashSet<usize>,
+        at: usize,
+    ) {
+        // Remove the entry being deleted, then decrement all keys above it.
+        error_steps.remove(&at);
+        let shifted: std::collections::HashMap<usize, String> = error_steps
+            .drain()
+            .map(|(k, v)| (if k > at { k - 1 } else { k }, v))
+            .collect();
+        *error_steps = shifted;
+
+        completed_steps.remove(&at);
+        let shifted_c: std::collections::HashSet<usize> = completed_steps
+            .drain()
+            .map(|k| if k > at { k - 1 } else { k })
+            .collect();
+        *completed_steps = shifted_c;
+
+        expanded.remove(&at);
+        let shifted_e: std::collections::HashSet<usize> = expanded
+            .drain()
+            .map(|k| if k > at { k - 1 } else { k })
+            .collect();
+        *expanded = shifted_e;
+    }
+
     pub(crate) fn save_canvas_layout(&self) {
         let Some(ref path) = self.path else { return };
         let lpath = layout_path(path);

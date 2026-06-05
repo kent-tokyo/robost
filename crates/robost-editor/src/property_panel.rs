@@ -230,6 +230,7 @@ impl EditorApp {
                             serde_yml::Value::String(outer_key.to_owned()),
                             serde_yml::Value::String(new_key),
                         );
+                        self.push_undo();
                         self.commit_step(idx, rebuilt);
                     }
                     return;
@@ -586,6 +587,7 @@ impl EditorApp {
                                 serde_yml::Value::String(outer_key.to_owned()),
                                 serde_yml::Value::Mapping(new_m),
                             );
+                            self.push_undo();
                             self.commit_step(idx, rebuilt);
                             self.parse_error = None;
                         }
@@ -699,6 +701,7 @@ impl EditorApp {
                                     serde_yml::Value::String(outer_key.to_owned()),
                                     new_val,
                                 );
+                                self.push_undo();
                                 self.commit_step(idx, rebuilt);
                             }
                         });
@@ -738,6 +741,7 @@ impl EditorApp {
                             serde_yml::Value::String(ok.to_owned()),
                             serde_yml::Value::Mapping(inner),
                         );
+                        self.push_undo();
                         self.commit_step(idx, outer);
                     }
                 }
