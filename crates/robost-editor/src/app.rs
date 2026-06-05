@@ -2010,20 +2010,25 @@ impl eframe::App for EditorApp {
                 let key = get_step_key(&self.steps[idx]);
                 let cat = step_key_category(key);
                 let color = category_color(cat);
+                // Title row — truncate to avoid overlapping the tab row below
                 ui.horizontal(|ui| {
                     ui.colored_label(color, "▌");
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "ステップ {}  —  {}",
-                            idx,
-                            step_display_name(key)
-                        ))
-                        .strong(),
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!(
+                                "ステップ {}  —  {}",
+                                idx,
+                                step_display_name(key)
+                            ))
+                            .strong(),
+                        )
+                        .truncate(),
                     );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.selectable_value(&mut self.prop_view, PropView::Yaml, "YAML");
-                        ui.selectable_value(&mut self.prop_view, PropView::Form, "フォーム");
-                    });
+                });
+                // Tab row — right-aligned so it never overlaps the title
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.selectable_value(&mut self.prop_view, PropView::Yaml, "YAML");
+                    ui.selectable_value(&mut self.prop_view, PropView::Form, "フォーム");
                 });
                 ui.separator();
 
