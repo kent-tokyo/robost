@@ -1083,12 +1083,67 @@ impl EditorApp {
             }
         }
 
+        // Base directory for resolving relative template paths
+        let scenario_dir = self
+            .path
+            .as_deref()
+            .and_then(|p| p.parent())
+            .map(|p| p.to_path_buf());
+
+        // Step keys that require a `template` field pointing to a PNG file
+        const IMAGE_STEP_KEYS: &[&str] = &[
+            "click_image",
+            "wait_image",
+            "find_image",
+            "match_rect",
+            "wait_no_image",
+            "wait_change",
+        ];
+
         const BRANCH_KEYS: &[&str] = &["do", "then", "else", "catch", "branches", "finally"];
 
         for (step_idx, step) in self.steps.iter().enumerate() {
             let Some(map) = step.as_mapping() else {
                 continue;
             };
+
+            // ── Template file existence check ──────────────────────────────
+            for &img_key in IMAGE_STEP_KEYS {
+                if let Some(inner) = map.get(img_key).and_then(|v| v.as_mapping()) {
+                    if let Some(serde_yml::Value::String(tpl)) = inner.get("template") {
+                        if tpl.is_empty() {
+                            issues.push(ValidationIssue {
+                                step_idx,
+                                message: format!(
+                                    "'{img_key}' の template が空です。\
+                                     📸 Snip ツールで画像を採取してから設定してください。"
+                                ),
+                                level: LogLevel::Warning,
+                            });
+                        } else {
+                            let tpl_path = std::path::Path::new(tpl);
+                            let exists = if tpl_path.is_absolute() {
+                                tpl_path.exists()
+                            } else if let Some(ref base) = scenario_dir {
+                                base.join(tpl_path).exists()
+                            } else {
+                                // Unsaved scenario — can't resolve relative path
+                                false
+                            };
+                            if !exists {
+                                issues.push(ValidationIssue {
+                                    step_idx,
+                                    message: format!(
+                                        "テンプレート画像 '{tpl}' が見つかりません。\
+                                         📸 Snip ツールで画像を採取するか、正しいパスを指定してください。"
+                                    ),
+                                    level: LogLevel::Warning,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
 
             // Register save_as before scanning this step's refs
             if let Some(serde_yml::Value::String(sv)) = map.get("save_as") {

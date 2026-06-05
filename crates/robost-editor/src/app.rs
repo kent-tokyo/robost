@@ -2350,6 +2350,7 @@ impl eframe::App for EditorApp {
                 let bg = match toast.level {
                     LogLevel::Ok => egui::Color32::from_rgba_premultiplied(30, 100, 50, 220),
                     LogLevel::Error => egui::Color32::from_rgba_premultiplied(120, 30, 30, 220),
+                    LogLevel::Warning => egui::Color32::from_rgba_premultiplied(120, 90, 20, 220),
                     LogLevel::Info => egui::Color32::from_rgba_premultiplied(40, 60, 100, 220),
                 };
                 let text_color = egui::Color32::WHITE;

@@ -212,6 +212,7 @@ pub(crate) struct FlowNode {
 pub(crate) enum LogLevel {
     Info,
     Ok,
+    Warning,
     Error,
 }
 
@@ -220,6 +221,7 @@ impl LogLevel {
         match self {
             LogLevel::Info => egui::Color32::LIGHT_GRAY,
             LogLevel::Ok => tokens::SUCCESS,
+            LogLevel::Warning => tokens::WARNING,
             LogLevel::Error => tokens::ERROR,
         }
     }
