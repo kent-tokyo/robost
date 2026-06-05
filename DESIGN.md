@@ -251,8 +251,10 @@ Microsoft guideline: *Present what users can do through clear, consistent patter
 
 Microsoft guideline: *Convey actions and concepts quickly with familiar, purposeful icons*
 
-- Use **Fluent System Icons** ([microsoft/fluentui-system-icons](https://github.com/microsoft/fluentui-system-icons))
-- Icon sizes: 16 px (toolbar with label), 20 px (toolbar icon only), 24 px (large buttons)
+**Icon library (Phase 1): [Phosphor Icons](https://phosphoricons.com/)** via the `egui-phosphor` crate.
+Fluent System Icons (originally specified) require SVG-to-font compilation and are not compatible with egui's font-based icon pipeline. Phosphor provides a Unicode glyph font (`Phosphor.ttf`) that integrates directly with egui's text rendering, and its Regular weight visually aligns with Fluent's style.
+
+- Icon sizes: 14 px (Nodes palette list items), 16 px (toolbar with label), 20 px (toolbar icon only)
 - Custom icons, when needed, are created as SVG (single color, consistent stroke) and stored in `assets/icons/`
 
 ### 8.1 Step Type Icon Mapping

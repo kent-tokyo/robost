@@ -43,6 +43,19 @@ pub(crate) fn apply_style(ctx: &egui::Context, theme: &settings::Theme) {
         ws.corner_radius = tokens::ROUNDING_SM;
     }
 
+    // Interactive states (DESIGN.md §9.2)
+    // hover: bg_fill is already brighter than inactive in egui defaults;
+    //   add an explicit bg_stroke to make focus rings visible.
+    style.visuals.widgets.hovered.bg_stroke =
+        egui::Stroke::new(1.0, tokens::ACCENT.gamma_multiply(0.6));
+    // active/pressed: inset shadow effect via a stronger border
+    style.visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, tokens::ACCENT);
+    // disabled (noninteractive): 0.38 opacity per §9.2
+    // egui uses fg_stroke for text; reduce its alpha to signal disabled state.
+    let nonint_fg = style.visuals.widgets.noninteractive.fg_stroke.color;
+    style.visuals.widgets.noninteractive.fg_stroke =
+        egui::Stroke::new(1.0, nonint_fg.gamma_multiply(0.38));
+
     // Base spacing (DESIGN.md §3.1)
     style.spacing.item_spacing = egui::vec2(tokens::SPACING_SM, tokens::SPACING_XS);
     style.spacing.button_padding = egui::vec2(tokens::SPACING_SM, tokens::SPACING_XS);

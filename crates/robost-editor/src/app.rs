@@ -448,41 +448,42 @@ impl eframe::App for EditorApp {
         if let Some(action) = self.confirm_dialog.clone() {
             let delete_msg_buf;
             let desc = match &action {
-                ConfirmAction::OpenFile => "変更が保存されていません。破棄して開きますか？",
-                ConfirmAction::NewFile => "変更が保存されていません。破棄して新規作成しますか？",
+                ConfirmAction::OpenFile => s.confirm_open_file,
+                ConfirmAction::NewFile => s.confirm_new_file,
                 ConfirmAction::DeleteStep(idx) => {
                     let child_count = self.steps.get(*idx).map(count_child_steps).unwrap_or(0);
                     if child_count > 0 {
-                        delete_msg_buf = format!(
-                            "選択中のステップを削除しますか？\n（内部に {} ステップが含まれています）",
-                            child_count
+                        delete_msg_buf = s.confirm_delete_step_with_children.replacen(
+                            "{}",
+                            &child_count.to_string(),
+                            1,
                         );
                         &delete_msg_buf
                     } else {
-                        "選択中のステップを削除しますか？"
+                        s.confirm_delete_step
                     }
                 }
                 ConfirmAction::DeleteSteps(count) => {
-                    delete_msg_buf = format!("選択中の {} ステップをまとめて削除しますか？", count);
+                    delete_msg_buf = s.confirm_delete_steps.replacen("{}", &count.to_string(), 1);
                     &delete_msg_buf
                 }
-                ConfirmAction::Quit => "変更が保存されていません。保存せずに終了しますか？",
+                ConfirmAction::Quit => s.confirm_quit,
             };
             let mut yes = false;
             let mut no = false;
             // Enter and Escape both cancel — Undo exists so accidental deletion risk is high.
-            // The user must explicitly click "はい" to confirm.
+            // The user must explicitly click the confirm button to proceed.
             egui::Modal::new(egui::Id::new("confirm_modal")).show(ctx, |ui| {
                 ui.set_min_width(240.0);
-                ui.strong("確認");
+                ui.strong(s.confirm_title);
                 ui.add_space(4.0);
                 ui.label(desc);
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    if ui.button("はい").clicked() {
+                    if ui.button(s.btn_yes).clicked() {
                         yes = true;
                     }
-                    let cancel_btn = ui.button("キャンセル");
+                    let cancel_btn = ui.button(s.btn_cancel);
                     if cancel_btn.clicked() {
                         no = true;
                     }
@@ -491,7 +492,7 @@ impl eframe::App for EditorApp {
                         cancel_btn.request_focus();
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.weak("Esc: キャンセル");
+                        ui.weak(s.esc_cancel);
                     });
                 });
             });
@@ -922,7 +923,7 @@ impl eframe::App for EditorApp {
                                 self.run_scenario();
                             }
                             ui.add_enabled_ui(!self.multi_selected.is_empty(), |ui| {
-                                if ui.button("Run Selection  Cmd+Shift+F5").clicked() {
+                                if ui.button(s.menu_run_selection).clicked() {
                                     ui.close();
                                     self.run_selection();
                                 }
@@ -1054,8 +1055,8 @@ impl eframe::App for EditorApp {
                         save_settings(&self.settings);
                     }
                     if ui
-                        .selectable_label(self.settings.minimap_show, "ミニマップ")
-                        .on_hover_text("ミニマップの表示/非表示")
+                        .selectable_label(self.settings.minimap_show, s.minimap_label)
+                        .on_hover_text(s.minimap_tooltip)
                         .clicked()
                     {
                         self.settings.minimap_show = !self.settings.minimap_show;
@@ -1253,8 +1254,8 @@ impl eframe::App for EditorApp {
                                 .num_columns(2)
                                 .min_col_width(120.0)
                                 .show(ui, |ui| {
-                                    ui.strong("変数名");
-                                    ui.strong("初期値");
+                                    ui.strong(s.vars_name_header);
+                                    ui.strong(s.vars_initial_header);
                                     ui.end_row();
                                     let keys: Vec<serde_yml::Value> =
                                         self.scenario_vars.keys().cloned().collect();
@@ -1299,10 +1300,7 @@ impl eframe::App for EditorApp {
                         let mut jump_to: Option<usize> = None;
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             if issues.is_empty() {
-                                ui.colored_label(
-                                    LogLevel::Ok.color(),
-                                    "問題は見つかりませんでした",
-                                );
+                                ui.colored_label(LogLevel::Ok.color(), s.no_problems);
                             } else {
                                 for issue in &issues {
                                     ui.horizontal(|ui| {
@@ -2190,7 +2188,7 @@ impl eframe::App for EditorApp {
 
                     ui.separator();
                     ui.horizontal(|ui| {
-                        if ui.button("キャンセル").clicked() {
+                        if ui.button(s.btn_cancel).clicked() {
                             close = true;
                         }
                         ui.weak("Esc / ↑↓ で選択 / Enter で挿入");
