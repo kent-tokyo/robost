@@ -78,6 +78,7 @@ pub(crate) struct EditorApp {
     pub(crate) step_clipboard: Vec<serde_yml::Value>,
     /// When Some, forces all node-palette categories open (true) or closed (false) for one frame.
     pub(crate) palette_force_open: Option<bool>,
+    pub(crate) nodes_search: String,
     pub(crate) canvas_positions: HashMap<usize, egui::Pos2>,
     pub(crate) canvas_zoom: f32,
     pub(crate) canvas_pan: egui::Vec2,
@@ -184,6 +185,7 @@ impl Default for EditorApp {
             multi_selected: HashSet::new(),
             step_clipboard: Vec::new(),
             palette_force_open: None,
+            nodes_search: String::new(),
             canvas_positions: HashMap::new(),
             canvas_zoom: 1.0,
             canvas_pan: egui::Vec2::ZERO,

@@ -611,6 +611,85 @@ impl EditorApp {
             })
             .collect();
 
+        // ── Start / End terminals (Power Automate style) ──────────────────
+        // Drawn before edges so they sit behind all regular nodes.
+        const SE_W: f32 = 80.0; // logical pill width
+        const SE_H: f32 = 22.0; // logical pill height
+        const SE_GAP: f32 = 28.0; // gap between pill and nearest node
+
+        if n > 0 {
+            let first_sp = screen_positions[0];
+            let last_sp = screen_positions[n - 1];
+            let ctrl_v = Vec2::new(0.0, SE_GAP * z * 0.4);
+
+            // ── Start pill ──
+            let start_c = first_sp + Vec2::new(NODE_W * z / 2.0, -(SE_GAP * z + SE_H * z / 2.0));
+            painter.rect_filled(
+                Rect::from_center_size(start_c, Vec2::new(SE_W * z, SE_H * z)),
+                SE_H * z / 2.0,
+                Color32::from_rgb(20, 110, 50),
+            );
+            if z >= 0.5 {
+                painter.text(
+                    start_c,
+                    Align2::CENTER_CENTER,
+                    "▶  開始",
+                    FontId::proportional(10.0 * z),
+                    Color32::from_gray(220),
+                );
+            }
+            // Edge Start → first node
+            let se_from = start_c + Vec2::new(0.0, SE_H * z / 2.0);
+            let se_to = first_sp + Vec2::new(NODE_W * z / 2.0, 0.0);
+            painter.add(egui::Shape::CubicBezier(
+                CubicBezierShape::from_points_stroke(
+                    [se_from, se_from + ctrl_v, se_to - ctrl_v, se_to],
+                    false,
+                    Color32::TRANSPARENT,
+                    Stroke::new((1.5 * z).max(1.0), tokens::EDGE_COLOR),
+                ),
+            ));
+            painter.arrow(
+                se_to - Vec2::new(0.0, 6.0 * z),
+                Vec2::new(0.0, 6.0 * z),
+                Stroke::new((1.5 * z).max(1.0), tokens::EDGE_COLOR),
+            );
+
+            // ── End pill ──
+            let end_c =
+                last_sp + Vec2::new(NODE_W * z / 2.0, NODE_H * z + SE_GAP * z + SE_H * z / 2.0);
+            painter.rect_filled(
+                Rect::from_center_size(end_c, Vec2::new(SE_W * z, SE_H * z)),
+                SE_H * z / 2.0,
+                Color32::from_rgb(55, 55, 70),
+            );
+            if z >= 0.5 {
+                painter.text(
+                    end_c,
+                    Align2::CENTER_CENTER,
+                    "■  終了",
+                    FontId::proportional(10.0 * z),
+                    Color32::from_gray(185),
+                );
+            }
+            // Edge last node → End
+            let ee_from = last_sp + Vec2::new(NODE_W * z / 2.0, NODE_H * z);
+            let ee_to = end_c - Vec2::new(0.0, SE_H * z / 2.0);
+            painter.add(egui::Shape::CubicBezier(
+                CubicBezierShape::from_points_stroke(
+                    [ee_from, ee_from + ctrl_v, ee_to - ctrl_v, ee_to],
+                    false,
+                    Color32::TRANSPARENT,
+                    Stroke::new((1.5 * z).max(1.0), tokens::EDGE_COLOR),
+                ),
+            ));
+            painter.arrow(
+                ee_to - Vec2::new(0.0, 6.0 * z),
+                Vec2::new(0.0, 6.0 * z),
+                Stroke::new((1.5 * z).max(1.0), tokens::EDGE_COLOR),
+            );
+        }
+
         // ── Draw edges (behind nodes) ──────────────────────────────────────
         let mut insert_after_idx: Option<usize> = None;
         for i in 0..n.saturating_sub(1) {

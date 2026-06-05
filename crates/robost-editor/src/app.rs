@@ -1281,40 +1281,92 @@ impl eframe::App for EditorApp {
                     });
                 });
                 ui.separator();
-                let force = self.palette_force_open.take();
+                // ── Search box ────────────────────────────────────────────
+                let search_resp = ui.add(
+                    egui::TextEdit::singleline(&mut self.nodes_search)
+                        .hint_text("🔍 検索…")
+                        .desired_width(f32::INFINITY),
+                );
+                if search_resp.gained_focus() {
+                    // Expanding all while searching makes results easier to find.
+                    self.palette_force_open = Some(true);
+                }
+                let query = self.nodes_search.to_lowercase();
+                let searching = !query.is_empty();
+                if searching && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    self.nodes_search.clear();
+                }
+                ui.add_space(2.0);
+                let force = if searching {
+                    None
+                } else {
+                    self.palette_force_open.take()
+                };
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    let mut cats: Vec<&str> = Vec::new();
-                    for t in STEP_TEMPLATES {
-                        if !cats.contains(&t.category) {
-                            cats.push(t.category);
+                    if searching {
+                        // Flat filtered list — no category headers
+                        let matches: Vec<_> = STEP_TEMPLATES
+                            .iter()
+                            .filter(|t| {
+                                t.display_name.to_lowercase().contains(&query)
+                                    || t.name.to_lowercase().contains(&query)
+                                    || t.category.to_lowercase().contains(&query)
+                            })
+                            .collect();
+                        if matches.is_empty() {
+                            ui.weak("一致するノードがありません");
                         }
-                    }
-                    for cat in cats {
-                        let col = category_color(cat);
-                        let hdr = egui::RichText::new(cat).color(col).strong().size(11.0);
-                        egui::CollapsingHeader::new(hdr)
-                            .default_open(true)
-                            .open(force)
-                            .show(ui, |ui| {
-                                for t in STEP_TEMPLATES.iter().filter(|t| t.category == cat) {
-                                    let label = egui::RichText::new(t.display_name).size(11.0);
-                                    let drag_id = egui::Id::new(("palette_drag", t.name));
-                                    let resp = ui
-                                        .dnd_drag_source(
-                                            drag_id,
-                                            DragPayload::NewStep(t.yaml),
-                                            |ui| ui.selectable_label(false, label),
-                                        )
-                                        .inner;
-                                    if resp.double_clicked() {
-                                        palette_insert = Some(t.yaml);
+                        for t in matches {
+                            let label = egui::RichText::new(t.display_name).size(11.0);
+                            let drag_id = egui::Id::new(("palette_drag", t.name));
+                            let resp = ui
+                                .dnd_drag_source(drag_id, DragPayload::NewStep(t.yaml), |ui| {
+                                    ui.selectable_label(false, label)
+                                })
+                                .inner;
+                            if resp.double_clicked() {
+                                palette_insert = Some(t.yaml);
+                            }
+                            resp.on_hover_text(format!(
+                                "{}\n{}\n\n{}",
+                                t.name, s.hint_double_click, t.yaml
+                            ));
+                        }
+                    } else {
+                        // Normal category tree
+                        let mut cats: Vec<&str> = Vec::new();
+                        for t in STEP_TEMPLATES {
+                            if !cats.contains(&t.category) {
+                                cats.push(t.category);
+                            }
+                        }
+                        for cat in cats {
+                            let col = category_color(cat);
+                            let hdr = egui::RichText::new(cat).color(col).strong().size(11.0);
+                            egui::CollapsingHeader::new(hdr)
+                                .default_open(true)
+                                .open(force)
+                                .show(ui, |ui| {
+                                    for t in STEP_TEMPLATES.iter().filter(|t| t.category == cat) {
+                                        let label = egui::RichText::new(t.display_name).size(11.0);
+                                        let drag_id = egui::Id::new(("palette_drag", t.name));
+                                        let resp = ui
+                                            .dnd_drag_source(
+                                                drag_id,
+                                                DragPayload::NewStep(t.yaml),
+                                                |ui| ui.selectable_label(false, label),
+                                            )
+                                            .inner;
+                                        if resp.double_clicked() {
+                                            palette_insert = Some(t.yaml);
+                                        }
+                                        resp.on_hover_text(format!(
+                                            "{}\n{}\n\n{}",
+                                            t.name, s.hint_double_click, t.yaml
+                                        ));
                                     }
-                                    resp.on_hover_text(format!(
-                                        "{}\n{}\n\n{}",
-                                        t.name, s.hint_double_click, t.yaml
-                                    ));
-                                }
-                            });
+                                });
+                        }
                     }
                 });
             });
