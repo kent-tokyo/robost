@@ -25,6 +25,10 @@ impl eframe::App for EditorApp {
 
     #[allow(deprecated)]
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Re-apply theme every frame so our choice overrides any system dark-mode
+        // detection that eframe/winit may trigger after startup.
+        crate::apply_style(ctx, &self.settings.theme);
+
         let s = S::for_lang(&self.settings.lang);
         if self.bottom_tab != BottomTab::Variables {
             self.var_highlight = None;

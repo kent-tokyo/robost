@@ -44,17 +44,13 @@ pub(crate) fn apply_style(ctx: &egui::Context, theme: &settings::Theme) {
     }
 
     // Interactive states (DESIGN.md §9.2)
-    // hover: bg_fill is already brighter than inactive in egui defaults;
-    //   add an explicit bg_stroke to make focus rings visible.
+    // hover: accent-tinted border for visible focus ring
     style.visuals.widgets.hovered.bg_stroke =
         egui::Stroke::new(1.0, tokens::ACCENT.gamma_multiply(0.6));
-    // active/pressed: inset shadow effect via a stronger border
+    // active/pressed: stronger accent border
     style.visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, tokens::ACCENT);
-    // disabled (noninteractive): 0.38 opacity per §9.2
-    // egui uses fg_stroke for text; reduce its alpha to signal disabled state.
-    let nonint_fg = style.visuals.widgets.noninteractive.fg_stroke.color;
-    style.visuals.widgets.noninteractive.fg_stroke =
-        egui::Stroke::new(1.0, nonint_fg.gamma_multiply(0.38));
+    // Note: egui's `noninteractive` is used for labels/separators, not just
+    // disabled buttons. Do NOT reduce its opacity here — that fades all text.
 
     // Base spacing (DESIGN.md §3.1)
     style.spacing.item_spacing = egui::vec2(tokens::SPACING_SM, tokens::SPACING_XS);
@@ -69,29 +65,35 @@ fn setup_fonts(ctx: &egui::Context) {
     // Phosphor icon font (embedded in egui-phosphor crate)
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
 
-    let candidates: &[&str] = &[
-        // macOS
-        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    // CJK font candidates — first match wins.
+    // macOS: prefer Hiragino Sans W3 (crisp Japanese) then fall back to Sans GB.
+    // Windows: Meiryo (good hinting), Yu Gothic, MS Gothic.
+    // Linux: Noto Sans CJK.
+    let cjk_candidates: &[&str] = &[
+        // macOS — Hiragino Sans W3 is the cleanest Japanese sans-serif
+        "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
         "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
         // Windows
         "C:\\Windows\\Fonts\\meiryo.ttc",
-        "C:\\Windows\\Fonts\\msgothic.ttc",
         "C:\\Windows\\Fonts\\YuGothR.ttc",
+        "C:\\Windows\\Fonts\\msgothic.ttc",
         // Linux
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/noto/NotoSansCJKjp-Regular.otf",
     ];
-
-    for path in candidates {
+    for path in cjk_candidates {
         if let Ok(data) = std::fs::read(path) {
             fonts
                 .font_data
                 .insert("cjk".to_owned(), egui::FontData::from_owned(data).into());
+            // Insert CJK BEFORE egui's default Ubuntu-Light so it takes priority
+            // for all glyphs, giving consistent weight across Latin + CJK.
             fonts
                 .families
                 .entry(egui::FontFamily::Proportional)
                 .or_default()
-                .push("cjk".to_owned());
+                .insert(0, "cjk".to_owned());
             fonts
                 .families
                 .entry(egui::FontFamily::Monospace)
@@ -102,6 +104,19 @@ fn setup_fonts(ctx: &egui::Context) {
     }
 
     ctx.set_fonts(fonts);
+
+    // Bump text sizes for better readability (DESIGN.md §2.1)
+    use egui::{FontId, TextStyle};
+    let mut style = (*ctx.global_style()).clone();
+    style.text_styles = [
+        (TextStyle::Small, FontId::proportional(11.0)),
+        (TextStyle::Body, FontId::proportional(14.0)),
+        (TextStyle::Button, FontId::proportional(14.0)),
+        (TextStyle::Heading, FontId::proportional(18.0)),
+        (TextStyle::Monospace, FontId::monospace(13.0)),
+    ]
+    .into();
+    ctx.set_global_style(style);
 }
 
 fn main() -> Result<()> {
