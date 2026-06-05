@@ -531,6 +531,9 @@ impl eframe::App for EditorApp {
                         self.delete_selected_steps();
                     }
                     ConfirmAction::Quit => {
+                        // Clear dirty flag before closing so the close_requested()
+                        // handler on the next frame does not re-open the dialog.
+                        self.dirty = false;
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 }
