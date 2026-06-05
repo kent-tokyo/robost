@@ -1120,6 +1120,16 @@ impl EditorApp {
                                 ),
                                 level: LogLevel::Warning,
                             });
+                        } else if tpl.starts_with("__CAPTURE_NEEDED__") {
+                            let display = tpl.trim_start_matches("__CAPTURE_NEEDED__");
+                            issues.push(ValidationIssue {
+                                step_idx,
+                                message: format!(
+                                    "📸 要採取: '{display}' — Snip ツールで対象 UI を表示し \
+                                     Ctrl+Shift+C でキャプチャしてください。"
+                                ),
+                                level: LogLevel::Warning,
+                            });
                         } else {
                             let tpl_path = std::path::Path::new(tpl);
                             let exists = if tpl_path.is_absolute() {
@@ -1127,7 +1137,6 @@ impl EditorApp {
                             } else if let Some(ref base) = scenario_dir {
                                 base.join(tpl_path).exists()
                             } else {
-                                // Unsaved scenario — can't resolve relative path
                                 false
                             };
                             if !exists {
