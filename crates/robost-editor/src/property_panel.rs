@@ -1327,25 +1327,28 @@ impl EditorApp {
                         ui.end_row();
 
                         ui.label(format!("{}:", s.settings_model));
-                        let models: &[&str] = match self.settings.provider {
+                        // Preset list for quick selection
+                        let presets: &[&str] = match self.settings.provider {
                             AiProvider::Anthropic => &[
                                 "claude-haiku-4-5-20251001",
                                 "claude-sonnet-4-6",
                                 "claude-opus-4-8",
                             ],
-                            AiProvider::OpenAI => &["gpt-4o-mini", "gpt-4o"],
+                            AiProvider::OpenAI => &["gpt-4o-mini", "gpt-4o", "gpt-4o-latest"],
                         };
-                        egui::ComboBox::from_id_salt("model_combo")
-                            .selected_text(&self.settings.model)
-                            .show_ui(ui, |ui| {
-                                for m in models {
-                                    ui.selectable_value(
-                                        &mut self.settings.model,
-                                        m.to_string(),
-                                        *m,
-                                    );
+                        ui.vertical(|ui| {
+                            // Free-form text field — accepts any model ID including future ones
+                            ui.text_edit_singleline(&mut self.settings.model);
+                            // Preset buttons as quick-fill
+                            ui.horizontal_wrapped(|ui| {
+                                ui.weak("プリセット:");
+                                for &p in presets {
+                                    if ui.small_button(p).clicked() {
+                                        self.settings.model = p.to_string();
+                                    }
                                 }
                             });
+                        });
                         ui.end_row();
                     });
 
