@@ -1482,10 +1482,10 @@ impl eframe::App for EditorApp {
                 });
             });
 
-        // ── Left: step list ───────────────────────────────────────────────
+        // ── Left: step list (hidden in Canvas mode — Canvas is self-sufficient) ─
         egui::SidePanel::left("steps_panel")
             .min_width(240.0)
-            .show(ctx, |ui| {
+            .show_animated(ctx, self.view_mode != ViewMode::Canvas, |ui| {
                 ui.heading(s.panel_steps);
                 ui.separator();
 
