@@ -1331,7 +1331,7 @@ impl EditorApp {
                             AiProvider::Anthropic => &[
                                 "claude-haiku-4-5-20251001",
                                 "claude-sonnet-4-6",
-                                "claude-opus-4-7",
+                                "claude-opus-4-8",
                             ],
                             AiProvider::OpenAI => &["gpt-4o-mini", "gpt-4o"],
                         };
