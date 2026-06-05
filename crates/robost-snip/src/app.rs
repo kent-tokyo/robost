@@ -1097,6 +1097,60 @@ impl eframe::App for SnipApp {
             self.draw_selecting(ctx);
         } else if matches!(self.state, OverlayState::Editing { .. }) {
             self.draw_editing(ctx);
+        } else if matches!(self.state, OverlayState::Hidden)
+            && self.popup_msg.is_none()
+            && !self.show_help
+        {
+            // Onboarding screen: shown when the window is visible but no capture is active
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(ui.available_height() * 0.2);
+
+                    ui.heading("📸 robost Snip — テンプレート採取ツール");
+                    ui.add_space(24.0);
+
+                    egui::Frame::group(ui.style())
+                        .inner_margin(egui::Margin::same(20))
+                        .show(ui, |ui| {
+                            ui.set_max_width(480.0);
+                            ui.label("【使い方】");
+                            ui.add_space(8.0);
+
+                            ui.horizontal(|ui| {
+                                ui.label("① ");
+                                ui.label("キャプチャしたい画面（対象アプリ）を表示してください");
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("② ");
+                                ui.label("キーボードで");
+                                ui.code("Ctrl+Shift+C");
+                                ui.label("を押すと画面が凍結されます");
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("③ ");
+                                ui.label("凍結した画面上でドラッグして採取範囲を選択");
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("④ ");
+                                ui.label("保存先フォルダを選んで完了");
+                            });
+
+                            ui.add_space(16.0);
+                            ui.separator();
+                            ui.add_space(8.0);
+
+                            if ui
+                                .button("⌨  今すぐキャプチャを開始 (Ctrl+Shift+C)")
+                                .clicked()
+                            {
+                                self.start_capture(ctx);
+                            }
+                        });
+
+                    ui.add_space(16.0);
+                    ui.weak("このウィンドウを閉じてもトレイアイコンから再度使えます");
+                });
+            });
         }
 
         let interval = if matches!(self.state, OverlayState::Hidden)
