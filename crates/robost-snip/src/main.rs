@@ -48,7 +48,7 @@ fn setup_fonts(ctx: &eframe::egui::Context) {
 }
 
 fn apply_style(ctx: &eframe::egui::Context) {
-    let mut style = (*ctx.style()).clone();
+    let mut style = (*ctx.global_style()).clone();
 
     style.visuals.selection.bg_fill = ACCENT.gamma_multiply(0.45);
     style.visuals.window_corner_radius = ROUNDING_MD;
@@ -65,7 +65,7 @@ fn apply_style(ctx: &eframe::egui::Context) {
     style.spacing.item_spacing = eframe::egui::vec2(SPACING_SM, SPACING_XS);
     style.spacing.button_padding = eframe::egui::vec2(SPACING_SM, SPACING_XS);
 
-    ctx.set_style(style);
+    ctx.set_global_style(style);
 }
 
 fn main() {
