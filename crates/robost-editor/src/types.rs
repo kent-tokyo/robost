@@ -147,6 +147,15 @@ pub(crate) fn step_key_category(key: &str) -> &str {
     }
 }
 
+// ---- nodes panel tab --------------------------------------------------------
+
+#[derive(Clone, PartialEq, Default)]
+pub(crate) enum NodesPanelTab {
+    #[default]
+    Nodes,
+    Templates,
+}
+
 // ---- view mode / flowchart types --------------------------------------------
 
 #[derive(Clone)]
@@ -165,6 +174,8 @@ pub(crate) enum CanvasContextAction {
     DistributeV,
     SelectAll,
     AddComment(egui::Pos2),
+    CanvasReset,
+    CanvasFit,
 }
 
 #[derive(PartialEq, Clone, Copy, Default)]

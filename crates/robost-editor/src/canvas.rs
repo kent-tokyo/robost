@@ -1774,6 +1774,46 @@ impl EditorApp {
                     }
                 }
             }
+            // ── Canvas view controls ──────────────────────────────────────
+            {
+                use egui_phosphor::regular as ph;
+                ui.separator();
+                if ui
+                    .button(format!(
+                        "{} {}",
+                        ph::ARROW_COUNTER_CLOCKWISE,
+                        s.canvas_reset
+                    ))
+                    .clicked()
+                {
+                    canvas_ctx_action = Some(CanvasContextAction::CanvasReset);
+                    ui.close();
+                }
+                if ui
+                    .button(format!("{} {}", ph::ARROWS_OUT, s.canvas_fit))
+                    .clicked()
+                {
+                    canvas_ctx_action = Some(CanvasContextAction::CanvasFit);
+                    ui.close();
+                }
+                if ui
+                    .selectable_label(self.settings.canvas_snap, s.canvas_snap)
+                    .clicked()
+                {
+                    self.settings.canvas_snap = !self.settings.canvas_snap;
+                    crate::settings::save_settings(&self.settings);
+                    ui.close();
+                }
+                if ui
+                    .selectable_label(self.settings.minimap_show, s.minimap_label)
+                    .clicked()
+                {
+                    self.settings.minimap_show = !self.settings.minimap_show;
+                    crate::settings::save_settings(&self.settings);
+                    ui.close();
+                }
+                ui.label(format!("{:.0}%", self.canvas_zoom * 100.0));
+            }
         });
 
         // Handle context menu actions from the node loop and background menu
@@ -1848,6 +1888,15 @@ impl EditorApp {
                     });
                     self.canvas_editing_comment = Some(self.canvas_comments.len() - 1);
                     self.canvas_layout_dirty = true;
+                }
+                CanvasContextAction::CanvasReset => {
+                    self.push_undo();
+                    self.canvas_positions.clear();
+                    self.ensure_canvas_layout();
+                    self.canvas_layout_dirty = true;
+                }
+                CanvasContextAction::CanvasFit => {
+                    self.canvas_fit_view(self.canvas_viewport_size);
                 }
             }
         }

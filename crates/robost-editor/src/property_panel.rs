@@ -93,6 +93,7 @@ impl EditorApp {
 
         // Pending actions resolved after closures
         let mut pending_file_key: Option<String> = None;
+        let mut snip_clicked = false;
         let mut child_action: Option<ChildAction> = None;
 
         // ── ai_create: special prompt + generate button ─────────────────────
@@ -429,6 +430,15 @@ impl EditorApp {
                                                         );
                                                         any_changed = true;
                                                     }
+                                                    if fk == "template" {
+                                                        use egui_phosphor::regular as ph;
+                                                        if ui.small_button(ph::CAMERA)
+                                                            .on_hover_text("Snip ツールを起動 — 対象UIを表示して Ctrl+Shift+C でキャプチャ後、📂 で PNG を選択")
+                                                            .clicked()
+                                                        {
+                                                            snip_clicked = true;
+                                                        }
+                                                    }
                                                     if is_file && ui.small_button("📂").clicked() {
                                                         pending_file_key = Some(fk.clone());
                                                     }
@@ -712,6 +722,12 @@ impl EditorApp {
                 }
             });
 
+        // ── Deferred snip launch ─────────────────────────────────────────────
+        if snip_clicked {
+            self.log_info("📸 対象UIを表示して Ctrl+Shift+C でキャプチャ。採取後 📂 でPNGを選択してください。".to_string());
+            crate::app::open_snip();
+        }
+
         // ── Deferred file dialog ─────────────────────────────────────────────
         if let Some(fkey) = pending_file_key {
             if let Some(p) = rfd::FileDialog::new().pick_file() {
@@ -858,6 +874,7 @@ impl EditorApp {
         let mut new_outer = outer_map.clone();
         let mut changed = false;
         let mut pending_file_key: Option<String> = None;
+        let mut snip_clicked = false;
 
         match inner_val {
             Some(serde_yml::Value::Mapping(inner_map)) => {
@@ -881,6 +898,15 @@ impl EditorApp {
                                     let resp = ui.add(
                                         egui::TextEdit::singleline(&mut buf).desired_width(200.0),
                                     );
+                                    if fk == "template" {
+                                        use egui_phosphor::regular as ph;
+                                        if ui.small_button(ph::CAMERA)
+                                            .on_hover_text("Snip ツールを起動 — 対象UIを表示して Ctrl+Shift+C でキャプチャ後、📂 で PNG を選択")
+                                            .clicked()
+                                        {
+                                            snip_clicked = true;
+                                        }
+                                    }
                                     if is_file && ui.small_button("📂").clicked() {
                                         pending_file_key = Some(fk.clone());
                                     }
@@ -934,6 +960,12 @@ impl EditorApp {
                             ui.end_row();
                         }
                     });
+
+                // Deferred snip launch (must run outside the grid closure)
+                if snip_clicked {
+                    self.log_info("📸 対象UIを表示して Ctrl+Shift+C でキャプチャ。採取後 📂 でPNGを選択してください。".to_string());
+                    crate::app::open_snip();
+                }
 
                 // Deferred file picker (must run outside the grid closure)
                 if let Some(fk) = pending_file_key {

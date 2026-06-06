@@ -6757,6 +6757,7 @@ dependencies = [
  "egui-phosphor",
  "egui_commonmark",
  "egui_extras",
+ "image",
  "keyring",
  "rfd",
  "serde",

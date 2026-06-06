@@ -10,7 +10,7 @@ use crate::flow_helpers::{
 use crate::settings::{load_settings, AppSettings};
 use crate::types::{
     AiMessage, BottomTab, CanvasComment, ConfirmAction, EditorState, FlowNode, LogEntry, LogLevel,
-    PropView, Toast, ValidationIssue, ViewMode,
+    NodesPanelTab, PropView, Toast, ValidationIssue, ViewMode,
 };
 
 pub(crate) struct EditorApp {
@@ -127,6 +127,11 @@ pub(crate) struct EditorApp {
     pub(crate) canvas_comment_next_id: u64,
     /// Problem count from the previous frame — used to detect when new errors appear.
     pub(crate) prev_problem_count: usize,
+    /// Active tab in the Nodes side panel (Nodes or Templates).
+    pub(crate) nodes_panel_tab: NodesPanelTab,
+    /// Cache of loaded textures for template PNG thumbnails.
+    pub(crate) template_textures:
+        std::collections::HashMap<std::path::PathBuf, egui::TextureHandle>,
 }
 
 impl Default for EditorApp {
@@ -214,6 +219,8 @@ impl Default for EditorApp {
             canvas_editing_comment: None,
             canvas_comment_next_id: 1,
             prev_problem_count: 0,
+            nodes_panel_tab: NodesPanelTab::default(),
+            template_textures: HashMap::new(),
         }
     }
 }

@@ -15,7 +15,7 @@ use crate::state::EditorApp;
 use crate::step_templates::{step_icon, StepTemplate, STEP_TEMPLATES};
 use crate::types::{
     category_color, step_key_category, AiMessage, BottomTab, ConfirmAction, DragPayload, LogEntry,
-    LogLevel, PropView, StepAction, ViewMode,
+    LogLevel, NodesPanelTab, PropView, StepAction, ViewMode,
 };
 
 impl eframe::App for EditorApp {
@@ -983,7 +983,7 @@ impl eframe::App for EditorApp {
 
         // ── Toolbar ──────────────────────────────────────────────────────────
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
-            // ── Row 1: view selector + file ops + scenario name ──────────────
+            // ── Single row: view selector | Undo Redo | Scenario name | Run/Stop | [theme] ─
             ui.horizontal(|ui| {
                 // View selector — always visible on the left
                 if ui
@@ -1007,20 +1007,6 @@ impl eframe::App for EditorApp {
                     self.ensure_canvas_layout();
                 }
                 ui.separator();
-                if ui.button("📂 開く").clicked() {
-                    self.open_file();
-                }
-                if ui.button("💾 保存").on_hover_text("保存 (Cmd+S)").clicked() {
-                    self.save_file();
-                }
-                if ui
-                    .button("📁 名前を付けて保存")
-                    .on_hover_text("名前を付けて保存 (Cmd+Shift+S)")
-                    .clicked()
-                {
-                    self.save_file_as();
-                }
-                ui.separator();
                 ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
                     if ui
                         .button(ph::ARROW_COUNTER_CLOCKWISE)
@@ -1040,15 +1026,15 @@ impl eframe::App for EditorApp {
                     }
                 });
                 ui.separator();
-                // Scenario name — takes remaining width on row 1
+                // Scenario name — fixed width so Run/Stop fits on the same row
                 ui.label(format!("{}:", s.scenario_name_label));
-                if ui.text_edit_singleline(&mut self.name).changed() {
+                if ui
+                    .add(egui::TextEdit::singleline(&mut self.name).desired_width(200.0))
+                    .changed()
+                {
                     self.dirty = true;
                 }
-            });
-
-            // ── Row 2: execution + view-specific controls + theme ────────────
-            ui.horizontal(|ui| {
+                ui.separator();
                 // ── Run / Stop ────────────────────────────────────────────────
                 if self.run_child.is_some() {
                     if ui
@@ -1065,142 +1051,6 @@ impl eframe::App for EditorApp {
                 {
                     self.run_scenario();
                 }
-                // ── Snip ─────────────────────────────────────────────────────
-                if ui
-                    .button(s.btn_snip)
-                    .on_hover_text(s.btn_snip_tooltip)
-                    .clicked()
-                {
-                    open_snip();
-                }
-                // ── Canvas-specific controls ──────────────────────────────────
-                if self.view_mode == ViewMode::Canvas {
-                    ui.separator();
-                    if ui.button(s.canvas_reset).clicked() {
-                        self.push_undo();
-                        self.canvas_positions.clear();
-                        self.ensure_canvas_layout();
-                        self.canvas_layout_dirty = true;
-                    }
-                    if ui.button(s.canvas_fit).clicked() {
-                        self.canvas_fit_view(self.canvas_viewport_size);
-                    }
-                    if ui
-                        .selectable_label(self.settings.canvas_snap, s.canvas_snap)
-                        .clicked()
-                    {
-                        self.settings.canvas_snap = !self.settings.canvas_snap;
-                        save_settings(&self.settings);
-                    }
-                    if ui
-                        .selectable_label(self.settings.minimap_show, s.minimap_label)
-                        .on_hover_text(s.minimap_tooltip)
-                        .clicked()
-                    {
-                        self.settings.minimap_show = !self.settings.minimap_show;
-                        save_settings(&self.settings);
-                    }
-                    ui.label(format!("{:.0}%", self.canvas_zoom * 100.0));
-                    let help_btn = ui.button("?").on_hover_text("キャンバス操作ヘルプ");
-                    egui::Popup::from_toggle_button_response(&help_btn)
-                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-                        .show(|ui| {
-                            ui.set_min_width(280.0);
-                            ui.strong("Canvas 操作ガイド");
-                            ui.separator();
-                            egui::Grid::new("canvas_help_grid")
-                                .num_columns(2)
-                                .spacing([12.0, 4.0])
-                                .show(ui, |ui| {
-                                    ui.label("Ctrl+スクロール / ピンチ");
-                                    ui.label("ズーム (カーソル固定)");
-                                    ui.end_row();
-                                    ui.label("Cmd+0");
-                                    ui.label("全体表示 (fit to view)");
-                                    ui.end_row();
-                                    ui.label("Cmd+1");
-                                    ui.label("100% ズーム + 中央");
-                                    ui.end_row();
-                                    ui.label("スクロール");
-                                    ui.label("上下パン");
-                                    ui.end_row();
-                                    ui.label("背景ドラッグ");
-                                    ui.label("パン");
-                                    ui.end_row();
-                                    ui.label("Shift+背景ドラッグ");
-                                    ui.label("ラッソ選択 (途中Shift押しでも可)");
-                                    ui.end_row();
-                                    ui.label("Cmd+A");
-                                    ui.label("全選択 (Canvasビューのみ)");
-                                    ui.end_row();
-                                    ui.label("Delete / Backspace");
-                                    ui.label("選択ステップを削除 (確認あり)");
-                                    ui.end_row();
-                                    ui.label("Cmd+C / X / V / D");
-                                    ui.label("コピー / カット / 貼付 / 複製");
-                                    ui.end_row();
-                                    ui.label("クリック");
-                                    ui.label("選択 / 背景クリックで解除");
-                                    ui.end_row();
-                                    ui.label("Cmd+クリック");
-                                    ui.label("選択をトグル");
-                                    ui.end_row();
-                                    ui.label("Shift+クリック");
-                                    ui.label("範囲選択");
-                                    ui.end_row();
-                                    ui.label("ダブルクリック");
-                                    ui.label("List ビューで開く");
-                                    ui.end_row();
-                                    ui.label("右クリック (ノード)");
-                                    ui.label("削除 / 複製 / 整列");
-                                    ui.end_row();
-                                    ui.label("右クリック (背景)");
-                                    ui.label("全選択 / 整列");
-                                    ui.end_row();
-                                    ui.label("2+選択→右クリック");
-                                    ui.label("左揃え / 上揃え");
-                                    ui.end_row();
-                                    ui.label("3+選択→右クリック");
-                                    ui.label("水平/垂直等間隔");
-                                    ui.end_row();
-                                    ui.label("ミニマップクリック");
-                                    ui.label("その位置へジャンプ");
-                                    ui.end_row();
-                                    ui.label("ミニマップドラッグ");
-                                    ui.label("連続ナビゲーション");
-                                    ui.end_row();
-                                    ui.label("↑ / ↓");
-                                    ui.label("前/次ノードを選択 + ビュースクロール");
-                                    ui.end_row();
-                                    ui.label("Cmd+↑ / Cmd+↓");
-                                    ui.label("選択ステップを前後に移動");
-                                    ui.end_row();
-                                    ui.label("Cmd+G");
-                                    ui.label("ノード検索バーを開く");
-                                    ui.end_row();
-                                    ui.label("Cmd+Shift+A");
-                                    ui.label("ステップ追加メニュー");
-                                    ui.end_row();
-                                    ui.label("?");
-                                    ui.label("このヘルプを表示");
-                                    ui.end_row();
-                                });
-                        });
-                }
-                if self.view_mode == ViewMode::Flow {
-                    ui.separator();
-                    if ui
-                        .button(format!("{} リセット", ph::HOUSE))
-                        .on_hover_text(
-                            "ズーム・パンをリセット (Ctrl+ドラッグでパン、Ctrl+スクロールでズーム)",
-                        )
-                        .clicked()
-                    {
-                        self.flow_zoom = 1.0;
-                        self.flow_pan = egui::Vec2::ZERO;
-                    }
-                    ui.label(format!("{:.0}%", self.flow_zoom * 100.0));
-                }
 
                 // ── Theme toggle (right-aligned) ──────────────────────────
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1216,25 +1066,6 @@ impl eframe::App for EditorApp {
                         };
                         crate::apply_style(ui.ctx(), &self.settings.theme);
                         save_settings(&self.settings);
-                    }
-                });
-            });
-            // Status bar row: last log entry right-aligned
-            ui.horizontal(|ui| {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if let Some(last) = self.log.last() {
-                        let text = if last.message.chars().count() > 60 {
-                            let end = last
-                                .message
-                                .char_indices()
-                                .nth(57)
-                                .map(|(i, _)| i)
-                                .unwrap_or(last.message.len());
-                            format!("{}…", &last.message[..end])
-                        } else {
-                            last.message.clone()
-                        };
-                        ui.colored_label(last.level.color(), text);
                     }
                 });
             });
@@ -1362,129 +1193,249 @@ impl eframe::App for EditorApp {
 
         // ── Left: step palette (permanent tree of available step types) ─────
         let mut palette_insert: Option<&'static str> = None;
+        // Template double-click action: set template field on selected image step
+        let mut template_set_path: Option<std::path::PathBuf> = None;
         egui::SidePanel::left("step_palette")
             .resizable(true)
             .default_width(220.0)
             .min_width(200.0)
             .show(ctx, |ui| {
+                // Tab selector
                 ui.horizontal(|ui| {
-                    ui.heading(s.panel_nodes);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui
-                            .small_button(s.btn_collapse_all)
-                            .on_hover_text("全て閉じる")
-                            .clicked()
-                        {
-                            self.palette_force_open = Some(false);
-                        }
-                        if ui
-                            .small_button(s.btn_expand_all)
-                            .on_hover_text("全て展開")
-                            .clicked()
-                        {
-                            self.palette_force_open = Some(true);
-                        }
-                    });
+                    ui.selectable_value(
+                        &mut self.nodes_panel_tab,
+                        NodesPanelTab::Nodes,
+                        s.panel_nodes,
+                    );
+                    ui.selectable_value(
+                        &mut self.nodes_panel_tab,
+                        NodesPanelTab::Templates,
+                        "Templates",
+                    );
                 });
                 ui.separator();
-                // ── Search box ────────────────────────────────────────────
-                let search_resp = ui.add(
-                    egui::TextEdit::singleline(&mut self.nodes_search)
-                        .hint_text("🔍 検索…")
-                        .desired_width(f32::INFINITY),
-                );
-                if search_resp.gained_focus() {
-                    // Expanding all while searching makes results easier to find.
-                    self.palette_force_open = Some(true);
-                }
-                let query = self.nodes_search.to_lowercase();
-                let searching = !query.is_empty();
-                if searching && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                    self.nodes_search.clear();
-                }
-                ui.add_space(2.0);
-                let force = if searching {
-                    None
-                } else {
-                    self.palette_force_open.take()
-                };
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    if searching {
-                        // Flat filtered list — no category headers
-                        let matches: Vec<_> = STEP_TEMPLATES
-                            .iter()
-                            .filter(|t| {
-                                t.display_name.to_lowercase().contains(&query)
-                                    || t.name.to_lowercase().contains(&query)
-                                    || t.category.to_lowercase().contains(&query)
-                            })
-                            .collect();
-                        if matches.is_empty() {
-                            ui.weak("一致するノードがありません");
-                        }
-                        for t in matches {
-                            let label = egui::RichText::new(format!(
-                                "{} {}",
-                                step_icon(t.name),
-                                t.display_name
-                            ))
-                            .size(11.0);
-                            let drag_id = egui::Id::new(("palette_drag", t.name));
-                            let resp = ui
-                                .dnd_drag_source(drag_id, DragPayload::NewStep(t.yaml), |ui| {
-                                    ui.selectable_label(false, label)
-                                })
-                                .inner;
-                            if resp.double_clicked() {
-                                palette_insert = Some(t.yaml);
-                            }
-                            resp.on_hover_text(format!(
-                                "{}\n{}\n\n{}",
-                                t.name, s.hint_double_click, t.yaml
-                            ));
-                        }
-                    } else {
-                        // Normal category tree
-                        let mut cats: Vec<&str> = Vec::new();
-                        for t in STEP_TEMPLATES {
-                            if !cats.contains(&t.category) {
-                                cats.push(t.category);
-                            }
-                        }
-                        for cat in cats {
-                            let col = category_color(cat);
-                            let hdr = egui::RichText::new(cat).color(col).strong().size(11.0);
-                            egui::CollapsingHeader::new(hdr)
-                                .default_open(true)
-                                .open(force)
-                                .show(ui, |ui| {
-                                    for t in STEP_TEMPLATES.iter().filter(|t| t.category == cat) {
-                                        let label = egui::RichText::new(format!(
-                                            "{} {}",
-                                            step_icon(t.name),
-                                            t.display_name
-                                        ))
-                                        .size(11.0);
-                                        let drag_id = egui::Id::new(("palette_drag", t.name));
-                                        let resp = ui
-                                            .dnd_drag_source(
-                                                drag_id,
-                                                DragPayload::NewStep(t.yaml),
-                                                |ui| ui.selectable_label(false, label),
-                                            )
-                                            .inner;
-                                        if resp.double_clicked() {
-                                            palette_insert = Some(t.yaml);
-                                        }
-                                        resp.on_hover_text(format!(
-                                            "{}\n{}\n\n{}",
-                                            t.name, s.hint_double_click, t.yaml
-                                        ));
+
+                match self.nodes_panel_tab {
+                    NodesPanelTab::Nodes => {
+                        // ── Expand/collapse controls ──────────────────────────
+                        ui.horizontal(|ui| {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .small_button(s.btn_collapse_all)
+                                        .on_hover_text("全て閉じる")
+                                        .clicked()
+                                    {
+                                        self.palette_force_open = Some(false);
                                     }
-                                });
+                                    if ui
+                                        .small_button(s.btn_expand_all)
+                                        .on_hover_text("全て展開")
+                                        .clicked()
+                                    {
+                                        self.palette_force_open = Some(true);
+                                    }
+                                },
+                            );
+                        });
+                        // ── Search box ────────────────────────────────────────────
+                        let search_resp = ui.add(
+                            egui::TextEdit::singleline(&mut self.nodes_search)
+                                .hint_text("🔍 検索…")
+                                .desired_width(f32::INFINITY),
+                        );
+                        if search_resp.gained_focus() {
+                            // Expanding all while searching makes results easier to find.
+                            self.palette_force_open = Some(true);
+                        }
+                        let query = self.nodes_search.to_lowercase();
+                        let searching = !query.is_empty();
+                        if searching && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                            self.nodes_search.clear();
+                        }
+                        ui.add_space(2.0);
+                        let force = if searching {
+                            None
+                        } else {
+                            self.palette_force_open.take()
+                        };
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            if searching {
+                                // Flat filtered list — no category headers
+                                let matches: Vec<_> = STEP_TEMPLATES
+                                    .iter()
+                                    .filter(|t| {
+                                        t.display_name.to_lowercase().contains(&query)
+                                            || t.name.to_lowercase().contains(&query)
+                                            || t.category.to_lowercase().contains(&query)
+                                    })
+                                    .collect();
+                                if matches.is_empty() {
+                                    ui.weak("一致するノードがありません");
+                                }
+                                for t in matches {
+                                    let label = egui::RichText::new(format!(
+                                        "{} {}",
+                                        step_icon(t.name),
+                                        t.display_name
+                                    ))
+                                    .size(11.0);
+                                    let drag_id = egui::Id::new(("palette_drag", t.name));
+                                    let resp = ui
+                                        .dnd_drag_source(
+                                            drag_id,
+                                            DragPayload::NewStep(t.yaml),
+                                            |ui| ui.selectable_label(false, label),
+                                        )
+                                        .inner;
+                                    if resp.double_clicked() {
+                                        palette_insert = Some(t.yaml);
+                                    }
+                                    resp.on_hover_text(format!(
+                                        "{}\n{}\n\n{}",
+                                        t.name, s.hint_double_click, t.yaml
+                                    ));
+                                }
+                            } else {
+                                // Normal category tree
+                                let mut cats: Vec<&str> = Vec::new();
+                                for t in STEP_TEMPLATES {
+                                    if !cats.contains(&t.category) {
+                                        cats.push(t.category);
+                                    }
+                                }
+                                for cat in cats {
+                                    let col = category_color(cat);
+                                    let hdr =
+                                        egui::RichText::new(cat).color(col).strong().size(11.0);
+                                    egui::CollapsingHeader::new(hdr)
+                                        .default_open(true)
+                                        .open(force)
+                                        .show(ui, |ui| {
+                                            for t in
+                                                STEP_TEMPLATES.iter().filter(|t| t.category == cat)
+                                            {
+                                                let label = egui::RichText::new(format!(
+                                                    "{} {}",
+                                                    step_icon(t.name),
+                                                    t.display_name
+                                                ))
+                                                .size(11.0);
+                                                let drag_id =
+                                                    egui::Id::new(("palette_drag", t.name));
+                                                let resp = ui
+                                                    .dnd_drag_source(
+                                                        drag_id,
+                                                        DragPayload::NewStep(t.yaml),
+                                                        |ui| ui.selectable_label(false, label),
+                                                    )
+                                                    .inner;
+                                                if resp.double_clicked() {
+                                                    palette_insert = Some(t.yaml);
+                                                }
+                                                resp.on_hover_text(format!(
+                                                    "{}\n{}\n\n{}",
+                                                    t.name, s.hint_double_click, t.yaml
+                                                ));
+                                            }
+                                        });
+                                }
+                            }
+                        });
+                    }
+                    NodesPanelTab::Templates => {
+                        // ── Collect PNG paths from scenario dir or fallback ───
+                        let template_dir = self
+                            .path
+                            .as_deref()
+                            .and_then(|p| p.parent())
+                            .map(|p| p.to_path_buf())
+                            .unwrap_or_else(|| {
+                                dirs::home_dir()
+                                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+                                    .join("Documents/robost_templates")
+                            });
+                        let png_paths: Vec<std::path::PathBuf> = if template_dir.is_dir() {
+                            std::fs::read_dir(&template_dir)
+                                .into_iter()
+                                .flatten()
+                                .filter_map(|e| e.ok())
+                                .map(|e| e.path())
+                                .filter(|p| {
+                                    p.extension()
+                                        .and_then(|e| e.to_str())
+                                        .map(|e| e.eq_ignore_ascii_case("png"))
+                                        .unwrap_or(false)
+                                })
+                                .collect()
+                        } else {
+                            Vec::new()
+                        };
+
+                        if png_paths.is_empty() {
+                            ui.add_space(8.0);
+                            ui.weak("📸 Snip ツールで画像を採取すると、ここに表示されます");
+                        } else {
+                            egui::ScrollArea::vertical().show(ui, |ui| {
+                                // Load textures that aren't cached yet
+                                // We collect paths to load first (avoids borrow conflict)
+                                let to_load: Vec<std::path::PathBuf> = png_paths
+                                    .iter()
+                                    .filter(|p| !self.template_textures.contains_key(*p))
+                                    .cloned()
+                                    .collect();
+                                for path in to_load {
+                                    if let Ok(img) = image::open(&path) {
+                                        let rgba = img.to_rgba8();
+                                        let size = [rgba.width() as usize, rgba.height() as usize];
+                                        let pixels = rgba.into_raw();
+                                        let color_image =
+                                            egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
+                                        let tex = ui.ctx().load_texture(
+                                            path.to_string_lossy(),
+                                            color_image,
+                                            egui::TextureOptions::LINEAR,
+                                        );
+                                        self.template_textures.insert(path, tex);
+                                    }
+                                }
+                                // Show in a 3-column grid
+                                egui::Grid::new("template_grid")
+                                    .num_columns(3)
+                                    .spacing([4.0, 4.0])
+                                    .show(ui, |ui| {
+                                        for (col_idx, path) in png_paths.iter().enumerate() {
+                                            let fname = path
+                                                .file_name()
+                                                .map(|n| n.to_string_lossy().into_owned())
+                                                .unwrap_or_default();
+                                            if let Some(tex) = self.template_textures.get(path) {
+                                                let tex_id = tex.id();
+                                                let img_resp = ui
+                                                    .add(
+                                                        egui::Image::new((
+                                                            tex_id,
+                                                            egui::vec2(64.0, 64.0),
+                                                        ))
+                                                        .sense(egui::Sense::click()),
+                                                    )
+                                                    .on_hover_text(fname.clone());
+                                                if img_resp.double_clicked() {
+                                                    template_set_path = Some(path.clone());
+                                                }
+                                            } else {
+                                                ui.label("…");
+                                            }
+                                            if (col_idx + 1) % 3 == 0 {
+                                                ui.end_row();
+                                            }
+                                        }
+                                    });
+                            });
                         }
                     }
-                });
+                }
             });
 
         // ── Left: step list (hidden in Canvas mode — Canvas is self-sufficient) ─
@@ -2300,6 +2251,58 @@ impl eframe::App for EditorApp {
             }
         }
 
+        // ── Handle Templates tab double-click: set template field on image step ─
+        if let Some(tpl_path) = template_set_path {
+            if let Some(idx) = self.selected {
+                if idx < self.steps.len() {
+                    let step = self.steps[idx].clone();
+                    let outer_key = crate::flow_helpers::get_step_key(&step);
+                    const IMAGE_KEYS: &[&str] = &[
+                        "click_image",
+                        "wait_image",
+                        "find_image",
+                        "match_rect",
+                        "wait_no_image",
+                        "wait_change",
+                    ];
+                    if IMAGE_KEYS.contains(&outer_key) {
+                        // Build relative path when possible
+                        let path_str = if let Some(ref scenario_path) = self.path {
+                            if let Some(dir) = scenario_path.parent() {
+                                tpl_path
+                                    .strip_prefix(dir)
+                                    .map(|r| r.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|_| tpl_path.to_string_lossy().into_owned())
+                            } else {
+                                tpl_path.to_string_lossy().into_owned()
+                            }
+                        } else {
+                            tpl_path.to_string_lossy().into_owned()
+                        };
+                        if let Some(serde_yml::Value::Mapping(mut inner)) =
+                            step.as_mapping().and_then(|m| m.get(outer_key)).cloned()
+                        {
+                            inner.insert(
+                                serde_yml::Value::String("template".to_owned()),
+                                serde_yml::Value::String(path_str),
+                            );
+                            let mut outer = step.as_mapping().unwrap().clone();
+                            outer.insert(
+                                serde_yml::Value::String(outer_key.to_owned()),
+                                serde_yml::Value::Mapping(inner),
+                            );
+                            self.push_undo();
+                            self.commit_step(idx, outer);
+                            self.log_info(format!(
+                                "テンプレートを設定しました: {}",
+                                tpl_path.file_name().unwrap_or_default().to_string_lossy()
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
         // ── Settings window ───────────────────────────────────────────────
         self.show_settings_window(ctx);
 
@@ -2385,7 +2388,7 @@ impl eframe::App for EditorApp {
     }
 }
 
-fn open_snip() {
+pub(crate) fn open_snip() {
     let bin = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join("robost-snip")))
