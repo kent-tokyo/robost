@@ -15,7 +15,7 @@ use crate::state::EditorApp;
 use crate::step_templates::{step_icon, StepTemplate, STEP_TEMPLATES};
 use crate::types::{
     category_color, step_key_category, AiMessage, BottomTab, ConfirmAction, DragPayload, LogEntry,
-    LogLevel, NodesPanelTab, PropView, StepAction, ViewMode,
+    LogLevel, NodesPanelTab, PropView, SidebarTab, StepAction, ViewMode,
 };
 
 impl eframe::App for EditorApp {
@@ -31,9 +31,27 @@ impl eframe::App for EditorApp {
         crate::apply_style(ctx, &self.settings.theme);
 
         let s = S::for_lang(&self.settings.lang);
+        let ui_dark = matches!(self.settings.theme, crate::settings::Theme::Dark);
         if self.bottom_tab != BottomTab::Variables {
             self.var_highlight = None;
         }
+
+        // ── Snap flash: expire stale entries and schedule repaint ─────────────
+        {
+            let flash_dur =
+                std::time::Duration::from_millis(crate::tokens::SNAP_FLASH_MS);
+            self.snap_flashes
+                .retain(|_, t| t.elapsed() < flash_dur);
+            if let Some(min_remaining) = self
+                .snap_flashes
+                .values()
+                .map(|t| flash_dur.saturating_sub(t.elapsed()))
+                .min()
+            {
+                ctx.request_repaint_after(min_remaining);
+            }
+        }
+
         // ── OS window close button ────────────────────────────────────────────
         if ctx.input(|i| i.viewport().close_requested())
             && self.dirty
@@ -253,7 +271,7 @@ impl eframe::App for EditorApp {
                 let min_sel = sorted[0];
                 let max_sel = *sorted.last().unwrap();
                 if min_sel > 0 {
-                    self.push_undo();
+                    self.push_undo_named("移動");
                     // Move the step just above the block to below the block
                     let above_pos = self.canvas_positions.remove(&(min_sel - 1));
                     let step = self.steps.remove(min_sel - 1);
@@ -270,7 +288,7 @@ impl eframe::App for EditorApp {
                 }
             } else if let Some(i) = self.selected {
                 if i > 0 {
-                    self.push_undo();
+                    self.push_undo_named("移動");
                     self.steps.swap(i, i - 1);
                     let pos_a = self.canvas_positions.remove(&i);
                     let pos_b = self.canvas_positions.remove(&(i - 1));
@@ -520,7 +538,7 @@ impl eframe::App for EditorApp {
                     }
                     ConfirmAction::DeleteStep(idx) => {
                         if idx < self.steps.len() {
-                            self.push_undo();
+                            self.push_undo_named("ステップ削除");
                             self.steps.remove(idx);
                             Self::canvas_shift_positions(&mut self.canvas_positions, idx, -1);
                             Self::canvas_shift_run_state(
@@ -555,10 +573,11 @@ impl eframe::App for EditorApp {
         }
 
         // ── Window title (dirty indicator) ───────────────────────────────────
+        let s = S::for_lang(&self.settings.lang);
         let title = if self.dirty {
-            format!("RPA シナリオエディター ─ {}*", self.name)
+            format!("{} ─ {}*", s.app_title, self.name)
         } else {
-            format!("RPA シナリオエディター ─ {}", self.name)
+            format!("{} ─ {}", s.app_title, self.name)
         };
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
 
@@ -986,14 +1005,11 @@ impl eframe::App for EditorApp {
             // ── Single row: view selector | Undo Redo | Scenario name | Run/Stop | [theme] ─
             ui.horizontal(|ui| {
                 // View selector — always visible on the left
-                if ui
-                    .selectable_value(&mut self.view_mode, ViewMode::List, s.menu_list)
-                    .clicked()
-                {
-                    // nothing extra
-                }
+                ui.selectable_value(&mut self.view_mode, ViewMode::List, s.menu_list)
+                    .on_hover_text("リストビュー — ステップを縦一覧で表示");
                 if ui
                     .selectable_value(&mut self.view_mode, ViewMode::Flow, s.menu_flow)
+                    .on_hover_text("フローチャートビュー — 分岐を木構造で表示")
                     .clicked()
                 {
                     self.selected_child = None;
@@ -1001,6 +1017,7 @@ impl eframe::App for EditorApp {
                 }
                 if ui
                     .selectable_value(&mut self.view_mode, ViewMode::Canvas, s.menu_canvas)
+                    .on_hover_text("キャンバスビュー — ノードをドラッグで自由配置")
                     .clicked()
                 {
                     self.selected_child = None;
@@ -1008,18 +1025,29 @@ impl eframe::App for EditorApp {
                 }
                 ui.separator();
                 ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
+                    let undo_tip = if self.last_undo_name.is_empty() {
+                        "アンドゥ (Cmd+Z)".to_owned()
+                    } else {
+                        format!("アンドゥ: {} (Cmd+Z)", self.last_undo_name)
+                    };
                     if ui
                         .button(ph::ARROW_COUNTER_CLOCKWISE)
-                        .on_hover_text("アンドゥ (Cmd+Z)")
+                        .on_hover_text(undo_tip)
                         .clicked()
                     {
                         self.undo();
                     }
                 });
                 ui.add_enabled_ui(!self.redo_stack.is_empty(), |ui| {
+                    let redo_tip = self
+                        .redo_stack
+                        .back()
+                        .filter(|s| !s.action_name.is_empty())
+                        .map(|s| format!("リドゥ: {} (Cmd+Shift+Z)", s.action_name))
+                        .unwrap_or_else(|| "リドゥ (Cmd+Shift+Z)".to_owned());
                     if ui
                         .button(ph::ARROW_CLOCKWISE)
-                        .on_hover_text("リドゥ (Cmd+Shift+Z)")
+                        .on_hover_text(redo_tip)
                         .clicked()
                     {
                         self.redo();
@@ -1070,6 +1098,92 @@ impl eframe::App for EditorApp {
                 });
             });
         });
+
+        // ── Status bar (pinned to the very bottom, below bottom_panel) ───────
+        {
+            const STATUS_SECS: u64 = 3;
+            if let Some((_, pushed_at)) = &self.status_message {
+                let elapsed = pushed_at.elapsed();
+                let duration = std::time::Duration::from_secs(STATUS_SECS);
+                if elapsed >= duration {
+                    self.status_message = None;
+                } else {
+                    // Schedule repaint exactly when the message should clear.
+                    ctx.request_repaint_after(duration - elapsed);
+                }
+            }
+        }
+        egui::TopBottomPanel::bottom("status_bar")
+            .exact_height(crate::tokens::STATUS_BAR_HEIGHT)
+            .frame(egui::Frame::none().fill(crate::tokens::STATUSBAR_BG))
+            .show(ctx, |ui| {
+                use crate::tokens;
+                // Status bar is always dark-ish (blue bg) — use white text throughout
+                let sb_text = egui::Color32::WHITE;
+                let sb_dim = egui::Color32::from_rgba_unmultiplied(255, 255, 255, 180);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = tokens::SPACING_SM;
+
+                    // Left: view mode
+                    let mode_label = match self.view_mode {
+                        ViewMode::List => "List",
+                        ViewMode::Flow => "Flow",
+                        ViewMode::Canvas => "Canvas",
+                    };
+                    ui.colored_label(sb_text, egui::RichText::new(mode_label).small().strong());
+                    ui.colored_label(sb_dim, egui::RichText::new("|").small());
+
+                    // Left-center: selection info
+                    let sel_info = if let Some(idx) = self.selected {
+                        if let Some(step) = self.steps.get(idx) {
+                            let lbl = crate::flow_helpers::step_summary(step);
+                            format!("ステップ {}: {}", idx + 1, lbl)
+                        } else {
+                            format!("ステップ {}", idx + 1)
+                        }
+                    } else if !self.steps.is_empty() {
+                        format!("{}ステップ", self.steps.len())
+                    } else {
+                        String::new()
+                    };
+                    if !sel_info.is_empty() {
+                        ui.colored_label(sb_dim, egui::RichText::new(&sel_info).small());
+                    }
+
+                    // Center: temporary status message
+                    if let Some((ref msg, _)) = self.status_message {
+                        ui.colored_label(sb_text, egui::RichText::new(msg).small());
+                    }
+
+                    // Right: run state + canvas zoom
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // Canvas zoom %
+                        if self.view_mode == ViewMode::Canvas {
+                            ui.colored_label(
+                                sb_dim,
+                                egui::RichText::new(format!("{:.0}%", self.canvas_zoom * 100.0)).small(),
+                            );
+                            ui.colored_label(sb_dim, egui::RichText::new("|").small());
+                        }
+                        // Run state
+                        if self.run_child.is_some() {
+                            let step_info = self
+                                .current_run_step
+                                .map(|i| format!(" ステップ {}", i + 1 + self.run_from_offset))
+                                .unwrap_or_default();
+                            ui.colored_label(
+                                sb_text,
+                                egui::RichText::new(format!("● 実行中{step_info}")).small(),
+                            );
+                        } else {
+                            ui.colored_label(
+                                egui::Color32::GRAY,
+                                egui::RichText::new("■ 停止中").small(),
+                            );
+                        }
+                    });
+                });
+            });
 
         // ── Bottom: tabbed Variables + Log ────────────────────────────────
         egui::TopBottomPanel::bottom("bottom_panel")
@@ -1191,6 +1305,88 @@ impl eframe::App for EditorApp {
                 }
             });
 
+        // ── Activity Bar (VS Code–style icon strip, leftmost 48 px) ──────────
+        {
+            use egui_phosphor::regular as ph;
+            let ab_frame = egui::Frame::none().fill(crate::tokens::ACTIVITY_BAR_BG);
+            egui::SidePanel::left("activity_bar")
+                .exact_width(crate::tokens::ACTIVITY_BAR_WIDTH)
+                .resizable(false)
+                .frame(ab_frame)
+                .show_separator_line(false)
+                .show(ctx, |ui| {
+                    ui.set_min_width(crate::tokens::ACTIVITY_BAR_WIDTH);
+                    ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+                    ui.spacing_mut().button_padding = egui::vec2(0.0, 0.0);
+
+                    let icon_size = crate::tokens::ACTIVITY_BAR_WIDTH;
+                    let items: &[(SidebarTab, &str, &str)] = &[
+                        (SidebarTab::Steps, ph::LIST_BULLETS, "ステップ一覧"),
+                        (SidebarTab::Nodes, ph::TREE_STRUCTURE, "ステップパレット"),
+                        (SidebarTab::Templates, ph::IMAGE, "テンプレート"),
+                    ];
+                    for (tab, icon, tooltip) in items {
+                        let active = self.sidebar_tab == *tab;
+                        let icon_color = if active {
+                            egui::Color32::WHITE
+                        } else {
+                            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 102) // 40% opacity
+                        };
+                        let cell_rect = ui.available_rect_before_wrap();
+                        let cell_rect = egui::Rect::from_min_size(
+                            cell_rect.min,
+                            egui::vec2(icon_size, icon_size),
+                        );
+                        let resp = ui.allocate_rect(cell_rect, egui::Sense::click());
+                        let is_hovered = resp.hovered();
+                        if resp.clicked() {
+                            self.sidebar_tab = *tab;
+                            match *tab {
+                                SidebarTab::Steps => {
+                                    // Steps tab = switch to List view so step list is visible
+                                    self.view_mode = ViewMode::List;
+                                    self.nodes_panel_tab = NodesPanelTab::Nodes;
+                                }
+                                SidebarTab::Templates => {
+                                    self.nodes_panel_tab = NodesPanelTab::Templates;
+                                }
+                                SidebarTab::Nodes => {
+                                    self.nodes_panel_tab = NodesPanelTab::Nodes;
+                                }
+                            }
+                        }
+                        resp.on_hover_text(*tooltip);
+                        // Hover: brighten icon
+                        if is_hovered && !active {
+                            ui.painter().rect_filled(
+                                cell_rect,
+                                0.0,
+                                egui::Color32::from_rgba_unmultiplied(255, 255, 255, 20),
+                            );
+                        }
+                        // Active: 2 px left accent border
+                        if active {
+                            ui.painter().rect_filled(
+                                egui::Rect::from_min_size(
+                                    cell_rect.min,
+                                    egui::vec2(2.0, icon_size),
+                                ),
+                                0.0,
+                                crate::tokens::ACCENT,
+                            );
+                        }
+                        // Icon centered in cell — 22 px for good visibility
+                        ui.painter().text(
+                            cell_rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            *icon,
+                            egui::FontId::proportional(22.0),
+                            icon_color,
+                        );
+                    }
+                });
+        }
+
         // ── Left: step palette (permanent tree of available step types) ─────
         let mut palette_insert: Option<&'static str> = None;
         // Template double-click action: set template field on selected image step
@@ -1198,22 +1394,40 @@ impl eframe::App for EditorApp {
         egui::SidePanel::left("step_palette")
             .resizable(true)
             .default_width(220.0)
-            .min_width(200.0)
+            .min_width(180.0)
+            .frame(
+                egui::Frame::none()
+                    .fill(crate::tokens::sidebar_bg(ui_dark))
+                    .inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 0 }),
+            )
             .show(ctx, |ui| {
-                // Tab selector
+                ui.spacing_mut().item_spacing.y = 2.0;
+                // Sidebar title with padding
+                let sidebar_title = match self.sidebar_tab {
+                    SidebarTab::Steps | SidebarTab::Nodes => "STEP PALETTE",
+                    SidebarTab::Templates => "TEMPLATES",
+                };
+                ui.add_space(4.0);
                 ui.horizontal(|ui| {
-                    ui.selectable_value(
-                        &mut self.nodes_panel_tab,
-                        NodesPanelTab::Nodes,
-                        s.panel_nodes,
-                    );
-                    ui.selectable_value(
-                        &mut self.nodes_panel_tab,
-                        NodesPanelTab::Templates,
-                        "Templates",
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new(sidebar_title)
+                            .size(11.0)
+                            .color(crate::tokens::FG_DIM),
                     );
                 });
-                ui.separator();
+                ui.add_space(2.0);
+                ui.add(egui::Separator::default().spacing(0.0));
+
+                // Sync nodes_panel_tab from sidebar_tab
+                match self.sidebar_tab {
+                    SidebarTab::Templates => {
+                        self.nodes_panel_tab = NodesPanelTab::Templates;
+                    }
+                    _ => {
+                        self.nodes_panel_tab = NodesPanelTab::Nodes;
+                    }
+                }
 
                 match self.nodes_panel_tab {
                     NodesPanelTab::Nodes => {
@@ -1306,9 +1520,11 @@ impl eframe::App for EditorApp {
                                     }
                                 }
                                 for cat in cats {
-                                    let col = category_color(cat);
-                                    let hdr =
-                                        egui::RichText::new(cat).color(col).strong().size(11.0);
+                                    // Category headers are monochrome in the palette.
+                                    // Color appears only on canvas node stripes.
+                                    let hdr = egui::RichText::new(cat)
+                                        .color(crate::tokens::FG_DIM)
+                                        .size(11.0);
                                     egui::CollapsingHeader::new(hdr)
                                         .default_open(true)
                                         .open(force)
@@ -1438,12 +1654,17 @@ impl eframe::App for EditorApp {
                 }
             });
 
-        // ── Left: step list (hidden in Canvas mode — Canvas is self-sufficient) ─
+        // ── Left: step list (visible in List/Flow modes) ─────────────────────
         egui::SidePanel::left("steps_panel")
-            .min_width(240.0)
+            .min_width(220.0)
+            .frame(egui::Frame::none().fill(crate::tokens::sidebar_bg(ui_dark)))
             .show_animated(ctx, self.view_mode != ViewMode::Canvas, |ui| {
-                ui.heading(s.panel_steps);
-                ui.separator();
+                ui.label(
+                    egui::RichText::new("STEPS")
+                        .size(11.0)
+                        .color(crate::tokens::FG_DIM),
+                );
+                ui.add(egui::Separator::default().spacing(4.0));
 
                 let mut action: Option<StepAction> = None;
                 let step_count = self.steps.len();
@@ -1616,7 +1837,7 @@ impl eframe::App for EditorApp {
                                                         }
                                                     });
                                                     if ui
-                                                        .small_button("✕")
+                                                        .small_button("×")
                                                         .on_hover_cursor(
                                                             egui::CursorIcon::PointingHand,
                                                         )
@@ -2242,7 +2463,7 @@ impl eframe::App for EditorApp {
         // ── Handle palette double-click insert ───────────────────────────
         if let Some(yaml) = palette_insert {
             if let Ok(v) = serde_yml::from_str::<serde_yml::Value>(yaml) {
-                self.push_undo();
+                self.push_undo_named("ステップ追加");
                 let idx = self.selected.map(|i| i + 1).unwrap_or(self.steps.len());
                 self.steps.insert(idx, v);
                 Self::canvas_shift_positions(&mut self.canvas_positions, idx, 1);

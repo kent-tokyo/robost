@@ -110,6 +110,8 @@ pub struct S {
     pub vars_initial_header: &'static str,
     pub no_problems: &'static str,
     pub menu_run_selection: &'static str,
+    // window title
+    pub app_title: &'static str,
 }
 
 impl S {
@@ -206,6 +208,7 @@ impl S {
                 vars_initial_header: "初期値",
                 no_problems: "問題は見つかりませんでした",
                 menu_run_selection: "選択範囲を実行  Cmd+Shift+F5",
+                app_title: "RPA シナリオエディター",
             },
             Lang::En => Self {
                 menu_file: "File",
@@ -298,6 +301,7 @@ impl S {
                 vars_initial_header: "Initial value",
                 no_problems: "No problems found",
                 menu_run_selection: "Run Selection  Cmd+Shift+F5",
+                app_title: "RPA Scenario Editor",
             },
             Lang::Zh => Self {
                 menu_file: "文件",
@@ -389,6 +393,7 @@ impl S {
                 vars_initial_header: "初始值",
                 no_problems: "未发现问题",
                 menu_run_selection: "运行选中  Cmd+Shift+F5",
+                app_title: "RPA 场景编辑器",
             },
         }
     }
