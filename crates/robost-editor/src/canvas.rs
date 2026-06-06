@@ -431,69 +431,35 @@ impl EditorApp {
         use crate::types::{category_color, step_key_category};
         use egui::{epaint::CubicBezierShape, Align2, Color32, FontId, Rect, Sense, Stroke, Vec2};
 
-        // ── Theme-aware canvas colors ────────────────────────────────────────
-        // All canvas rendering derives from these locals so the canvas
-        // renders correctly in both dark and light mode.
+        // ── Theme-aware canvas colors (VS Code–derived) ──────────────────────
         let dark = ui.visuals().dark_mode;
-        let cv_bg = if dark {
-            tokens::CANVAS_BG
-        } else {
-            Color32::from_gray(245)
-        };
-        let node_bg = if dark {
-            tokens::NODE_BG
-        } else {
-            Color32::from_gray(252)
-        };
-        let node_bg_disabled = if dark {
-            Color32::from_gray(28)
-        } else {
-            Color32::from_gray(235)
-        };
+        let cv_bg = if dark { tokens::CANVAS_BG } else { Color32::from_gray(248) };
+        // Node backgrounds — flat, no blending with category color
+        let node_bg = if dark { tokens::NODE_BG } else { Color32::from_gray(255) };
+        let node_bg_disabled = if dark { Color32::from_gray(30) } else { Color32::from_gray(240) };
         let node_bg_selected = if dark {
             tokens::NODE_BG_SELECTED
         } else {
-            Color32::from_rgb(210, 230, 255)
+            Color32::from_rgb(0xCC, 0xE0, 0xFF)
         };
         let node_bg_running = if dark {
             tokens::NODE_BG_RUNNING
         } else {
-            Color32::from_rgb(255, 245, 200)
+            Color32::from_rgb(0xFF, 0xF5, 0xCC)
         };
-        let node_border = if dark {
-            Color32::from_gray(68)
-        } else {
-            Color32::from_gray(200)
-        };
-        let shadow_color = if dark {
-            Color32::from_rgba_premultiplied(0, 0, 0, 60)
-        } else {
-            Color32::from_rgba_premultiplied(0, 0, 0, 18)
-        };
-        let node_text = if dark {
-            Color32::from_gray(185)
-        } else {
-            Color32::from_gray(40)
-        };
-        let node_text_dim = if dark {
-            Color32::from_gray(90)
-        } else {
-            Color32::from_gray(175)
-        };
-        let node_text_minimal = if dark {
-            Color32::from_gray(160)
-        } else {
-            Color32::from_gray(120)
-        };
+        // Node border — near-invisible (1 step lighter/darker than node bg)
+        let node_border = if dark { Color32::from_gray(50) } else { Color32::from_gray(210) };
+        // No shadow (VS Code is flat)
+        let node_text = if dark { tokens::FG_DEFAULT } else { Color32::from_gray(25) };
+        let node_text_dim = if dark { tokens::FG_DIM } else { Color32::from_gray(110) };
+        let node_text_minimal = if dark { Color32::from_gray(120) } else { Color32::from_gray(150) };
         // Start/End terminal pill colors
-        let start_pill_bg = tokens::SUCCESS; // #107C10 — readable in both modes
+        let start_pill_bg = tokens::SUCCESS;
         let start_pill_text = Color32::WHITE;
-        let end_pill_bg = if dark {
-            Color32::from_rgb(55, 55, 70)
-        } else {
-            Color32::from_rgb(140, 140, 155)
-        };
+        let end_pill_bg = if dark { Color32::from_rgb(55, 55, 70) } else { Color32::from_gray(155) };
         let end_pill_text = Color32::WHITE;
+        // Edge connection lines (theme-aware)
+        let edge_color = if dark { tokens::EDGE_COLOR } else { Color32::from_gray(180) };
 
         // Pre-compute search state so it can be used throughout without borrow conflicts
         let search_query = self.canvas_search.to_lowercase();
@@ -575,7 +541,7 @@ impl EditorApp {
             if grid >= 8.0 {
                 let offset_x = (self.canvas_pan.x * z).rem_euclid(grid);
                 let offset_y = (self.canvas_pan.y * z).rem_euclid(grid);
-                let grid_color = egui::Color32::from_gray(42);
+                let grid_color = if dark { Color32::from_gray(42) } else { Color32::from_gray(230) };
                 let stroke = egui::Stroke::new(1.0, grid_color);
                 let mut x = resp.rect.min.x + offset_x;
                 while x <= resp.rect.max.x {
@@ -743,13 +709,13 @@ impl EditorApp {
                     [se_from, se_from + ctrl_v, se_to - ctrl_v, se_to],
                     false,
                     Color32::TRANSPARENT,
-                    Stroke::new((1.5 * z).max(1.0), tokens::EDGE_COLOR),
+                    Stroke::new((1.5 * z).max(1.0), edge_color),
                 ),
             ));
             painter.arrow(
                 se_to - Vec2::new(0.0, 6.0 * z),
                 Vec2::new(0.0, 6.0 * z),
-                Stroke::new((1.5 * z).max(1.0), tokens::EDGE_COLOR),
+                Stroke::new((1.5 * z).max(1.0), edge_color),
             );
 
             // ── End pill ──
@@ -777,13 +743,13 @@ impl EditorApp {
                     [ee_from, ee_from + ctrl_v, ee_to - ctrl_v, ee_to],
                     false,
                     Color32::TRANSPARENT,
-                    Stroke::new((1.5 * z).max(1.0), tokens::EDGE_COLOR),
+                    Stroke::new((1.5 * z).max(1.0), edge_color),
                 ),
             ));
             painter.arrow(
                 ee_to - Vec2::new(0.0, 6.0 * z),
                 Vec2::new(0.0, 6.0 * z),
-                Stroke::new((1.5 * z).max(1.0), tokens::EDGE_COLOR),
+                Stroke::new((1.5 * z).max(1.0), edge_color),
             );
         }
 
@@ -828,7 +794,7 @@ impl EditorApp {
             let stroke_color = if is_compound {
                 Color32::from_rgb(120, 100, 60)
             } else {
-                tokens::EDGE_COLOR
+                edge_color
             };
             // Ensure edges remain visible at extreme zoom-out (min 1px)
             let stroke_width = if is_compound {
@@ -878,6 +844,9 @@ impl EditorApp {
                     let btn_rect =
                         egui::Rect::from_center_size(mid, egui::vec2(btn_size, btn_size));
                     let btn_resp = ui.allocate_rect(btn_rect, Sense::click());
+                    if btn_resp.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
                     if btn_resp.hovered() || btn_resp.clicked() {
                         painter.circle_filled(mid, btn_size / 2.0, Color32::from_rgb(50, 90, 160));
                         painter.text(
@@ -1114,6 +1083,21 @@ impl EditorApp {
             let step = &self.steps[idx];
             let full_label = step_summary(step);
 
+            // Cursor feedback: PointingHand on delete button, Grab elsewhere, Grabbing while dragging
+            let x_btn_center = node_rect.min + Vec2::new(NODE_W * z - 9.0 * z, 9.0 * z);
+            let x_btn_hovered = z >= 0.6
+                && ui
+                    .input(|i| i.pointer.hover_pos())
+                    .map(|p| p.distance(x_btn_center) <= 9.0 * z)
+                    .unwrap_or(false);
+            if self.canvas_dragging.map(|(di, _)| di) == Some(idx) {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+            } else if hovered && x_btn_hovered {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            } else if hovered && self.canvas_edge_drag.is_none() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+            }
+
             // Show tooltip on hover: error > truncated label > double-click hint
             if hovered {
                 if let Some(err_msg) = self.canvas_error_steps.get(&idx) {
@@ -1159,49 +1143,57 @@ impl EditorApp {
             } else {
                 node_bg
             };
-            let blended_bg = {
-                let [r0, g0, b0, _] = base_bg.to_array();
-                let [r1, g1, b1, _] = cat_color.to_array();
-                Color32::from_rgb(
-                    ((r0 as u16 * 7 + r1 as u16) / 8) as u8,
-                    ((g0 as u16 * 7 + g1 as u16) / 8) as u8,
-                    ((b0 as u16 * 7 + b1 as u16) / 8) as u8,
-                )
-            };
+            // VS Code flat style: no background blending with category color.
+            // Category color is expressed ONLY by the left stripe (3 px).
+            // No drop shadow.
             let (border, border_w) = if selected {
-                (Color32::from_rgb(90, 150, 230), (1.5 * z).max(1.0))
+                (tokens::ACCENT, (1.5 * z).max(1.0))
             } else if is_multi_only {
-                (Color32::from_rgb(75, 115, 215), (1.5 * z).max(1.0))
+                (tokens::ACCENT.gamma_multiply(0.7), (1.5 * z).max(1.0))
             } else {
-                (node_border, 1.0)
+                (node_border, 0.5) // near-invisible for non-selected nodes
             };
 
-            // Drop shadow (offset 3px down-right)
-            let shadow_rect = node_rect.translate(egui::vec2(3.0 * z, 3.0 * z));
-            painter.rect_filled(shadow_rect, 4.0 * z, shadow_color);
-
-            painter.rect_filled(node_rect, 4.0 * z, blended_bg);
+            painter.rect_filled(node_rect, tokens::ROUNDING_CARD, base_bg);
             painter.rect_stroke(
                 node_rect,
-                4.0 * z,
+                tokens::ROUNDING_CARD,
                 Stroke::new(border_w, border),
                 egui::StrokeKind::Inside,
             );
+            // Snap flash: teal border for SNAP_FLASH_MS after a grid-snap event.
+            if let Some(&flash_at) = self.snap_flashes.get(&idx) {
+                let flash_dur = std::time::Duration::from_millis(crate::tokens::SNAP_FLASH_MS);
+                if flash_at.elapsed() < flash_dur {
+                    let alpha = {
+                        let t = flash_at.elapsed().as_secs_f32() / flash_dur.as_secs_f32();
+                        ((1.0 - t) * 255.0) as u8
+                    };
+                    painter.rect_stroke(
+                        node_rect.expand(2.0 * z),
+                        tokens::ROUNDING_CARD,
+                        Stroke::new(
+                            (2.0 * z).max(1.5),
+                            crate::tokens::SNAP_FLASH.gamma_multiply(alpha as f32 / 255.0),
+                        ),
+                        egui::StrokeKind::Outside,
+                    );
+                }
+            }
             if is_multi_only {
                 painter.rect_stroke(
                     node_rect.expand(1.5 * z),
-                    4.0 * z,
-                    egui::Stroke::new((1.5 * z).max(1.5), Color32::from_rgb(100, 140, 255)),
+                    tokens::ROUNDING_CARD,
+                    egui::Stroke::new((1.5 * z).max(1.5), tokens::ACCENT.gamma_multiply(0.6)),
                     egui::StrokeKind::Outside,
                 );
             }
-            // Hover outline
-            if hovered && !selected {
-                painter.rect_stroke(
+            // Hover: subtle background tint (VS Code: no border on hover)
+            if hovered && !selected && !is_multi_only {
+                painter.rect_filled(
                     node_rect,
-                    4.0 * z,
-                    Stroke::new(1.0, Color32::from_rgb(120, 140, 160)),
-                    egui::StrokeKind::Outside,
+                    tokens::ROUNDING_CARD,
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 8),
                 );
             }
 
@@ -1221,15 +1213,18 @@ impl EditorApp {
                 painter.text(
                     x_center,
                     Align2::CENTER_CENTER,
-                    "✕",
+                    "×",
                     FontId::proportional(8.0 * z),
                     Color32::WHITE, // White on red delete button for high contrast
                 );
             }
 
-            // Left color stripe (widened)
-            let stripe = Rect::from_min_size(node_rect.min, Vec2::new(6.0 * z, NODE_H * z));
-            painter.rect_filled(stripe, 0.0, cat_color);
+            // Left color stripe — thin (3 px), category color only element.
+            let stripe = Rect::from_min_size(
+                node_rect.min,
+                Vec2::new((3.0 * z).max(2.0), NODE_H * z),
+            );
+            painter.rect_filled(stripe, tokens::ROUNDING_CARD, cat_color);
 
             // Progressive node content based on zoom level
             if z < 0.5 {
@@ -1406,7 +1401,7 @@ impl EditorApp {
                             } else {
                                 Color32::from_rgb(180, 170, 150)
                             };
-                            let text = format!("▸ {}  {} steps", label, steps_vec.len());
+                            let text = format!("{}  {} steps", label, steps_vec.len());
                             painter.text(
                                 egui::Pos2::new(node_rect.min.x + 8.0 * z, row_y + row_h * 0.5),
                                 Align2::LEFT_CENTER,
@@ -1475,16 +1470,7 @@ impl EditorApp {
                 };
                 // Small circle = output port (drag to reorder)
                 painter.circle_filled(port_center, (3.5 * z).max(3.0), dot_color);
-                // Visual-only drag-handle glyph on right edge (no interaction)
-                if z >= 0.8 {
-                    painter.text(
-                        node_rect.max - Vec2::new(6.0 * z, NODE_H * z / 2.0),
-                        Align2::RIGHT_CENTER,
-                        "⠿",
-                        FontId::proportional(10.0 * z),
-                        Color32::from_rgba_premultiplied(120, 120, 140, 70),
-                    );
-                }
+                // Drag affordance is communicated by the Grab cursor (set above).
                 if port_hovered && !in_edge_drag {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
                     let tip_rect =
@@ -1612,6 +1598,10 @@ impl EditorApp {
             } else {
                 canvas_pos
             };
+            // Record snap flash when the position actually changed due to snapping.
+            if self.settings.canvas_snap && snapped_pos != canvas_pos {
+                self.snap_flashes.insert(idx, std::time::Instant::now());
+            }
             if self.multi_selected.len() > 1 && self.multi_selected.contains(&idx) {
                 let old_pos = self
                     .canvas_positions
@@ -2095,6 +2085,13 @@ impl EditorApp {
                 }
 
                 let comment_resp = ui.allocate_rect(comment_rect, egui::Sense::click_and_drag());
+
+                // Cursor feedback for comments
+                if self.canvas_comment_drag.map(|(i, _)| i) == Some(ci) {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+                } else if comment_resp.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                }
 
                 if comment_resp.drag_started() {
                     let cursor = ui
