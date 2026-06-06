@@ -25,6 +25,7 @@ impl eframe::App for EditorApp {
 
     #[allow(deprecated)]
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        use egui_phosphor::regular as ph;
         // Re-apply theme every frame so our choice overrides any system dark-mode
         // detection that eframe/winit may trigger after startup.
         crate::apply_style(ctx, &self.settings.theme);
@@ -1021,13 +1022,17 @@ impl eframe::App for EditorApp {
                 }
                 ui.separator();
                 ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
-                    if ui.button("↶").on_hover_text("アンドゥ (Cmd+Z)").clicked() {
+                    if ui
+                        .button(ph::ARROW_COUNTER_CLOCKWISE)
+                        .on_hover_text("アンドゥ (Cmd+Z)")
+                        .clicked()
+                    {
                         self.undo();
                     }
                 });
                 ui.add_enabled_ui(!self.redo_stack.is_empty(), |ui| {
                     if ui
-                        .button("↷")
+                        .button(ph::ARROW_CLOCKWISE)
                         .on_hover_text("リドゥ (Cmd+Shift+Z)")
                         .clicked()
                     {
@@ -1047,14 +1052,14 @@ impl eframe::App for EditorApp {
                 // ── Run / Stop ────────────────────────────────────────────────
                 if self.run_child.is_some() {
                     if ui
-                        .button(format!("⏹ {}", s.btn_stop))
+                        .button(format!("{} {}", ph::STOP_CIRCLE, s.btn_stop))
                         .on_hover_text(format!("{} (F5)", s.btn_stop))
                         .clicked()
                     {
                         self.stop_run();
                     }
                 } else if ui
-                    .button(format!("▶ {}", s.btn_run))
+                    .button(format!("{} {}", ph::PLAY, s.btn_run))
                     .on_hover_text(format!("{} (F5)", s.btn_run))
                     .clicked()
                 {
@@ -1185,7 +1190,7 @@ impl eframe::App for EditorApp {
                 if self.view_mode == ViewMode::Flow {
                     ui.separator();
                     if ui
-                        .button("⌂ リセット")
+                        .button(format!("{} リセット", ph::HOUSE))
                         .on_hover_text(
                             "ズーム・パンをリセット (Ctrl+ドラッグでパン、Ctrl+スクロールでズーム)",
                         )
@@ -1558,8 +1563,11 @@ impl eframe::App for EditorApp {
                                                     };
                                                     ui.colored_label(bar_color, "▌");
                                                     // Enable/disable toggle
-                                                    let toggle_icon =
-                                                        if is_disabled { "○" } else { "●" };
+                                                    let toggle_icon = if is_disabled {
+                                                        ph::CIRCLE
+                                                    } else {
+                                                        ph::RECORD
+                                                    };
                                                     let toggle_color = if is_disabled {
                                                         egui::Color32::from_gray(90)
                                                     } else {
