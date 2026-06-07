@@ -27,6 +27,8 @@ interface CanvasProps {
   onNodeSelect?: (nodeId: string) => void;
 }
 
+const NODE_TYPES = { stepNode: StepNode } as const;
+
 const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
   const { scenario, canvasLayout, updateCanvasNodes, updateCanvasEdges, updateCanvasZoom, updateCanvasPan, addStep, deleteStep, groupSteps, ungroupSteps, pasteStep } = useScenarioStore();
   const { saveSnapshot } = useEditorStore();
@@ -63,28 +65,19 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
   );
 
   const onNodesChangeWithSave = useCallback(
-    (changes: any) => {
+    (changes: any[]) => {
       onNodesChange(changes);
       setNodes((nds) => {
         updateCanvasNodes(nds);
         return nds;
       });
-      saveSnapshot('Reposition node');
+      if (changes.some((c) => c.type === 'position' && c.dragging === false)) {
+        saveSnapshot('Reposition node');
+      }
     },
     [onNodesChange, setNodes, updateCanvasNodes, saveSnapshot]
   );
 
-  const nodeTypes = useMemo(
-    () => ({
-      stepNode: (props: any) => (
-        <StepNode
-          {...props}
-          onSelect={() => onNodeSelect?.(props.id)}
-        />
-      ),
-    }),
-    [onNodeSelect]
-  );
 
   const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -241,7 +234,7 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
         onNodesChange={onNodesChangeWithSave}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        nodeTypes={nodeTypes}
+        nodeTypes={NODE_TYPES}
         fitView
       >
         <Background color="#aaa" gap={16} />

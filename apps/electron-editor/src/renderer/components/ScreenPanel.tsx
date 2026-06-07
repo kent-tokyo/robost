@@ -423,7 +423,7 @@ const ScreenPanel: React.FC = () => {
                           onClick={() => handleCopyCoordinate(coord, 'json')}
                           title={t('editor.copyAsJSON')}
                         >
-                          {}
+                          {'{}'}
                         </button>
                         <button
                           onClick={() => removePickedCoordinate(coord.id)}

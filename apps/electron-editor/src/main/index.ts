@@ -24,21 +24,30 @@ const createWindow = () => {
       nodeIntegration: false,
       contextIsolation: true,
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-          imgSrc: ["'self'", "data:"],
-          fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net"],
-          connectSrc: ["'self'", "http://127.0.0.1:*"],
-        },
-      },
     },
   });
 
   console.log('[Main] Window created');
   console.log('[Main] Loading URL:', MAIN_WINDOW_WEBPACK_ENTRY);
+
+  // Set CSP via session headers (proper Electron pattern)
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
+          "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+          "img-src 'self' data:; " +
+          "font-src 'self' data: https://cdn.jsdelivr.net; " +
+          "worker-src blob: 'self'; " +
+          "connect-src 'self' http://127.0.0.1:* https://api.anthropic.com;"
+        ],
+      },
+    });
+  });
+
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY).catch((err: any) => {
     console.error('[Main] loadURL failed:', err);
   });

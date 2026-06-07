@@ -13,6 +13,45 @@ import './App.css';
 
 type Panel = 'explorer' | 'search' | 'run' | 'extensions' | 'settings' | 'history' | null;
 
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    console.error('[ErrorBoundary] Caught error:', error.message, error.stack);
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          padding: '20px',
+          color: '#f48771',
+          backgroundColor: '#3f1e1e',
+          fontFamily: 'monospace',
+          fontSize: '12px',
+          whiteSpace: 'pre-wrap',
+          overflowY: 'auto',
+          height: '100vh',
+        }}>
+          <h1>❌ Application Error</h1>
+          <p>{this.state.error?.message}</p>
+          <p>{this.state.error?.stack}</p>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 const App: React.FC = () => {
   const { i18n, t } = useTranslation();
   const { theme } = useSettingsStore();
@@ -98,4 +137,5 @@ const App: React.FC = () => {
   );
 };
 
+export { ErrorBoundary };
 export default App;

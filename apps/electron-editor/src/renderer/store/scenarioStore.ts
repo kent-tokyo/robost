@@ -139,9 +139,11 @@ export const useScenarioStore = create<ScenarioState>()(
       set((state) => {
         const stepsToGroup: ScenarioStep[] = [];
         const remainingSteps: ScenarioStep[] = [];
+        let insertIndex = -1;
 
         state.scenario.steps.forEach((step) => {
           if (stepIds.includes(step.id)) {
+            if (insertIndex === -1) insertIndex = remainingSteps.length;
             stepsToGroup.push(step);
           } else {
             remainingSteps.push(step);
@@ -149,6 +151,7 @@ export const useScenarioStore = create<ScenarioState>()(
         });
 
         if (stepsToGroup.length === 0) return;
+        if (insertIndex === -1) insertIndex = remainingSteps.length;
 
         groupId = `group-${Date.now()}`;
         const groupStep: ScenarioStep = {
@@ -159,12 +162,10 @@ export const useScenarioStore = create<ScenarioState>()(
           childSteps: stepsToGroup,
         };
 
-        // Insert group at position of first grouped step
-        const firstIndex = state.scenario.steps.findIndex((s) => s.id === stepIds[0]);
         state.scenario.steps = [
-          ...remainingSteps.slice(0, firstIndex),
+          ...remainingSteps.slice(0, insertIndex),
           groupStep,
-          ...remainingSteps.slice(firstIndex),
+          ...remainingSteps.slice(insertIndex),
         ];
       });
       return groupId;

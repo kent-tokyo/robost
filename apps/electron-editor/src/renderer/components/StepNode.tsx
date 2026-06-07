@@ -15,16 +15,15 @@ interface StepNodeProps {
     childCount?: number;
   };
   isConnecting?: boolean;
-  onSelect?: () => void;
   selected?: boolean;
 }
 
-const StepNode: React.FC<StepNodeProps> = ({ id, data, isConnecting, onSelect, selected }) => {
+const StepNode: React.FC<StepNodeProps> = ({ id, data, isConnecting, selected }) => {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { isNodeSelected, toggleNodeSelection, copyToClipboard, selectNode, clearSelection } = useCanvasStore();
   const { updateStep, deleteStep, duplicateStep } = useScenarioStore();
-  const { saveSnapshot } = useEditorStore();
+  const { saveSnapshot, setSelectedNodeId } = useEditorStore();
 
   const getIconForType = (type: string) => {
     const icons: Record<string, string> = {
@@ -75,10 +74,10 @@ const StepNode: React.FC<StepNodeProps> = ({ id, data, isConnecting, onSelect, s
       if (!isNodeSelected(id)) {
         clearSelection();
         selectNode(id);
+        setSelectedNodeId(id);
       }
-      onSelect?.();
     }
-  }, [id, isNodeSelected, toggleNodeSelection, selectNode, clearSelection, onSelect]);
+  }, [id, isNodeSelected, toggleNodeSelection, selectNode, clearSelection, setSelectedNodeId]);
 
   const handleCopy = useCallback(() => {
     const step = { id, name: data.label, type: data.type, data: {} };

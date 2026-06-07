@@ -144,7 +144,7 @@ const VariableInspector: React.FC = () => {
           placeholder="Variable name..."
           value={newVarName}
           onChange={(e) => setNewVarName(e.target.value)}
-          onKeyPress={(e) => {
+          onKeyDown={(e) => {
             if (e.key === 'Enter') handleAddWatch();
           }}
           style={{
