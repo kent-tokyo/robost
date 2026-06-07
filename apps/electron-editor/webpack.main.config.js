@@ -1,12 +1,5 @@
 module.exports = {
-  entry: {
-    index: './src/main/index.ts',
-    preload: './src/main/preload.ts',
-  },
-  output: {
-    path: require('path').resolve(__dirname, '.webpack/main'),
-    filename: '[name].js',
-  },
+  entry: './src/main/index.ts',
   module: {
     rules: require('./webpack.rules'),
   },

@@ -1,41 +1,58 @@
 import { app, BrowserWindow, Menu, ipcMain, dialog } from 'electron';
 import path from 'path';
-import isDev from 'electron-is-dev';
 import { promises as fs } from 'fs';
 import { RpaManager } from './rpaManager';
+
+declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
+declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
 let mainWindow: BrowserWindow | null = null;
 let rpaManager: RpaManager | null = null;
 
 const createWindow = () => {
+  console.log('[Main] Creating window...');
+  console.log('[Main] MAIN_WINDOW_WEBPACK_ENTRY:', MAIN_WINDOW_WEBPACK_ENTRY);
+  console.log('[Main] MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY:', MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY);
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 800,
     minHeight: 600,
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, '..', '..', '.webpack', 'main', 'preload.js'),
+      preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
     },
   });
 
-  const startURL = isDev
-    ? 'http://localhost:3000'
-    : `file://${path.join(__dirname, '..', '..', '.webpack', 'renderer', 'main_window', 'index.html')}`;
-
-  mainWindow.loadURL(startURL);
+  console.log('[Main] Window created');
+  console.log('[Main] Loading URL:', MAIN_WINDOW_WEBPACK_ENTRY);
+  mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY).catch((err: any) => {
+    console.error('[Main] loadURL failed:', err);
+  });
 
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
+    console.log('[Main] Ready to show, displaying window');
     mainWindow?.show();
   });
 
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
-  }
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('[Main] Content loaded successfully');
+  });
+
+  mainWindow.webContents.on('crashed', () => {
+    console.error('[Main] Renderer process crashed');
+  });
+
+  // Always open DevTools in development
+  console.log('[Main] Opening DevTools');
+  mainWindow.webContents.openDevTools();
 
   mainWindow.on('closed', () => {
+    console.log('[Main] Window closed');
     mainWindow = null;
     if (rpaManager) {
       rpaManager.stop();
@@ -46,6 +63,7 @@ const createWindow = () => {
 
   // Initialize RpaManager
   rpaManager = new RpaManager(mainWindow);
+  console.log('[Main] RpaManager initialized');
 };
 
 const createMenu = () => {
@@ -87,7 +105,10 @@ const createMenu = () => {
   Menu.setApplicationMenu(menu);
 };
 
-app.on('ready', createWindow);
+app.on('ready', () => {
+  console.log('[Main] App ready event fired');
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
