@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ExplorerIcon, SearchIcon, RunIcon, ExtensionsIcon, SettingsIcon, NewFileIcon, OpenFolderIcon, SaveIcon, SaveAsIcon, SparklesIcon, getStepTypeIcon } from './Icons';
 import { useFileManager } from '../hooks/useFileManager';
 import { templates, TemplateDefinition } from '../utils/templates';
 import SettingsPanel from './SettingsPanel';

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SparklesIcon, CopyIcon, CheckIcon } from './Icons';
 import { useAiAssistant, AiSuggestion } from '../hooks/useAiAssistant';
 import { useScenarioStore } from '../store/scenarioStore';
 import * as YAML from 'js-yaml';
