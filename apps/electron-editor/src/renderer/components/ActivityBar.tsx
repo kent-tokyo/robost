@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-type Panel = 'explorer' | 'search' | 'run' | 'extensions' | 'settings' | null;
+type Panel = 'explorer' | 'search' | 'run' | 'extensions' | 'settings' | 'history' | null;
 
 interface ActivityBarProps {
   activePanel: Panel;
@@ -16,6 +16,7 @@ const ActivityBar: React.FC<ActivityBarProps> = ({ activePanel, onPanelChange })
     { id: 'search', label: t('activityBar.search'), icon: '🔍' },
     { id: 'run', label: t('activityBar.run'), icon: '▶️' },
     { id: 'extensions', label: t('activityBar.extensions'), icon: '🧩' },
+    { id: 'history', label: 'Execution History', icon: '📊' },
   ];
 
   return (

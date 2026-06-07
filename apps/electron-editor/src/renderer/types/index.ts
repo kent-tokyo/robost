@@ -23,6 +23,9 @@ export interface ScenarioStep {
   type: StepType;
   data: Record<string, any>;
   enabled?: boolean;
+  comment?: string;
+  childSteps?: ScenarioStep[];
+  parentGroupId?: string;
 }
 
 export interface Scenario {

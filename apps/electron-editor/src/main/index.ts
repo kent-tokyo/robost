@@ -196,3 +196,43 @@ ipcMain.handle('rpa:stop', () => {
 ipcMain.handle('rpa:is-running', () => {
   return rpaManager?.isRunning() || false;
 });
+
+// Screenshot handler
+ipcMain.handle('rpa:screenshot', async (event, serverPort: number) => {
+  if (!serverPort) {
+    throw new Error('Server port not available');
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const http = require('http');
+
+    const request = http.get(`http://127.0.0.1:${serverPort}/screenshot`, (response: any) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+
+      response.on('data', (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+
+      response.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        const base64 = buffer.toString('base64');
+        resolve(base64);
+      });
+    });
+
+    request.on('error', (err: any) => {
+      reject(new Error(`Failed to fetch screenshot: ${err.message}`));
+    });
+
+    // Set timeout to avoid hanging
+    request.setTimeout(5000, () => {
+      request.destroy();
+      reject(new Error('Screenshot request timeout'));
+    });
+  });
+});

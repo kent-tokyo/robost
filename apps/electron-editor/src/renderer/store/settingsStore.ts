@@ -30,6 +30,7 @@ interface SettingsState {
   addRecentFile: (filePath: string) => void;
   removeRecentFile: (filePath: string) => void;
   clearRecentFiles: () => void;
+  // Note: aiHistory is stored in localStorage directly by AiPanel component
 }
 
 export const useSettingsStore = create<SettingsState>()(

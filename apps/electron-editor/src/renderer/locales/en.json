@@ -22,9 +22,23 @@
     "canvas": "Canvas",
     "list": "List",
     "code": "Code",
+    "screen": "Screen",
     "undo": "Undo",
     "redo": "Redo",
-    "listViewComingSoon": "List view coming soon"
+    "listViewComingSoon": "List view coming soon",
+    "autoRefresh": "Auto-refresh",
+    "screenCaptureHint": "Click 'Refresh' to capture the current screen",
+    "captureNow": "Capture Now",
+    "tools": "Tools",
+    "clearRegion": "Clear Region",
+    "clearCoordinates": "Clear History",
+    "region": "Region",
+    "size": "Size",
+    "coordinates": "Coordinates",
+    "noCoordinates": "No coordinates picked yet",
+    "copyAsCSV": "Copy as x,y",
+    "copyAsJSON": "Copy as JSON",
+    "selection": "Selection"
   },
   "canvas": {
     "canvas": "Canvas",
@@ -33,7 +47,27 @@
     "step": "Step",
     "steps": "steps",
     "deleteNode": "Delete step",
-    "addStep": "Add step"
+    "addStep": "Add step",
+    "search": "Search",
+    "layout": "Layout",
+    "group": "Group",
+    "ungroup": "Ungroup",
+    "copy": "Copy",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "addComment": "Add Comment",
+    "groupSelected": "Group Selected Steps",
+    "selectAtLeast2": "Select at least 2 steps to group",
+    "enterGroupName": "Enter group name:",
+    "newGroup": "New Group",
+    "searchCanvas": "Search Canvas",
+    "searchPlaceholder": "Search by name, type, or data...",
+    "filterByType": "Filter by type:",
+    "clearAll": "Clear All",
+    "noMatches": "No matches found for",
+    "autoLayoutBtn": "Auto-layout nodes",
+    "searchBtn": "Search canvas (Cmd+F)",
+    "groupBtn": "Group selected steps"
   },
   "inspector": {
     "inspector": "Inspector",
@@ -94,6 +128,20 @@
     "warning": "Warning",
     "success": "Success",
     "info": "Info",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "refresh": "Refresh"
+  },
+  "ai": {
+    "descriptionPlaceholder": "Describe what you want to do...",
+    "generateSteps": "Generate Steps",
+    "suggestions": "Suggestions",
+    "addSelected": "Add Selected",
+    "addAll": "Add All",
+    "copyYaml": "Copy YAML",
+    "data": "Data",
+    "history": "Recent Suggestions",
+    "steps": "steps",
+    "emptyState": "Describe what you want to automate",
+    "emptyStateHint": "AI will suggest steps to add"
   }
 }

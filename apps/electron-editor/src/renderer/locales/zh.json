@@ -22,9 +22,23 @@
     "canvas": "画布",
     "list": "列表",
     "code": "代码",
+    "screen": "屏幕",
     "undo": "撤销",
     "redo": "重做",
-    "listViewComingSoon": "列表视图即将推出"
+    "listViewComingSoon": "列表视图即将推出",
+    "autoRefresh": "自动刷新",
+    "screenCaptureHint": "点击'刷新'以捕获当前屏幕",
+    "captureNow": "立即捕获",
+    "tools": "工具",
+    "clearRegion": "清除区域",
+    "clearCoordinates": "清除历史",
+    "region": "区域",
+    "size": "大小",
+    "coordinates": "坐标",
+    "noCoordinates": "还没有选择坐标",
+    "copyAsCSV": "复制为 x,y",
+    "copyAsJSON": "复制为 JSON",
+    "selection": "选择"
   },
   "canvas": {
     "canvas": "画布",
@@ -33,7 +47,27 @@
     "step": "步骤",
     "steps": "步骤",
     "deleteNode": "删除步骤",
-    "addStep": "添加步骤"
+    "addStep": "添加步骤",
+    "search": "搜索",
+    "layout": "布局",
+    "group": "分组",
+    "ungroup": "取消分组",
+    "copy": "复制",
+    "duplicate": "复制",
+    "delete": "删除",
+    "addComment": "添加注释",
+    "groupSelected": "分组选定的步骤",
+    "selectAtLeast2": "选择至少2个步骤以分组",
+    "enterGroupName": "输入组名:",
+    "newGroup": "新组",
+    "searchCanvas": "搜索画布",
+    "searchPlaceholder": "按名称、类型或数据搜索...",
+    "filterByType": "按类型过滤:",
+    "clearAll": "全部清除",
+    "noMatches": "找不到匹配的内容",
+    "autoLayoutBtn": "自动布局节点",
+    "searchBtn": "搜索画布 (Cmd+F)",
+    "groupBtn": "分组选定的步骤"
   },
   "inspector": {
     "inspector": "检查器",
@@ -94,6 +128,20 @@
     "warning": "警告",
     "success": "成功",
     "info": "信息",
-    "loading": "加载中..."
+    "loading": "加载中...",
+    "refresh": "刷新"
+  },
+  "ai": {
+    "descriptionPlaceholder": "描述您想要做的事情...",
+    "generateSteps": "生成步骤",
+    "suggestions": "建议",
+    "addSelected": "添加选定项",
+    "addAll": "全部添加",
+    "copyYaml": "复制YAML",
+    "data": "数据",
+    "history": "最近的建议",
+    "steps": "步骤",
+    "emptyState": "描述您想要自动化的内容",
+    "emptyStateHint": "AI将建议要添加的步骤"
   }
 }

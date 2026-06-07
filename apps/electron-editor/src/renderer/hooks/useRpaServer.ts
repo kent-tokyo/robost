@@ -15,6 +15,7 @@ declare global {
       rpaRun: (yamlPath: string) => Promise<{ success: boolean }>;
       rpaStop: () => Promise<{ success: boolean }>;
       rpaIsRunning: () => Promise<boolean>;
+      rpaScreenshot: (serverPort: number) => Promise<string>;
 
       // IPC messaging
       ipcOn: (
@@ -33,6 +34,8 @@ export const useRpaServer = () => {
     setCurrentStep,
     addLog,
     setServerPort,
+    recordStepExecution,
+    setExecutionVariables,
   } = useRunStore();
   const { scenario } = useScenarioStore();
 
@@ -45,7 +48,7 @@ export const useRpaServer = () => {
 
       switch (event.type) {
         case 'scenario_start':
-          startRun(event.total || 0);
+          startRun(event.total || 0, scenario.name);
           break;
 
         case 'step_start':
@@ -53,6 +56,15 @@ export const useRpaServer = () => {
           if (event.index !== undefined) {
             setCurrentStep(event.index, 0);
             addLog('info', `Starting: ${event.name}`);
+
+            // Record step execution
+            recordStepExecution({
+              stepId: event.id || `step-${event.index}`,
+              stepName: event.name || 'Unknown',
+              stepType: event.type || 'unknown',
+              status: 'started',
+              startTime: Date.now(),
+            });
           }
           break;
 
@@ -60,6 +72,42 @@ export const useRpaServer = () => {
           if (event.index !== undefined && event.elapsed_ms !== undefined) {
             setCurrentStep(event.index, event.elapsed_ms);
             addLog('info', `Completed in ${event.elapsed_ms}ms`);
+
+            // Record step completion
+            recordStepExecution({
+              stepId: event.id || `step-${event.index}`,
+              stepName: event.name || 'Unknown',
+              stepType: event.type || 'unknown',
+              status: 'completed',
+              startTime: Date.now() - event.elapsed_ms,
+              endTime: Date.now(),
+              duration: event.elapsed_ms,
+            });
+          }
+          break;
+
+        case 'step_failed':
+          if (event.index !== undefined) {
+            setCurrentStep(event.index, event.elapsed_ms || 0);
+            addLog('error', `Step failed: ${event.error || 'Unknown error'}`);
+
+            // Record step failure
+            recordStepExecution({
+              stepId: event.id || `step-${event.index}`,
+              stepName: event.name || 'Unknown',
+              stepType: event.type || 'unknown',
+              status: 'failed',
+              startTime: Date.now() - (event.elapsed_ms || 0),
+              endTime: Date.now(),
+              duration: event.elapsed_ms || 0,
+              errorMessage: event.error || 'Unknown error',
+            });
+          }
+          break;
+
+        case 'variables':
+          if (event.variables) {
+            setExecutionVariables(event.variables);
           }
           break;
 
@@ -70,11 +118,14 @@ export const useRpaServer = () => {
           break;
 
         case 'finished':
-          stopRun();
           if (event.success) {
+            stopRun('success');
             addLog('info', 'Scenario completed successfully');
           } else if (event.error) {
+            stopRun('failed');
             addLog('error', `Scenario failed: ${event.error}`);
+          } else {
+            stopRun('stopped');
           }
           break;
       }
@@ -89,7 +140,7 @@ export const useRpaServer = () => {
     const unsubError = window.electronAPI.ipcOn('rpa:error', (data) => {
       console.error('[Renderer] RPA error:', data);
       addLog('error', data.message || 'Unknown error');
-      stopRun();
+      stopRun('failed');
     });
 
     const unsubLog = window.electronAPI.ipcOn('rpa:log', (data) => {
@@ -102,7 +153,7 @@ export const useRpaServer = () => {
       unsubError();
       unsubLog();
     };
-  }, [startRun, stopRun, setCurrentStep, addLog, setServerPort]);
+  }, [startRun, stopRun, setCurrentStep, addLog, setServerPort, recordStepExecution, setExecutionVariables, scenario.name]);
 
   // Run scenario
   const runScenario = useCallback(
@@ -119,7 +170,7 @@ export const useRpaServer = () => {
         console.log('[Renderer] runScenario result:', result);
       } catch (err: any) {
         addLog('error', err.message || 'Failed to run scenario');
-        stopRun();
+        stopRun('failed');
       }
     },
     [addLog, stopRun]
@@ -132,9 +183,10 @@ export const useRpaServer = () => {
     try {
       await window.electronAPI.rpaStop();
       addLog('info', 'Stopped by user');
-      stopRun();
+      // stopRun is called via 'finished' event, but we ensure it's set to stopped
     } catch (err: any) {
       addLog('error', err.message || 'Failed to stop scenario');
+      stopRun('stopped');
     }
   }, [addLog, stopRun]);
 

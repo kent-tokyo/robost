@@ -11,7 +11,7 @@ import { useSettingsStore } from './store/settingsStore';
 import { useEditorStore } from './store/editorStore';
 import './App.css';
 
-type Panel = 'explorer' | 'search' | 'run' | 'extensions' | 'settings' | null;
+type Panel = 'explorer' | 'search' | 'run' | 'extensions' | 'settings' | 'history' | null;
 
 const App: React.FC = () => {
   const { i18n, t } = useTranslation();

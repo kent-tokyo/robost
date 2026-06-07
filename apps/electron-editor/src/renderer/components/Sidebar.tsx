@@ -3,9 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { useFileManager } from '../hooks/useFileManager';
 import { templates, TemplateDefinition } from '../utils/templates';
 import SettingsPanel from './SettingsPanel';
+import AiPanel from './AiPanel';
+import HistoryPanel from './HistoryPanel';
+import BreakpointManager from './BreakpointManager';
+import VariableInspector from './VariableInspector';
 
-type Panel = 'explorer' | 'search' | 'run' | 'extensions' | 'settings' | null;
-type TabType = 'explorer' | 'recent' | 'templates';
+type Panel = 'explorer' | 'search' | 'run' | 'extensions' | 'settings' | 'history' | null;
+type TabType = 'explorer' | 'recent' | 'templates' | 'ai' | 'breakpoints' | 'variables';
 
 interface SidebarProps {
   panel: Panel;
@@ -173,9 +177,10 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
               gap: '0',
               borderBottom: '1px solid var(--color-border)',
               padding: '4px',
+              overflowX: 'auto',
             }}
           >
-            {(['explorer', 'recent', 'templates'] as TabType[]).map((tab) => (
+            {(['explorer', 'recent', 'templates', 'ai'] as TabType[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -189,11 +194,13 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
                   fontWeight: '500',
                   borderBottom: activeTab === tab ? '2px solid var(--color-accent)' : 'none',
                   textTransform: 'capitalize',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {tab === 'explorer' && 'Explorer'}
                 {tab === 'recent' && 'Recent'}
                 {tab === 'templates' && 'Templates'}
+                {tab === 'ai' && '✨ AI'}
               </button>
             ))}
           </div>
@@ -384,7 +391,23 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
                 )}
               </div>
             )}
+
+            {/* AI Tab */}
+            {activeTab === 'ai' && <AiPanel />}
+
+            {/* Breakpoints Tab */}
+            {activeTab === 'breakpoints' && <BreakpointManager />}
+
+            {/* Variables Tab */}
+            {activeTab === 'variables' && <VariableInspector />}
           </div>
+        </div>
+      )}
+
+      {/* History Panel */}
+      {panel === 'history' && (
+        <div className="sidebar-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <HistoryPanel />
         </div>
       )}
 

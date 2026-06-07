@@ -26,8 +26,10 @@ i18n
 // Listen for locale changes in settings store
 useSettingsStore.subscribe(
   (state) => state.locale,
-  (locale) => {
-    i18n.changeLanguage(locale);
+  (locale: string | undefined) => {
+    if (locale) {
+      i18n.changeLanguage(locale);
+    }
   }
 );
 

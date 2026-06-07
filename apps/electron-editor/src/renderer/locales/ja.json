@@ -22,9 +22,23 @@
     "canvas": "キャンバス",
     "list": "リスト",
     "code": "コード",
+    "screen": "スクリーン",
     "undo": "元に戻す",
     "redo": "やり直す",
-    "listViewComingSoon": "リストビューは近日公開予定です"
+    "listViewComingSoon": "リストビューは近日公開予定です",
+    "autoRefresh": "自動更新",
+    "screenCaptureHint": "「更新」をクリックして現在のスクリーンをキャプチャします",
+    "captureNow": "今すぐキャプチャ",
+    "tools": "ツール",
+    "clearRegion": "領域をクリア",
+    "clearCoordinates": "履歴をクリア",
+    "region": "領域",
+    "size": "サイズ",
+    "coordinates": "座標",
+    "noCoordinates": "まだ座標が選択されていません",
+    "copyAsCSV": "x,yでコピー",
+    "copyAsJSON": "JSONでコピー",
+    "selection": "選択"
   },
   "canvas": {
     "canvas": "キャンバス",
@@ -33,7 +47,27 @@
     "step": "ステップ",
     "steps": "ステップ",
     "deleteNode": "ステップを削除",
-    "addStep": "ステップを追加"
+    "addStep": "ステップを追加",
+    "search": "検索",
+    "layout": "レイアウト",
+    "group": "グループ化",
+    "ungroup": "グループ解除",
+    "copy": "コピー",
+    "duplicate": "複製",
+    "delete": "削除",
+    "addComment": "コメント追加",
+    "groupSelected": "選択したステップをグループ化",
+    "selectAtLeast2": "グループ化するには少なくとも2つのステップを選択してください",
+    "enterGroupName": "グループ名を入力してください:",
+    "newGroup": "新しいグループ",
+    "searchCanvas": "キャンバスを検索",
+    "searchPlaceholder": "名前、タイプ、またはデータで検索...",
+    "filterByType": "タイプで絞り込み:",
+    "clearAll": "すべてクリア",
+    "noMatches": "一致するものが見つかりません",
+    "autoLayoutBtn": "ノードを自動レイアウト",
+    "searchBtn": "キャンバスを検索 (Cmd+F)",
+    "groupBtn": "選択したステップをグループ化"
   },
   "inspector": {
     "inspector": "インスペクター",
@@ -94,6 +128,20 @@
     "warning": "警告",
     "success": "成功",
     "info": "情報",
-    "loading": "読み込み中..."
+    "loading": "読み込み中...",
+    "refresh": "更新"
+  },
+  "ai": {
+    "descriptionPlaceholder": "何をしたいのか説明してください...",
+    "generateSteps": "ステップを生成",
+    "suggestions": "提案",
+    "addSelected": "選択したものを追加",
+    "addAll": "すべてを追加",
+    "copyYaml": "YAMLをコピー",
+    "data": "データ",
+    "history": "最近の提案",
+    "steps": "ステップ",
+    "emptyState": "自動化したい内容を説明してください",
+    "emptyStateHint": "AIがステップを提案します"
   }
 }

@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   rpaRun: (yamlPath: string) => ipcRenderer.invoke('rpa:run', yamlPath),
   rpaStop: () => ipcRenderer.invoke('rpa:stop'),
   rpaIsRunning: () => ipcRenderer.invoke('rpa:is-running'),
+  rpaScreenshot: (serverPort: number) => ipcRenderer.invoke('rpa:screenshot', serverPort),
 });
 
 export {};

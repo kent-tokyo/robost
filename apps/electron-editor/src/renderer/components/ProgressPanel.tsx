@@ -5,7 +5,7 @@ import './ProgressPanel.css';
 
 const ProgressPanel: React.FC = () => {
   const { t } = useTranslation();
-  const { isRunning, currentStepIndex, totalSteps, elapsedMs, logs } = useRunStore();
+  const { isRunning, isPaused, currentStepIndex, totalSteps, elapsedMs, logs, pauseRun, resumeRun } = useRunStore();
 
   if (!isRunning && logs.length === 0) {
     return null;
@@ -15,9 +15,50 @@ const ProgressPanel: React.FC = () => {
     <div className="progress-panel">
       <div className="progress-header">
         <span>📋 {t('progressPanel.executionLog')}</span>
-        <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-          {logs.length} {t('progressPanel.entries')}
-        </span>
+        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+          <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+            {logs.length} {t('progressPanel.entries')}
+          </span>
+          {isRunning && (
+            <>
+              {!isPaused ? (
+                <button
+                  onClick={() => pauseRun()}
+                  style={{
+                    padding: '2px 6px',
+                    backgroundColor: 'transparent',
+                    color: 'var(--color-text-secondary)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                    fontSize: '10px',
+                    fontWeight: '500',
+                  }}
+                  title="Pause execution"
+                >
+                  ⏸
+                </button>
+              ) : (
+                <button
+                  onClick={() => resumeRun()}
+                  style={{
+                    padding: '2px 6px',
+                    backgroundColor: 'var(--color-accent)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                    fontSize: '10px',
+                    fontWeight: '500',
+                  }}
+                  title="Resume execution"
+                >
+                  ▶
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {isRunning && (
@@ -30,10 +71,13 @@ const ProgressPanel: React.FC = () => {
               }}
             />
           </div>
-          <span>{t('progressPanel.step')} {currentStepIndex + 1}/{totalSteps}</span>
-          <span style={{ color: 'var(--color-text-secondary)' }}>
-            {(elapsedMs / 1000).toFixed(1)}s
-          </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{t('progressPanel.step')} {currentStepIndex + 1}/{totalSteps}</span>
+            <span style={{ color: 'var(--color-text-secondary)' }}>
+              {isPaused && <span style={{ color: '#f59e0b', fontWeight: '500' }}>PAUSED • </span>}
+              {(elapsedMs / 1000).toFixed(1)}s
+            </span>
+          </div>
         </div>
       )}
 

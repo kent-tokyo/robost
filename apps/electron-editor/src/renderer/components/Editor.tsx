@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Canvas from './Canvas';
 import YAMLEditor from './YAMLEditor';
+import ScreenPanel from './ScreenPanel';
 import { useEditorStore } from '../store/editorStore';
 
 interface EditorProps {
@@ -9,7 +10,7 @@ interface EditorProps {
   onNodeSelect?: (nodeId: string | null) => void;
 }
 
-type ViewMode = 'canvas' | 'list' | 'code';
+type ViewMode = 'canvas' | 'list' | 'code' | 'screen';
 
 const Editor: React.FC<EditorProps> = ({ scenarioPath, onNodeSelect }) => {
   const { t } = useTranslation();
@@ -34,7 +35,7 @@ const Editor: React.FC<EditorProps> = ({ scenarioPath, onNodeSelect }) => {
         backgroundColor: 'var(--color-bg-secondary)',
       }}>
         <div style={{ display: 'flex', gap: '0' }}>
-          {(['canvas', 'list', 'code'] as const).map((mode) => (
+          {(['canvas', 'list', 'code', 'screen'] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
@@ -52,6 +53,7 @@ const Editor: React.FC<EditorProps> = ({ scenarioPath, onNodeSelect }) => {
               {mode === 'canvas' && `🎨 ${t('editor.canvas')}`}
               {mode === 'list' && `📋 ${t('editor.list')}`}
               {mode === 'code' && `📝 ${t('editor.code')}`}
+              {mode === 'screen' && `🖥️ ${t('editor.screen')}`}
             </button>
           ))}
         </div>
@@ -97,6 +99,7 @@ const Editor: React.FC<EditorProps> = ({ scenarioPath, onNodeSelect }) => {
           </div>
         )}
         {viewMode === 'code' && <YAMLEditor />}
+        {viewMode === 'screen' && <ScreenPanel />}
       </div>
     </div>
   );
