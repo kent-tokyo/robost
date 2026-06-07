@@ -87,14 +87,35 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
 
   const onDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.stopPropagation();
+
+    // Get canvas position from mouse coordinates
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    const canvasX = e.clientX - rect.left;
+    const canvasY = e.clientY - rect.top;
+
+    // Convert screen coordinates to canvas coordinates using current viewport
+    const viewport = getViewport();
+    const zoom = getZoom();
+    const nodeX = (canvasX - viewport.x) / zoom;
+    const nodeY = (canvasY - viewport.y) / zoom;
 
     // Try to get template data first (from template gallery)
     const templateData = e.dataTransfer.getData('templateData');
     if (templateData) {
       try {
         const steps = JSON.parse(templateData);
-        steps.forEach((step: any) => {
-          addStep(step);
+        let xOffset = 0;
+        steps.forEach((step: any, index: number) => {
+          const newStep = {
+            ...step,
+            position: {
+              x: nodeX + xOffset,
+              y: nodeY,
+            },
+          };
+          addStep(newStep);
+          xOffset += 250; // Offset each step horizontally
         });
         saveSnapshot(`Add template: ${steps[0]?.name || 'unknown'}`);
       } catch (err) {
@@ -112,11 +133,15 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
       name: stepType,
       type: stepType as any,
       data: {},
+      position: {
+        x: nodeX,
+        y: nodeY,
+      },
     };
 
     addStep(newStep);
     saveSnapshot(`Add step: ${stepType}`);
-  }, [addStep, saveSnapshot]);
+  }, [addStep, saveSnapshot, getViewport, getZoom]);
 
   const handleDeleteNode = useCallback((nodeId: string) => {
     deleteStep(nodeId);
@@ -228,7 +253,7 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
   }, [handleKeyDown]);
 
   return (
-    <div className="canvas-container">
+    <div className="canvas-container" onDragOver={onDragOver} onDrop={onDrop}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -237,8 +262,6 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
         onConnect={onConnect}
         nodeTypes={NODE_TYPES}
         fitView
-        onDragOver={onDragOver}
-        onDrop={onDrop}
       >
         <Background color="#aaa" gap={16} />
         <Controls />
