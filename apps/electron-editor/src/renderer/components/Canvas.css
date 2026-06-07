@@ -1,0 +1,66 @@
+.canvas-container {
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-secondary);
+}
+
+.react-flow {
+  background: var(--color-bg-secondary) !important;
+}
+
+.react-flow__panel {
+  background: transparent !important;
+  border: none !important;
+}
+
+.react-flow__controls {
+  background: var(--color-bg-tertiary) !important;
+  border: 1px solid var(--color-border) !important;
+}
+
+.react-flow__controls button {
+  background: var(--color-accent) !important;
+  border: 1px solid var(--color-border) !important;
+}
+
+.react-flow__controls button:hover {
+  background: #005a9e !important;
+}
+
+.react-flow__minimap {
+  background: var(--color-bg-tertiary) !important;
+  border: 1px solid var(--color-border) !important;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+.canvas-panel {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.canvas-controls {
+  background: transparent;
+  border: none;
+}
+
+.react-flow__edge-path {
+  stroke: var(--color-accent) !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--color-text-primary) !important;
+  stroke-width: 2 !important;
+}
+
+.react-flow__handle {
+  background: var(--color-accent) !important;
+  border: 2px solid var(--color-bg-secondary) !important;
+}
+
+.react-flow__handle.connecting {
+  background: var(--color-success) !important;
+}

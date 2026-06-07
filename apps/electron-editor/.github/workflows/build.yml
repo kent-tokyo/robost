@@ -1,0 +1,125 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch: arm64
+          - target: x86_64-apple-darwin
+            arch: x64
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: apps/electron-editor/package-lock.json
+
+      - name: Build RPA binary
+        run: |
+          cd apps/electron-editor
+          cargo build -p robost-cli --release --target ${{ matrix.target }}
+          mkdir -p assets/rpa/darwin-${{ matrix.arch }}
+          cp ../../../target/${{ matrix.target }}/release/rpa assets/rpa/darwin-${{ matrix.arch }}/
+          chmod +x assets/rpa/darwin-${{ matrix.arch }}/rpa
+
+      - name: Install dependencies
+        run: |
+          cd apps/electron-editor
+          npm ci
+
+      - name: Build DMG
+        if: matrix.arch == 'arm64'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cd apps/electron-editor
+          npm run make:mac
+
+      - name: Upload artifacts
+        if: matrix.arch == 'arm64'
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-artifacts
+          path: apps/electron-editor/out/make/**/*
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-pc-windows-gnu
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: apps/electron-editor/package-lock.json
+
+      - name: Build RPA binary
+        run: |
+          cd apps/electron-editor
+          cargo build -p robost-cli --release --target x86_64-pc-windows-gnu
+          mkdir -p assets/rpa/win32-x64
+          copy ..\..\..\target\x86_64-pc-windows-gnu\release\rpa.exe assets\rpa\win32-x64\
+
+      - name: Install dependencies
+        run: |
+          cd apps/electron-editor
+          npm ci
+
+      - name: Build installer
+        run: |
+          cd apps/electron-editor
+          npm run make:win
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-artifacts
+          path: apps/electron-editor/out/make/**/*
+
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            macos-artifacts/**/*
+            windows-artifacts/**/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

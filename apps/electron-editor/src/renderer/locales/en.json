@@ -1,0 +1,99 @@
+{
+  "activityBar": {
+    "explorer": "Explorer",
+    "search": "Search",
+    "run": "Run",
+    "extensions": "Extensions",
+    "settings": "Settings"
+  },
+  "sidebar": {
+    "explorer": "Explorer",
+    "search": "Search",
+    "run": "Run",
+    "extensions": "Extensions",
+    "settings": "Settings",
+    "explorerDesc": "Open a scenario file to get started",
+    "searchDesc": "Search scenarios",
+    "runDesc": "Run and debug",
+    "extensionsDesc": "Manage extensions",
+    "settingsDesc": "Preferences"
+  },
+  "editor": {
+    "canvas": "Canvas",
+    "list": "List",
+    "code": "Code",
+    "undo": "Undo",
+    "redo": "Redo",
+    "listViewComingSoon": "List view coming soon"
+  },
+  "canvas": {
+    "canvas": "Canvas",
+    "run": "Run",
+    "stop": "Stop",
+    "step": "Step",
+    "steps": "steps",
+    "deleteNode": "Delete step",
+    "addStep": "Add step"
+  },
+  "inspector": {
+    "inspector": "Inspector",
+    "selectStepToEdit": "Select a step to edit properties",
+    "stepNotFound": "Step not found",
+    "general": "General",
+    "properties": "Properties",
+    "name": "Name",
+    "type": "Type",
+    "enabled": "Enabled",
+    "stepName": "Step name",
+    "stepType": "Step type"
+  },
+  "statusBar": {
+    "utf8": "UTF-8",
+    "lf": "LF",
+    "yaml": "YAML"
+  },
+  "progressPanel": {
+    "executionLog": "Execution Log",
+    "entries": "entries",
+    "step": "Step",
+    "running": "Running...",
+    "completed": "Completed",
+    "failed": "Failed"
+  },
+  "settings": {
+    "settings": "Settings",
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "darkMode": "Dark",
+    "lightMode": "Light",
+    "language": "Language",
+    "english": "English",
+    "japanese": "日本語",
+    "chinese": "中文",
+    "behavior": "Behavior",
+    "autoSave": "Auto-save",
+    "autoSaveInterval": "Auto-save interval (ms)",
+    "apiKeys": "API Keys",
+    "openaiApiKey": "OpenAI API Key",
+    "anthropicApiKey": "Anthropic API Key",
+    "save": "Save",
+    "cancel": "Cancel",
+    "defaultSettings": "Default Settings"
+  },
+  "common": {
+    "close": "Close",
+    "delete": "Delete",
+    "add": "Add",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "apply": "Apply",
+    "reset": "Reset",
+    "ok": "OK",
+    "error": "Error",
+    "warning": "Warning",
+    "success": "Success",
+    "info": "Info",
+    "loading": "Loading..."
+  }
+}

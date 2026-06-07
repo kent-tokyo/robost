@@ -156,31 +156,12 @@ impl EditorApp {
                             "APIキーが設定されていません。「設定」から入力してください。".into(),
                         ));
                     } else {
-                        const AI_CREATE_SYSTEM: &str = "\
-あなたはRPAシナリオ作成アシスタントです。ユーザーの指示をRPAのYAMLステップに変換してください。\n\
-\n\
-主要ステップ:\n\
-- click_image: { template: \"xxx.png\" }  # 画像クリック\n\
-- type: \"テキスト\"  # 文字入力\n\
-- press: Enter  # キー押下 (Tab/Enter/Escape/F1-F12 等)\n\
-- wait_image: { template: \"xxx.png\", timeout_ms: 5000 }  # 画像が現れるまで待機\n\
-- wait_no_image: { template: \"xxx.png\", timeout_ms: 5000 }  # 画像が消えるまで待機\n\
-- wait_ms: 1000  # ミリ秒待機 (スカラー値)\n\
-- key_combo: { keys: [\"ctrl\", \"c\"] }  # キーの組み合わせ\n\
-- set: { name: \"変数名\", value: \"値\" }  # 変数セット\n\
-\n\
-必ず ```yaml コードブロックで出力してください。複数ステップも可能です:\n\
-```yaml\n\
-- click_image:\n\
-    template: \"button.png\"\n\
-```\n\
-テンプレート名はユーザーの指示から推測した説明的な名前 (例: \"login_button.png\") を使用してください。";
                         let (tx, rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
                         let settings = self.settings.clone();
                         let prompt_to_send = current_prompt.clone();
+                        let system = build_system_prompt();
                         std::thread::spawn(move || {
-                            let result =
-                                call_ai_api(&settings, &[], &prompt_to_send, AI_CREATE_SYSTEM);
+                            let result = call_ai_api(&settings, &[], &prompt_to_send, &system);
                             let _ = tx.send(result);
                         });
                         self.ai_step_rx = Some((idx, rx));
@@ -539,7 +520,7 @@ impl EditorApp {
                                         _ => "?".to_owned(),
                                     };
                                     let pill = egui::Button::new(
-                                        egui::RichText::new(format!("{label} ✕")).size(11.0),
+                                        egui::RichText::new(format!("{label} ×")).size(11.0),
                                     )
                                     .fill(egui::Color32::from_gray(55))
                                     .min_size(egui::vec2(0.0, 20.0));
@@ -615,7 +596,7 @@ impl EditorApp {
 
                             for (branch_name, branch_steps) in &all_branches {
                                 let hdr = egui::RichText::new(format!(
-                                    "▸ {}  ({} ステップ)", branch_name, branch_steps.len()
+                                    "{}  ({} ステップ)", branch_name, branch_steps.len()
                                 )).strong().size(12.0);
                                 egui::CollapsingHeader::new(hdr)
                                     .default_open(true)
@@ -646,7 +627,7 @@ impl EditorApp {
                                                         child_action = Some(ChildAction::MoveDown(branch_name.clone(), ci));
                                                     }
                                                 });
-                                                if ui.small_button("✕").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                                                if ui.small_button("×").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                                                     child_action = Some(ChildAction::Delete(branch_name.clone(), ci));
                                                 }
                                             });
@@ -675,7 +656,7 @@ impl EditorApp {
                                             ui.colored_label(egui::Color32::from_rgb(160, 160, 160), "▶");
                                             ui.colored_label(egui::Color32::from_rgb(160, 160, 160), format!("[{}]", child_idx + 1));
                                             ui.colored_label(col, step_display_name(ck));
-                                            if ui.small_button("✕").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                                            if ui.small_button("×").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                                                 deselect_child = true;
                                             }
                                         });
@@ -1124,13 +1105,21 @@ impl EditorApp {
                 self.dirty = true;
                 self.ensure_canvas_layout();
                 self.log.push(LogEntry {
-                    message: format!("✅ {}ステップを{}番目の後に挿入しました", count, at),
+                    message: match self.settings.lang {
+                        Lang::Ja => format!("✅ {}ステップを{}番目の後に挿入しました", count, at),
+                        Lang::En => format!("✅ Inserted {count} step(s) after position {at}"),
+                        Lang::Zh => format!("✅ 已在第 {at} 个之后插入 {count} 个步骤"),
+                    },
                     level: LogLevel::Ok,
                 });
             }
             Err(e) => {
                 self.log.push(LogEntry {
-                    message: format!("⚠ YAML解析エラー (挿入失敗): {e}"),
+                    message: match self.settings.lang {
+                        Lang::Ja => format!("⚠ YAML解析エラー (挿入失敗): {e}"),
+                        Lang::En => format!("⚠ YAML parse error; insert failed: {e}"),
+                        Lang::Zh => format!("⚠ YAML 解析错误，插入失败: {e}"),
+                    },
                     level: LogLevel::Error,
                 });
             }
@@ -1151,7 +1140,7 @@ impl EditorApp {
         let system = build_system_prompt();
         std::thread::spawn(move || {
             let result = call_ai_api(&settings, &history, &input_for_thread, &system);
-            let _ = tx.send(result.unwrap_or_else(|e| format!("⚠ API エラー: {e}")));
+            let _ = tx.send(result.unwrap_or_else(|e| format!("⚠ API error: {e}")));
         });
         self.ai_messages.push(AiMessage {
             role: "user".into(),
@@ -1183,7 +1172,11 @@ impl EditorApp {
                             .corner_radius(egui::CornerRadius::same(24))
                             .fill(fill),
                     )
-                    .on_hover_text("AI アシスタント")
+                    .on_hover_text(match self.settings.lang {
+                        Lang::Ja => "AI アシスタント",
+                        Lang::En => "AI assistant",
+                        Lang::Zh => "AI 助手",
+                    })
                     .clicked()
                 {
                     self.ai_panel_open = !self.ai_panel_open;
@@ -1199,20 +1192,39 @@ impl EditorApp {
         self.ai_unread = false;
 
         let default_pos = egui::pos2(screen.max.x - 390.0, screen.max.y - 360.0);
-        egui::Window::new("AI アシスタント")
+        let panel_size = egui::vec2(360.0, 320.0);
+        let ai_title = match self.settings.lang {
+            Lang::Ja => "AI アシスタント",
+            Lang::En => "AI assistant",
+            Lang::Zh => "AI 助手",
+        };
+        egui::Window::new(ai_title)
             .default_pos(default_pos)
-            .default_size([360.0, 320.0])
-            .min_size([280.0, 220.0])
-            .resizable(true)
+            .fixed_size(panel_size)
+            .resizable(false)
             .collapsible(false)
             .show(ctx, |ui| {
+                ui.set_width(panel_size.x);
                 ui.horizontal(|ui| {
-                    ui.strong("AI アシスタント");
+                    ui.strong(ai_title);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button("✕").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                        if ui
+                            .small_button("×")
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .clicked()
+                        {
                             self.ai_panel_open = false;
                         }
-                        if ui.small_button("クリア").on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                        let clear_label = match self.settings.lang {
+                            Lang::Ja => "クリア",
+                            Lang::En => "Clear",
+                            Lang::Zh => "清除",
+                        };
+                        if ui
+                            .small_button(clear_label)
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .clicked()
+                        {
                             self.ai_messages.clear();
                             self.md_cache = egui_commonmark::CommonMarkCache::default();
                         }
@@ -1229,7 +1241,11 @@ impl EditorApp {
                         for (i, msg) in messages.iter().enumerate() {
                             if msg.role == "user" {
                                 ui.horizontal(|ui| {
-                                    ui.strong("あなた:");
+                                    ui.strong(match self.settings.lang {
+                                        Lang::Ja => "あなた:",
+                                        Lang::En => "You:",
+                                        Lang::Zh => "你:",
+                                    });
                                     ui.label(&msg.content);
                                 });
                             } else {
@@ -1242,17 +1258,37 @@ impl EditorApp {
                                         Ok(serde_yml::Value::Sequence(ref seq)) => {
                                             let names: Vec<&str> = seq.iter().map(get_step_key).take(3).collect();
                                             let suffix = if seq.len() > 3 {
-                                                format!(" … ({}件)", seq.len())
+                                                match self.settings.lang {
+                                                    Lang::Ja => format!(" … ({}件)", seq.len()),
+                                                    Lang::En => format!(" ... ({} steps)", seq.len()),
+                                                    Lang::Zh => format!(" … ({} 个)", seq.len()),
+                                                }
                                             } else {
                                                 String::new()
                                             };
-                                            format!("{}件: {}{}", seq.len(), names.join(", "), suffix)
+                                            match self.settings.lang {
+                                                Lang::Ja => format!("{}件: {}{}", seq.len(), names.join(", "), suffix),
+                                                Lang::En => format!("{} step(s): {}{}", seq.len(), names.join(", "), suffix),
+                                                Lang::Zh => format!("{} 个: {}{}", seq.len(), names.join(", "), suffix),
+                                            }
                                         }
-                                        Ok(ref v) => format!("1件: {}", get_step_key(v)),
-                                        Err(_) => "(プレビュー不可)".to_owned(),
+                                        Ok(ref v) => match self.settings.lang {
+                                            Lang::Ja => format!("1件: {}", get_step_key(v)),
+                                            Lang::En => format!("1 step: {}", get_step_key(v)),
+                                            Lang::Zh => format!("1 个: {}", get_step_key(v)),
+                                        },
+                                        Err(_) => match self.settings.lang {
+                                            Lang::Ja => "(プレビュー不可)".to_owned(),
+                                            Lang::En => "(preview unavailable)".to_owned(),
+                                            Lang::Zh => "(无法预览)".to_owned(),
+                                        },
                                     };
                                     if ui
-                                        .button(format!("📋 挿入 #{}", bi + 1))
+                                        .button(match self.settings.lang {
+                                            Lang::Ja => format!("📋 挿入 #{}", bi + 1),
+                                            Lang::En => format!("📋 Insert #{}", bi + 1),
+                                            Lang::Zh => format!("📋 插入 #{}", bi + 1),
+                                        })
                                         .on_hover_text(preview_text)
                                         .clicked()
                                     {
@@ -1265,23 +1301,39 @@ impl EditorApp {
                         }
                         if self.ai_loading {
                             ui.spinner();
-                            ui.label("処理中…");
+                            ui.label(match self.settings.lang {
+                                Lang::Ja => "処理中…",
+                                Lang::En => "Working...",
+                                Lang::Zh => "处理中…",
+                            });
                         }
                     });
 
                 ui.separator();
                 ui.horizontal(|ui| {
-                    let resp = ui.add(
+                    let input_w = (ui.available_width() - 64.0).max(180.0);
+                    let resp = ui.add_sized(
+                        [input_w, 44.0],
                         egui::TextEdit::multiline(&mut self.ai_input)
                             .desired_rows(2)
-                            .desired_width(ui.available_width() - 55.0)
-                            .hint_text(
-                                "e.g. \"Create an Excel loop\"\n\"画像クリックのステップを追加して\"",
-                            ),
+                            .hint_text(match self.settings.lang {
+                                Lang::Ja => {
+                                    "例: \"Excel のループを作って\"\n\"画像クリックのステップを追加して\""
+                                }
+                                Lang::En => {
+                                    "e.g. \"Create an Excel loop\"\n\"Add an image-click step\""
+                                }
+                                Lang::Zh => "例: \"创建 Excel 循环\"\n\"添加图片点击步骤\"",
+                            }),
                     );
+                    let send_label = match self.settings.lang {
+                        Lang::Ja => "送信",
+                        Lang::En => "Send",
+                        Lang::Zh => "发送",
+                    };
                     let send = ui.add_enabled(
                         !self.ai_loading,
-                        egui::Button::new("送信").min_size(egui::vec2(50.0, 44.0)),
+                        egui::Button::new(send_label).min_size(egui::vec2(50.0, 44.0)),
                     );
                     if send.clicked()
                         || (resp.has_focus()
@@ -1291,7 +1343,11 @@ impl EditorApp {
                         self.send_ai_request();
                     }
                 });
-                ui.weak("Ctrl+Enter で送信");
+                ui.weak(match self.settings.lang {
+                    Lang::Ja => "Ctrl+Enter で送信",
+                    Lang::En => "Ctrl+Enter to send",
+                    Lang::Zh => "Ctrl+Enter 发送",
+                });
             });
     }
 
@@ -1311,20 +1367,6 @@ impl EditorApp {
                     .num_columns(2)
                     .spacing([12.0, 8.0])
                     .show(ui, |ui| {
-                        ui.label(format!("{}:", s.settings_lang));
-                        egui::ComboBox::from_id_salt("lang_combo")
-                            .selected_text(match self.settings.lang {
-                                Lang::Ja => "日本語",
-                                Lang::En => "English",
-                                Lang::Zh => "中文",
-                            })
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.settings.lang, Lang::En, "English");
-                                ui.selectable_value(&mut self.settings.lang, Lang::Ja, "日本語");
-                                ui.selectable_value(&mut self.settings.lang, Lang::Zh, "中文");
-                            });
-                        ui.end_row();
-
                         ui.label(format!("{}:", s.settings_provider));
                         egui::ComboBox::from_id_salt("provider_combo")
                             .selected_text(match self.settings.provider {
@@ -1414,7 +1456,7 @@ impl EditorApp {
                         if ok {
                             ui.colored_label(tokens::SUCCESS, format!("✓ {msg}"));
                         } else {
-                            ui.colored_label(tokens::ERROR, format!("✗ {msg}"));
+                            ui.colored_label(tokens::ERROR, format!("× {msg}"));
                         }
                     }
                 });
@@ -1433,61 +1475,117 @@ impl EditorApp {
         let mut open = self.manual_open;
         let mut insert_yaml: Option<&'static str> = None;
 
-        egui::Window::new("マニュアル — ステップ一覧")
+        egui::Window::new("マニュアル")
             .open(&mut open)
             .resizable(true)
-            .default_size([500.0, 560.0])
+            .default_size([720.0, 640.0])
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("検索:");
-                    ui.text_edit_singleline(&mut self.manual_search);
-                    if ui.small_button("クリア").clicked() {
-                        self.manual_search.clear();
-                    }
-                });
+                ui.heading("robost エディタ マニュアル");
+                ui.weak("シナリオ作成、テンプレート採取、実行確認、ステップ仕様をまとめた操作ガイドです。");
+                ui.add_space(8.0);
 
-                // Category chips — toggles the category filter independently of the text search.
-                ui.horizontal_wrapped(|ui| {
-                    let mut seen = std::collections::HashSet::new();
-                    for t in STEP_TEMPLATES {
-                        if seen.insert(t.category) {
-                            let col = category_color(t.category);
-                            let is_active = self.manual_category_filter == Some(t.category);
-                            let fill = if is_active {
-                                egui::Color32::from_rgba_unmultiplied(
-                                    col.r(),
-                                    col.g(),
-                                    col.b(),
-                                    100,
-                                )
-                            } else {
-                                egui::Color32::from_rgba_unmultiplied(col.r(), col.g(), col.b(), 35)
-                            };
-                            if ui
-                                .add(
-                                    egui::Button::new(egui::RichText::new(t.category).size(10.0))
-                                        .fill(fill)
-                                        .min_size(egui::vec2(0.0, 18.0)),
-                                )
-                                .clicked()
-                            {
-                                self.manual_category_filter =
-                                    if is_active { None } else { Some(t.category) };
-                            }
-                        }
-                    }
-                });
-                ui.separator();
-
-                let kw_filter = self.manual_search.to_lowercase();
                 egui::ScrollArea::vertical()
-                    .max_height(440.0)
+                    .id_salt("manual_body")
                     .show(ui, |ui| {
+                        ui.collapsing("基本フロー", |ui| {
+                            ui.label("1. 左のステップパレットからステップをダブルクリック、またはキャンバスへドラッグして追加します。");
+                            ui.label("2. ステップを選択し、右のインスペクタまたはリスト編集画面でパラメータを入力します。");
+                            ui.label("3. 画像操作ステップでは Snip で PNG テンプレートを採取し、template/path 欄へ設定します。");
+                            ui.label("4. 下部の Problems タブで未設定項目や構文エラーを確認します。");
+                            ui.label("5. F5 または実行ボタンでシナリオを実行します。ログとキャンバス上の完了/失敗表示で結果を確認します。");
+                        });
+
+                        ui.collapsing("画面構成", |ui| {
+                            ui.label("Activity Bar: 左端のアイコン列です。シナリオ内ステップ、追加ノード、テンプレート画像を切り替えます。");
+                            ui.label("Sidebar: ステップ一覧、ノードパレット、テンプレートギャラリーを表示します。");
+                            ui.label("Editor surface: List / Flow / Canvas の作業面です。Canvas はノードを自由配置できます。");
+                            ui.label("Inspector: Canvas / Flow で選択中ステップを編集する右側パネルです。フォームと YAML を切り替えられます。");
+                            ui.label("Bottom panel: 変数、ログ、問題一覧を表示します。Problems は新しい問題が出ると自動で開きます。");
+                        });
+
+                        ui.collapsing("キャンバス操作", |ui| {
+                            ui.label("ノードをドラッグすると配置を変更できます。複数選択中は右クリックメニューから整列や等間隔配置を実行できます。");
+                            ui.label("Shift+ドラッグで範囲選択、Cmd+A で全選択、Esc で選択解除します。");
+                            ui.label("Cmd+F でノード検索、Cmd+0 で全体表示、Cmd+1 で 100% 表示に戻します。");
+                            ui.label("ノード下部の接続点からドラッグすると、ステップ順を移動できます。");
+                        });
+
+                        ui.collapsing("テンプレート採取", |ui| {
+                            ui.label("画像操作ステップの template 欄ではカメラボタンから Snip ツールを起動できます。");
+                            ui.label("採取した PNG はシナリオファイルと同じディレクトリ、または Documents/robost_templates からテンプレートギャラリーに表示されます。");
+                            ui.label("テンプレートギャラリーの画像をダブルクリックすると、選択中の画像操作ステップへパスを設定します。");
+                        });
+
+                        ui.collapsing("実行と検証", |ui| {
+                            ui.label("F5 は実行/停止の切り替えです。Cmd+R は停止中のみ実行します。");
+                            ui.label("複数ステップ選択中は選択範囲だけを実行できます。Canvas の右クリックでは選択ステップ以降の実行もできます。");
+                            ui.label("ログは下部 Log タブに出ます。実行中のステップ、完了、失敗はキャンバスにも反映されます。");
+                            ui.label("Problems タブは YAML 構文、必須フィールド、テンプレート設定漏れなどの確認用です。");
+                        });
+
+                        ui.collapsing("YAML 編集", |ui| {
+                            ui.label("フォームで扱いにくい複雑な値は YAML タブで直接編集できます。");
+                            ui.label("構文エラーがある場合はインスペクタ上部に表示され、正しい YAML になるまでシナリオへ反映されません。");
+                            ui.label("シナリオ変数は YAML の {{ name }} 形式で参照できます。Variables タブで変数をクリックすると参照ステップを強調表示します。");
+                        });
+
+                        ui.separator();
+                        ui.heading("ステップリファレンス");
+                        ui.horizontal(|ui| {
+                            ui.label("検索:");
+                            ui.text_edit_singleline(&mut self.manual_search);
+                            if ui.small_button("クリア").clicked() {
+                                self.manual_search.clear();
+                            }
+                        });
+
+                        // Category chips — toggles the category filter independently of the text search.
+                        ui.horizontal_wrapped(|ui| {
+                            let mut seen = std::collections::HashSet::new();
+                            for t in STEP_TEMPLATES {
+                                if seen.insert(t.category) {
+                                    let col = category_color(t.category);
+                                    let is_active = self.manual_category_filter == Some(t.category);
+                                    let fill = if is_active {
+                                        egui::Color32::from_rgba_unmultiplied(
+                                            col.r(),
+                                            col.g(),
+                                            col.b(),
+                                            100,
+                                        )
+                                    } else {
+                                        egui::Color32::from_rgba_unmultiplied(
+                                            col.r(),
+                                            col.g(),
+                                            col.b(),
+                                            35,
+                                        )
+                                    };
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                egui::RichText::new(t.category).size(10.0),
+                                            )
+                                            .fill(fill)
+                                            .min_size(egui::vec2(0.0, 18.0)),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.manual_category_filter =
+                                            if is_active { None } else { Some(t.category) };
+                                    }
+                                }
+                            }
+                        });
+                        ui.separator();
+
+                        let kw_filter = self.manual_search.to_lowercase();
                         let mut last_cat = "";
                         for t in STEP_TEMPLATES {
                             let match_filter = (kw_filter.is_empty()
                                 || t.name.to_lowercase().contains(&kw_filter)
-                                || t.display_name.to_lowercase().contains(&kw_filter))
+                                || t.display_name.to_lowercase().contains(&kw_filter)
+                                || t.yaml.to_lowercase().contains(&kw_filter))
                                 && (self.manual_category_filter.is_none()
                                     || self.manual_category_filter == Some(t.category));
                             if !match_filter {
@@ -1508,16 +1606,17 @@ impl EditorApp {
                             ui.horizontal(|ui| {
                                 let col = category_color(t.category);
                                 ui.colored_label(col, "▌");
-                                ui.label(egui::RichText::new(t.display_name).size(12.0))
-                                    .on_hover_text(format!(
-                                        "{}\n\n```yaml\n{}\n```",
-                                        t.name, t.yaml
-                                    ));
-                                ui.weak(egui::RichText::new(format!("({})", t.name)).size(10.0));
+                                ui.label(egui::RichText::new(t.display_name).strong())
+                                    .on_hover_text(format!("{}\n\n{}", t.name, t.yaml));
+                                ui.weak(format!("({})", t.name));
                                 if ui.small_button("挿入").clicked() {
                                     insert_yaml = Some(t.yaml);
                                 }
                             });
+                            ui.indent(("manual_yaml", t.name), |ui| {
+                                ui.monospace(t.yaml.trim());
+                            });
+                            ui.add_space(4.0);
                         }
                     });
             });

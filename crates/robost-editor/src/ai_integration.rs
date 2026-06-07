@@ -24,6 +24,8 @@ pub(crate) fn build_system_prompt() -> String {
 
 ### 1. OS 操作・アプリ操作は shell / script を優先
 macOS/Windows の OS 標準操作はコマンドで実行できる。画像認識より確実。
+ゴミ箱、ファイル削除、フォルダ作成、アプリ起動、通知、クリップボード、プロセス操作などは
+デスクトップ上のアイコンを探してクリックせず、shell / file_* / process_* / clipboard_* を選ぶ。
 
 例:
 - ゴミ箱を空にする(macOS): shell: cmd: osascript args: ["-e", "tell application \"Finder\" to empty trash"]
@@ -49,7 +51,7 @@ click_image:
 - 固定座標クリック: mouse_click_xy
 - UIA (Windows アクセシビリティ): uia_click, uia_find
 
-## 例: 「ゴミ箱を空にして」への回答
+## 例: 「ゴミ箱を空にして」「ゴミ箱をカラにして」への回答
 ```yaml
 - shell:
     cmd: osascript

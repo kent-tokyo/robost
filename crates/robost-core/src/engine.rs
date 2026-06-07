@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::progress::ProgressEvent;
 use crate::report::{ExecutionReport, Outcome, StepOutcome, StepRecord};
 
 use xcap;
@@ -12,6 +13,7 @@ use chrono::Local;
 use robost_backend::Backend;
 use robost_vision::TemplateMatcher;
 use thiserror::Error;
+use tokio::sync::broadcast;
 use tokio::time::sleep;
 use tracing::{error, info, instrument, warn};
 
@@ -150,6 +152,8 @@ pub struct ScenarioEngine {
     report_records: tokio::sync::Mutex<Vec<StepRecord>>,
     /// If set, overwrite this file with {"step":N,"name":"..."} before each step.
     progress_path: Option<PathBuf>,
+    /// If set, send progress events (e.g., for HTTP/SSE streaming).
+    progress_tx: Option<Arc<broadcast::Sender<ProgressEvent>>>,
 }
 
 impl ScenarioEngine {
@@ -173,6 +177,7 @@ impl ScenarioEngine {
             report_path: None,
             report_records: tokio::sync::Mutex::new(Vec::new()),
             progress_path: None,
+            progress_tx: None,
         }
     }
 
@@ -229,6 +234,12 @@ impl ScenarioEngine {
     /// Write step progress JSON `{"step":N,"name":"..."}` to `path` before each step.
     pub fn with_progress(mut self, path: Option<PathBuf>) -> Self {
         self.progress_path = path;
+        self
+    }
+
+    /// Set a broadcast channel to send progress events (e.g., for HTTP/SSE streaming).
+    pub fn with_progress_channel(mut self, tx: Option<Arc<broadcast::Sender<ProgressEvent>>>) -> Self {
+        self.progress_tx = tx;
         self
     }
 
@@ -380,17 +391,49 @@ impl ScenarioEngine {
             }
         }
 
-        match run_result? {
-            Flow::Done | Flow::Exit => Ok(()),
-            Flow::Break => {
+        let final_result = match run_result {
+            Ok(Flow::Done | Flow::Exit) => {
+                // Send scenario finished event.
+                if let Some(ref tx) = self.progress_tx {
+                    let _ = tx.send(ProgressEvent::Finished {
+                        success: true,
+                        error: None,
+                    });
+                }
+                Ok(())
+            }
+            Ok(Flow::Break) => {
                 warn!("break at top level (no enclosing loop)");
+                if let Some(ref tx) = self.progress_tx {
+                    let _ = tx.send(ProgressEvent::Finished {
+                        success: true,
+                        error: None,
+                    });
+                }
                 Ok(())
             }
-            Flow::Continue => {
+            Ok(Flow::Continue) => {
                 warn!("continue at top level (no enclosing loop)");
+                if let Some(ref tx) = self.progress_tx {
+                    let _ = tx.send(ProgressEvent::Finished {
+                        success: true,
+                        error: None,
+                    });
+                }
                 Ok(())
             }
-        }
+            Err(e) => {
+                if let Some(ref tx) = self.progress_tx {
+                    let _ = tx.send(ProgressEvent::Finished {
+                        success: false,
+                        error: Some(e.to_string()),
+                    });
+                }
+                Err(e)
+            }
+        };
+
+        final_result
     }
 
     /// Convenience wrapper with defaults (from_step=0, no data override).
@@ -501,6 +544,13 @@ impl ScenarioEngine {
         reconnect_retry_ms: u64,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Flow>> + 'a>> {
         Box::pin(async move {
+            // Send scenario start event.
+            if let Some(ref tx) = self.progress_tx {
+                let _ = tx.send(ProgressEvent::ScenarioStart {
+                    total: steps.len(),
+                });
+            }
+
             for (i, step) in steps.iter().enumerate() {
                 self.check_cancelled()?;
 
@@ -515,6 +565,15 @@ impl ScenarioEngine {
 
                 if self.debug_step || self.break_at == Some(i) {
                     self.debug_pause(i, step, vars).await?;
+                }
+
+                // Send step start event and write progress file.
+                if let Some(ref tx) = self.progress_tx {
+                    let _ = tx.send(ProgressEvent::StepStart {
+                        index: i,
+                        name: step.name().to_string(),
+                        total: steps.len(),
+                    });
                 }
 
                 if let Some(ref p) = self.progress_path {
@@ -594,6 +653,16 @@ impl ScenarioEngine {
                             return Err(e);
                         }
                         Ok(Flow::Done) => {
+                            let elapsed_ms = step_timer.elapsed().as_millis() as u64;
+
+                            // Send step done event.
+                            if let Some(ref tx) = self.progress_tx {
+                                let _ = tx.send(ProgressEvent::StepDone {
+                                    index: i,
+                                    elapsed_ms,
+                                });
+                            }
+
                             if self.dump_vars {
                                 eprintln!("[VARS] step {i}: {}", vars.debug_dump());
                             }
@@ -605,7 +674,7 @@ impl ScenarioEngine {
                                         i,
                                         step,
                                         step_started,
-                                        step_timer.elapsed().as_millis() as u64,
+                                        elapsed_ms,
                                         StepOutcome::Ok,
                                         None,
                                     ));

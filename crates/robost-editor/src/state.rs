@@ -93,6 +93,10 @@ pub(crate) struct EditorApp {
     pub(crate) canvas_viewport_size: egui::Vec2,
     /// When Some, step list rows referencing this variable name get an amber tint.
     pub(crate) var_highlight: Option<String>,
+    /// Draft name for adding a scenario variable from the Variables panel.
+    pub(crate) var_new_name: String,
+    /// Draft initial value for adding a scenario variable from the Variables panel.
+    pub(crate) var_new_value: String,
     /// Active category filter in the manual window (independent of text search).
     pub(crate) manual_category_filter: Option<&'static str>,
     /// Tracks when the undo-limit warning toast was last shown (throttles the toast).
@@ -132,6 +136,15 @@ pub(crate) struct EditorApp {
     /// Cache of loaded textures for template PNG thumbnails.
     pub(crate) template_textures:
         std::collections::HashMap<std::path::PathBuf, egui::TextureHandle>,
+    /// Temporary status bar message shown for 3 s then cleared.
+    pub(crate) status_message: Option<(String, std::time::Instant)>,
+    /// Action name of the most recent undo entry — shown in the undo button tooltip.
+    pub(crate) last_undo_name: String,
+    /// Per-node snap flash: maps node index → time the snap was detected.
+    /// Nodes within SNAP_FLASH_MS of their entry get a teal border drawn over them.
+    pub(crate) snap_flashes: std::collections::HashMap<usize, std::time::Instant>,
+    /// Which tab is currently selected in the Activity Bar / Sidebar.
+    pub(crate) sidebar_tab: crate::types::SidebarTab,
 }
 
 impl Default for EditorApp {
@@ -202,6 +215,8 @@ impl Default for EditorApp {
             canvas_selection_anchor: None,
             canvas_viewport_size: egui::Vec2::new(800.0, 600.0),
             var_highlight: None,
+            var_new_name: String::new(),
+            var_new_value: String::new(),
             manual_category_filter: None,
             undo_limit_warned_at: None,
             ai_step_rx: None,
@@ -221,6 +236,10 @@ impl Default for EditorApp {
             prev_problem_count: 0,
             nodes_panel_tab: NodesPanelTab::default(),
             template_textures: HashMap::new(),
+            status_message: None,
+            last_undo_name: String::new(),
+            snap_flashes: std::collections::HashMap::new(),
+            sidebar_tab: crate::types::SidebarTab::Steps,
         }
     }
 }
@@ -266,6 +285,17 @@ impl EditorApp {
     }
     pub(crate) fn log_info(&mut self, msg: impl Into<String>) {
         self.push_log(msg, LogLevel::Info);
+    }
+
+    /// Set a temporary status bar message that auto-clears after 3 seconds.
+    pub(crate) fn push_status(&mut self, msg: impl Into<String>) {
+        self.status_message = Some((msg.into(), std::time::Instant::now()));
+    }
+
+    /// Push an undo snapshot with a human-readable action name for the tooltip.
+    pub(crate) fn push_undo_named(&mut self, name: &str) {
+        self.last_undo_name = name.to_owned();
+        self.push_undo_impl(false);
     }
 
     pub(crate) fn load_file_path(&mut self, p: &std::path::Path) {
@@ -374,7 +404,9 @@ impl EditorApp {
                 Ok(()) => {
                     self.path = Some(path.clone());
                     self.dirty = false;
-                    self.log_ok(format!("保存しました: {}", path.display()));
+                    let msg = format!("保存しました: {}", path.display());
+                    self.push_status(msg.clone());
+                    self.log_ok(msg);
                     self.save_canvas_layout();
                 }
                 Err(e) => self.log_err(format!(
@@ -479,7 +511,7 @@ impl EditorApp {
         if self.step_clipboard.is_empty() {
             return;
         }
-        self.push_undo();
+        self.push_undo_named("貼り付け");
         let at = self
             .multi_selected
             .iter()
@@ -513,7 +545,7 @@ impl EditorApp {
         if self.multi_selected.is_empty() {
             return;
         }
-        self.push_undo();
+        self.push_undo_named("ステップ削除");
         let mut indices: Vec<usize> = self.multi_selected.iter().cloned().collect();
         indices.sort_unstable_by(|a, b| b.cmp(a)); // delete from highest to keep indices valid
         for i in &indices {
@@ -674,8 +706,8 @@ impl EditorApp {
                     let _ = std::fs::remove_file(&run_path);
                 }
                 let hint = if e.kind() == std::io::ErrorKind::NotFound {
-                    "\n  ヒント: rpa バイナリがエディタと同じディレクトリにありません。\
-                     cargo install robost-cli でインストールしてください。"
+                    "\n  ヒント: リリース版では rpa バイナリをエディタと同じディレクトリに配置してください。\
+                     開発中は cargo build -p robost-cli でも解決できます。"
                 } else {
                     ""
                 };
@@ -748,9 +780,9 @@ impl EditorApp {
 // ── Private helpers ──────────────────────────────────────────────────────────
 
 /// Spawn the `rpa` binary with stderr piped.
-/// Resolves the binary next to the current executable (never falls back to PATH
-/// to avoid PATH-hijacking — SEC-5). Returns the child handle and a receiver
-/// that delivers stderr lines as they arrive (REF-1).
+/// Release builds resolve the binary next to the editor executable. Debug builds
+/// may fall back to `cargo run -p robost-cli` so `cargo run -p robost-editor`
+/// remains usable before the CLI binary has been built.
 fn spawn_rpa(
     yaml_path: &std::path::Path,
     progress_path: &std::path::Path,
@@ -766,15 +798,49 @@ fn spawn_rpa(
         })?
         .join("rpa");
 
-    let mut child = std::process::Command::new(&rpa_bin)
-        .args([
+    let mut command = if rpa_bin.exists() {
+        let mut cmd = std::process::Command::new(&rpa_bin);
+        cmd.args([
             "run",
             &yaml_path.to_string_lossy(),
             "--progress",
             &progress_path.to_string_lossy(),
-        ])
-        .stderr(std::process::Stdio::piped())
-        .spawn()?;
+        ]);
+        cmd
+    } else if cfg!(debug_assertions) {
+        let workspace_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent())
+            .map(std::path::Path::to_path_buf)
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "cannot determine workspace root",
+                )
+            })?;
+        let mut cmd = std::process::Command::new("cargo");
+        cmd.current_dir(workspace_root).args([
+            "run",
+            "-p",
+            "robost-cli",
+            "--",
+            "run",
+            &yaml_path.to_string_lossy(),
+            "--progress",
+            &progress_path.to_string_lossy(),
+        ]);
+        cmd
+    } else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!(
+                "{} が見つかりません。robost-cli を同じディレクトリに配置してください。",
+                rpa_bin.display()
+            ),
+        ));
+    };
+
+    let mut child = command.stderr(std::process::Stdio::piped()).spawn()?;
 
     let (tx, rx) = std::sync::mpsc::channel::<String>();
     if let Some(stderr) = child.stderr.take() {
@@ -823,6 +889,7 @@ impl EditorApp {
             canvas_pan: [self.canvas_pan.x, self.canvas_pan.y],
             multi_selected: self.multi_selected.iter().cloned().collect(),
             expanded_steps: self.expanded_steps.iter().cloned().collect(),
+            action_name: self.last_undo_name.clone(),
         }
     }
 
@@ -889,17 +956,35 @@ impl EditorApp {
 
     pub(crate) fn undo(&mut self) {
         if let Some(prev) = self.undo_stack.pop_back() {
+            let action = prev.action_name.clone();
             let current = self.snapshot();
             self.redo_stack.push_back(current);
             self.restore(prev);
+            if !action.is_empty() {
+                self.push_status(format!("取り消し: {action}"));
+            } else {
+                self.push_status("取り消し");
+            }
+            self.last_undo_name = self
+                .undo_stack
+                .back()
+                .map(|s| s.action_name.clone())
+                .unwrap_or_default();
         }
     }
 
     pub(crate) fn redo(&mut self) {
         if let Some(next) = self.redo_stack.pop_back() {
+            let action = next.action_name.clone();
             let current = self.snapshot();
             self.undo_stack.push_back(current);
             self.restore(next);
+            self.last_undo_name = action.clone();
+            if !action.is_empty() {
+                self.push_status(format!("やり直し: {action}"));
+            } else {
+                self.push_status("やり直し");
+            }
         }
     }
 

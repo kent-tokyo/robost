@@ -1,0 +1,99 @@
+{
+  "activityBar": {
+    "explorer": "エクスプローラー",
+    "search": "検索",
+    "run": "実行",
+    "extensions": "拡張機能",
+    "settings": "設定"
+  },
+  "sidebar": {
+    "explorer": "エクスプローラー",
+    "search": "検索",
+    "run": "実行",
+    "extensions": "拡張機能",
+    "settings": "設定",
+    "explorerDesc": "シナリオファイルを開いて開始します",
+    "searchDesc": "シナリオを検索",
+    "runDesc": "実行とデバッグ",
+    "extensionsDesc": "拡張機能を管理",
+    "settingsDesc": "環境設定"
+  },
+  "editor": {
+    "canvas": "キャンバス",
+    "list": "リスト",
+    "code": "コード",
+    "undo": "元に戻す",
+    "redo": "やり直す",
+    "listViewComingSoon": "リストビューは近日公開予定です"
+  },
+  "canvas": {
+    "canvas": "キャンバス",
+    "run": "実行",
+    "stop": "停止",
+    "step": "ステップ",
+    "steps": "ステップ",
+    "deleteNode": "ステップを削除",
+    "addStep": "ステップを追加"
+  },
+  "inspector": {
+    "inspector": "インスペクター",
+    "selectStepToEdit": "プロパティを編集するステップを選択してください",
+    "stepNotFound": "ステップが見つかりません",
+    "general": "一般",
+    "properties": "プロパティ",
+    "name": "名前",
+    "type": "タイプ",
+    "enabled": "有効",
+    "stepName": "ステップ名",
+    "stepType": "ステップタイプ"
+  },
+  "statusBar": {
+    "utf8": "UTF-8",
+    "lf": "LF",
+    "yaml": "YAML"
+  },
+  "progressPanel": {
+    "executionLog": "実行ログ",
+    "entries": "エントリー",
+    "step": "ステップ",
+    "running": "実行中...",
+    "completed": "完了",
+    "failed": "失敗"
+  },
+  "settings": {
+    "settings": "設定",
+    "appearance": "外観",
+    "theme": "テーマ",
+    "darkMode": "ダーク",
+    "lightMode": "ライト",
+    "language": "言語",
+    "english": "English",
+    "japanese": "日本語",
+    "chinese": "中文",
+    "behavior": "動作",
+    "autoSave": "自動保存",
+    "autoSaveInterval": "自動保存間隔（ミリ秒）",
+    "apiKeys": "APIキー",
+    "openaiApiKey": "OpenAI APIキー",
+    "anthropicApiKey": "Anthropic APIキー",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "defaultSettings": "デフォルト設定"
+  },
+  "common": {
+    "close": "閉じる",
+    "delete": "削除",
+    "add": "追加",
+    "edit": "編集",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "apply": "適用",
+    "reset": "リセット",
+    "ok": "OK",
+    "error": "エラー",
+    "warning": "警告",
+    "success": "成功",
+    "info": "情報",
+    "loading": "読み込み中..."
+  }
+}

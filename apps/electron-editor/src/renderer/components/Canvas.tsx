@@ -1,0 +1,176 @@
+import React, { useCallback, useMemo, useEffect } from 'react';
+import ReactFlow, {
+  Node,
+  Edge,
+  Controls,
+  Background,
+  MiniMap,
+  addEdge,
+  Connection,
+  useNodesState,
+  useEdgesState,
+  Panel,
+  useReactFlow,
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+import StepNode from './StepNode';
+import { useScenarioStore } from '../store/scenarioStore';
+import { useEditorStore } from '../store/editorStore';
+import { useRunStore } from '../store/runStore';
+import { useRpaServer } from '../hooks/useRpaServer';
+import './Canvas.css';
+
+interface CanvasProps {
+  onNodeSelect?: (nodeId: string) => void;
+}
+
+const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
+  const { scenario, canvasLayout, updateCanvasNodes, updateCanvasEdges, updateCanvasZoom, updateCanvasPan, addStep, deleteStep } = useScenarioStore();
+  const { saveSnapshot } = useEditorStore();
+  const { isRunning, currentStepIndex, totalSteps, elapsedMs } = useRunStore();
+  const { runScenario, stopScenario } = useRpaServer();
+  const { getZoom, getViewport } = useReactFlow();
+
+  // Initialize nodes from scenario steps
+  const initialNodes: Node[] = scenario.steps.map((step, index) => ({
+    id: step.id,
+    type: 'stepNode',
+    data: { label: step.name, type: step.type },
+    position: canvasLayout.nodes[index]?.position || { x: 250, y: index * 150 },
+  }));
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(canvasLayout.edges);
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      const newEdges = addEdge(connection, edges);
+      setEdges(newEdges);
+      updateCanvasEdges(newEdges);
+    },
+    [edges, setEdges, updateCanvasEdges]
+  );
+
+  const onNodesChangeWithSave = useCallback(
+    (changes: any) => {
+      onNodesChange(changes);
+      setNodes((nds) => {
+        updateCanvasNodes(nds);
+        return nds;
+      });
+      saveSnapshot('Reposition node');
+    },
+    [onNodesChange, setNodes, updateCanvasNodes, saveSnapshot]
+  );
+
+  const nodeTypes = useMemo(
+    () => ({
+      stepNode: (props: any) => (
+        <StepNode
+          {...props}
+          onSelect={() => onNodeSelect?.(props.id)}
+        />
+      ),
+    }),
+    [onNodeSelect]
+  );
+
+  const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+
+    // Try to get template data first (from template gallery)
+    const templateData = e.dataTransfer.getData('templateData');
+    if (templateData) {
+      try {
+        const steps = JSON.parse(templateData);
+        steps.forEach((step: any) => {
+          addStep(step);
+        });
+        saveSnapshot(`Add template: ${steps[0]?.name || 'unknown'}`);
+      } catch (err) {
+        console.error('Failed to parse template data:', err);
+      }
+      return;
+    }
+
+    // Fallback to generic step type (legacy)
+    const stepType = e.dataTransfer.getData('stepType');
+    if (!stepType) return;
+
+    const newStep = {
+      id: `step-${Date.now()}`,
+      name: stepType,
+      type: stepType as any,
+      data: {},
+    };
+
+    addStep(newStep);
+    saveSnapshot(`Add step: ${stepType}`);
+  }, [addStep, saveSnapshot]);
+
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    deleteStep(nodeId);
+    saveSnapshot('Delete step');
+  }, [deleteStep, saveSnapshot]);
+
+  // Sync canvas state to store
+  useEffect(() => {
+    const zoom = getZoom();
+    const viewport = getViewport();
+    updateCanvasZoom(zoom);
+    updateCanvasPan(viewport.x, viewport.y);
+  }, [getZoom, getViewport, updateCanvasZoom, updateCanvasPan]);
+
+  return (
+    <div className="canvas-container" onDragOver={onDragOver} onDrop={onDrop}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChangeWithSave}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        nodeTypes={nodeTypes}
+        fitView
+      >
+        <Background color="#aaa" gap={16} />
+        <Controls />
+        <MiniMap />
+        <Panel position="top-right" className="canvas-panel">
+          <div style={{ padding: '8px', fontSize: '12px', color: '#ccc' }}>
+            <div>🎨 {nodes.length} steps</div>
+            {isRunning && (
+              <div style={{ marginTop: '4px', fontSize: '11px' }}>
+                Running: {currentStepIndex}/{totalSteps}
+              </div>
+            )}
+          </div>
+        </Panel>
+
+        <Panel position="bottom-right" className="canvas-controls">
+          <button
+            onClick={() => (isRunning ? stopScenario() : runScenario())}
+            style={{
+              padding: '8px 12px',
+              backgroundColor: isRunning ? '#f48771' : '#6a9955',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 'bold',
+            }}
+          >
+            {isRunning ? '⏹ Stop' : '▶ Run'}
+          </button>
+        </Panel>
+      </ReactFlow>
+    </div>
+  );
+};
+
+export default Canvas;

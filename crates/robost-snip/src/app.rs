@@ -521,6 +521,17 @@ impl SnipApp {
                     EditMode::View => egui::Sense::hover(),
                 };
                 let (preview_rect, response) = ui.allocate_exact_size(disp, sense);
+
+                // Cursor feedback based on active edit mode
+                if response.hovered() || *edit_mode == EditMode::AddMask && response.is_pointer_button_down_on() {
+                    let cursor = match edit_mode {
+                        EditMode::AddAnchor => egui::CursorIcon::Crosshair,
+                        EditMode::AddMask => egui::CursorIcon::Crosshair,
+                        EditMode::View => egui::CursorIcon::Default,
+                    };
+                    ui.ctx().set_cursor_icon(cursor);
+                }
+
                 let pp = ui.painter_at(preview_rect);
 
                 pp.image(
@@ -619,7 +630,11 @@ impl SnipApp {
                 // --- Mode selector ---
                 ui.horizontal(|ui| {
                     ui.label("モード:");
-                    if ui.selectable_label(*edit_mode == EditMode::View, "表示").clicked() {
+                    if ui
+                        .selectable_label(*edit_mode == EditMode::View, "表示")
+                        .on_hover_text("テンプレートを確認するだけのモードです")
+                        .clicked()
+                    {
                         *edit_mode = EditMode::View;
                     }
                     if ui
@@ -668,7 +683,7 @@ impl SnipApp {
                                 ui.horizontal(|ui| {
                                     let lbl = a.label.as_deref().unwrap_or("—");
                                     ui.label(format!("#{} ({}, {})  \"{}\"", i + 1, a.px_x, a.px_y, lbl));
-                                    if ui.small_button("✕").clicked() {
+                                    if ui.small_button("×").clicked() {
                                         rm = Some(i);
                                     }
                                 });
@@ -689,7 +704,7 @@ impl SnipApp {
                             for (i, m) in masks.iter().enumerate() {
                                 ui.horizontal(|ui| {
                                     ui.label(format!("#{} ({}, {}, {}×{})", i + 1, m.x, m.y, m.w, m.h));
-                                    if ui.small_button("✕").clicked() {
+                                    if ui.small_button("×").clicked() {
                                         rm = Some(i);
                                     }
                                 });
@@ -723,7 +738,7 @@ impl SnipApp {
                             );
                         }
                         Some(LiveResult::NotFound) => {
-                            ui.colored_label(egui::Color32::RED, "✗ 見つかりませんでした");
+                            ui.colored_label(egui::Color32::RED, "× 見つかりませんでした");
                         }
                         None => {}
                     }
@@ -741,7 +756,7 @@ impl SnipApp {
                     if ui.button("💾 保存").clicked() {
                         do_save = true;
                     }
-                    if ui.button("✕ キャンセル").clicked() {
+                    if ui.button("× キャンセル").clicked() {
                         do_cancel = true;
                     }
                 });

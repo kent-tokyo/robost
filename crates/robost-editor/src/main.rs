@@ -35,19 +35,34 @@ pub(crate) fn apply_style(ctx: &egui::Context, theme: &settings::Theme) {
     // here we only configure the global widget / window defaults.
 
     // Window and popup background = sidebar bg (most floating surfaces sit in sidebar context).
-    let window_bg = if dark { tokens::SIDEBAR_BG } else { tokens::SIDEBAR_BG_LIGHT };
+    let window_bg = if dark {
+        tokens::SIDEBAR_BG
+    } else {
+        tokens::SIDEBAR_BG_LIGHT
+    };
     style.visuals.window_fill = window_bg;
     style.visuals.panel_fill = window_bg;
 
     // Selection highlight (light mode: subtle blue background)
-    let selection_bg = if dark { tokens::LIST_SELECTION } else { egui::Color32::from_rgb(0xE8, 0xF1, 0xF8) };
+    let selection_bg = if dark {
+        tokens::LIST_SELECTION
+    } else {
+        egui::Color32::from_rgb(0xE8, 0xF1, 0xF8)
+    };
     style.visuals.selection.bg_fill = selection_bg;
-    style.visuals.selection.stroke = egui::Stroke::new(0.0, egui::Color32::TRANSPARENT);
 
     // ── Widget interaction states — background fills ONLY, no borders ─────────
     // VS Code principle: hover = subtle bg fill; focus = outline; never both.
-    let hover_bg = if dark { tokens::LIST_HOVER } else { egui::Color32::from_rgb(0xF0, 0xF0, 0xF0) };
-    let active_bg = if dark { tokens::LIST_SELECTION } else { egui::Color32::from_rgb(0xE0, 0xE6, 0xF6) };
+    let hover_bg = if dark {
+        tokens::LIST_HOVER
+    } else {
+        egui::Color32::from_rgb(0xF0, 0xF0, 0xF0)
+    };
+    let active_bg = if dark {
+        tokens::LIST_SELECTION
+    } else {
+        egui::Color32::from_rgb(0xE0, 0xE6, 0xF6)
+    };
 
     style.visuals.widgets.hovered.weak_bg_fill = hover_bg;
     style.visuals.widgets.hovered.bg_fill = hover_bg;
@@ -57,16 +72,24 @@ pub(crate) fn apply_style(ctx: &egui::Context, theme: &settings::Theme) {
     style.visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
 
     // Text colors
-    let fg = if dark { tokens::FG_DEFAULT } else { egui::Color32::from_gray(38) };
-    let fg_dim = if dark { tokens::FG_DIM } else { egui::Color32::from_gray(120) };
+    let fg = if dark {
+        tokens::FG_DEFAULT
+    } else {
+        egui::Color32::from_gray(38)
+    };
     style.visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, fg);
     style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, fg);
     style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, fg);
     style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, fg);
-    style.visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0, fg_dim);
+    style.visuals.selection.stroke = egui::Stroke::new(1.0, fg);
+    style.visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0, fg);
 
     // Separators — subtle light gray dividers
-    let sep = if dark { egui::Color32::from_gray(50) } else { egui::Color32::from_gray(220) };
+    let sep = if dark {
+        egui::Color32::from_gray(50)
+    } else {
+        egui::Color32::from_gray(220)
+    };
     style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, sep);
 
     // ── Corner radii (VS Code: 0-2 px UI, 4 px cards) ────────────────────────
@@ -84,10 +107,15 @@ pub(crate) fn apply_style(ctx: &egui::Context, theme: &settings::Theme) {
 
     // ── Spacing ───────────────────────────────────────────────────────────────
     // Slightly more padding than before to prevent labels touching panel edges.
-    style.spacing.item_spacing = egui::vec2(tokens::SPACING_SM, 5.0);
-    style.spacing.button_padding = egui::vec2(tokens::SPACING_SM, 4.0);
-    style.spacing.window_margin = egui::Margin::same(8);
-    style.spacing.menu_margin = egui::Margin::same(4);
+    style.spacing.item_spacing = egui::vec2(tokens::ITEM_SPACING_X, tokens::ITEM_SPACING_Y);
+    style.spacing.button_padding = egui::vec2(tokens::BUTTON_PADDING_X, tokens::BUTTON_PADDING_Y);
+    style.spacing.interact_size.y = style
+        .spacing
+        .interact_size
+        .y
+        .max(tokens::INTERACT_HEIGHT_MIN);
+    style.spacing.window_margin = egui::Margin::same(tokens::WINDOW_MARGIN);
+    style.spacing.menu_margin = egui::Margin::same(tokens::MENU_MARGIN);
 
     ctx.set_global_style(style);
 }
@@ -122,22 +150,18 @@ fn setup_fonts(ctx: &egui::Context) {
             fonts
                 .font_data
                 .insert("cjk".to_owned(), egui::FontData::from_owned(data).into());
-            // Append CJK AFTER Phosphor icons in the priority list.
-            // Order: [Ubuntu-Light, phosphor, cjk]
-            // — Ubuntu-Light handles Latin; Phosphor handles icon codepoints;
-            //   CJK is fallback for Japanese/Chinese glyphs neither can serve.
-            // Inserting CJK at position 0 would let its .notdef glyph (□)
-            // intercept Phosphor's PUA codepoints before Phosphor is reached.
+            // Put CJK first so Latin and Japanese share one font metrics box.
+            // Phosphor remains before the bundled fallback so icon glyphs resolve.
             fonts
                 .families
                 .entry(egui::FontFamily::Proportional)
                 .or_default()
-                .push("cjk".to_owned());
+                .insert(0, "cjk".to_owned());
             fonts
                 .families
                 .entry(egui::FontFamily::Monospace)
                 .or_default()
-                .push("cjk".to_owned());
+                .insert(0, "cjk".to_owned());
             break;
         }
     }

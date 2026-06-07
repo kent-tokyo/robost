@@ -31,7 +31,7 @@ pub(crate) const COL_VAR: egui::Color32 = egui::Color32::from_rgb(220, 200, 80);
 pub(crate) const COL_WAIT: egui::Color32 = egui::Color32::from_rgb(140, 140, 140);
 pub(crate) const COL_SCR: egui::Color32 = egui::Color32::from_rgb(220, 100, 100);
 pub(crate) const COL_CLIP: egui::Color32 = egui::Color32::from_rgb(100, 200, 220);
-pub(crate) const COL_LIB: egui::Color32 = egui::Color32::from_rgb(180, 180, 180);
+pub(crate) const COL_LIB: egui::Color32 = egui::Color32::from_rgb(0x7B, 0x68, 0xEE);
 pub(crate) const COL_DATA: egui::Color32 = egui::Color32::from_rgb(249, 200, 120);
 pub(crate) const COL_FILE: egui::Color32 = egui::Color32::from_rgb(180, 140, 240);
 pub(crate) const COL_EXCEL: egui::Color32 = egui::Color32::from_rgb(33, 160, 80);
@@ -156,6 +156,17 @@ pub(crate) enum NodesPanelTab {
     Templates,
 }
 
+// ---- activity bar / sidebar tab ---------------------------------------------
+
+/// Which content is shown in the sidebar, driven by Activity Bar icon clicks.
+#[derive(Clone, PartialEq, Copy, Default)]
+pub(crate) enum SidebarTab {
+    #[default]
+    Steps, // Current scenario step list
+    Nodes,     // Step template palette (add new steps)
+    Templates, // PNG template gallery
+}
+
 // ---- view mode / flowchart types --------------------------------------------
 
 #[derive(Clone)]
@@ -263,6 +274,9 @@ pub(crate) struct EditorState {
     pub(crate) canvas_pan: [f32; 2],
     pub(crate) multi_selected: Vec<usize>,
     pub(crate) expanded_steps: Vec<usize>,
+    /// Human-readable description of the action that produced this snapshot.
+    /// Shown in the undo button tooltip and status bar.
+    pub(crate) action_name: String,
 }
 
 // ---- canvas comment (sticky note) -------------------------------------------

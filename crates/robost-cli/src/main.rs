@@ -1,5 +1,6 @@
 mod config;
 mod scheduler;
+mod server;
 mod tray;
 
 use anyhow::{bail, Context, Result};
@@ -68,6 +69,9 @@ enum Commands {
         /// Write step progress JSON {"step":N,"name":"..."} to this file during execution
         #[arg(long)]
         progress: Option<PathBuf>,
+        /// Start HTTP server and stream progress via SSE (e.g., "127.0.0.1:0" for dynamic port)
+        #[arg(long)]
+        serve: Option<String>,
     },
     /// Plugin management
     Plugin {
@@ -170,16 +174,29 @@ fn main() -> Result<()> {
             dump_vars,
             report,
             progress,
+            serve,
         } => {
             if tray {
                 return tray::run_tray(scenario, silent, reconnect_timeout);
             }
 
-            let rt = tokio::runtime::Runtime::new()?;
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?;
             rt.block_on(async {
                 if wait_ms > 0 {
                     tokio::time::sleep(std::time::Duration::from_millis(wait_ms)).await;
                 }
+
+                // Start HTTP server if --serve is specified.
+                let progress_tx = if let Some(ref bind_addr) = serve {
+                    let (tx, _port) = server::run_server(bind_addr)
+                        .await
+                        .context("failed to start HTTP server")?;
+                    Some(tx)
+                } else {
+                    None
+                };
 
                 let backend = Arc::new(robost_backend::LocalBackend::new()?);
                 let base_dir = scenario
@@ -197,6 +214,11 @@ fn main() -> Result<()> {
                     engine = engine.with_report(report_path);
                 }
                 engine = engine.with_progress(progress);
+
+                // Set progress channel if server is running.
+                if let Some(tx) = progress_tx {
+                    engine = engine.with_progress_channel(Some(tx));
+                }
                 let mut s = robost_core::Scenario::from_file(&scenario)?;
 
                 // Resolve step range: --steps takes priority over --from.

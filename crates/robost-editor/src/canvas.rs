@@ -433,10 +433,22 @@ impl EditorApp {
 
         // ── Theme-aware canvas colors (VS Code–derived) ──────────────────────
         let dark = ui.visuals().dark_mode;
-        let cv_bg = if dark { tokens::CANVAS_BG } else { Color32::from_gray(248) };
+        let cv_bg = if dark {
+            tokens::CANVAS_BG
+        } else {
+            Color32::from_gray(248)
+        };
         // Node backgrounds — flat, no blending with category color
-        let node_bg = if dark { tokens::NODE_BG } else { Color32::from_gray(255) };
-        let node_bg_disabled = if dark { Color32::from_gray(30) } else { Color32::from_gray(240) };
+        let node_bg = if dark {
+            tokens::NODE_BG
+        } else {
+            Color32::from_gray(255)
+        };
+        let node_bg_disabled = if dark {
+            Color32::from_gray(30)
+        } else {
+            Color32::from_gray(240)
+        };
         let node_bg_selected = if dark {
             tokens::NODE_BG_SELECTED
         } else {
@@ -448,18 +460,42 @@ impl EditorApp {
             Color32::from_rgb(0xFF, 0xF5, 0xCC)
         };
         // Node border — near-invisible (1 step lighter/darker than node bg)
-        let node_border = if dark { Color32::from_gray(50) } else { Color32::from_gray(210) };
+        let node_border = if dark {
+            Color32::from_gray(50)
+        } else {
+            Color32::from_gray(210)
+        };
         // No shadow (VS Code is flat)
-        let node_text = if dark { tokens::FG_DEFAULT } else { Color32::from_gray(25) };
-        let node_text_dim = if dark { tokens::FG_DIM } else { Color32::from_gray(110) };
-        let node_text_minimal = if dark { Color32::from_gray(120) } else { Color32::from_gray(150) };
+        let node_text = if dark {
+            tokens::FG_DEFAULT
+        } else {
+            Color32::from_gray(25)
+        };
+        let node_text_dim = if dark {
+            tokens::FG_DIM
+        } else {
+            Color32::from_gray(110)
+        };
+        let node_text_minimal = if dark {
+            Color32::from_gray(120)
+        } else {
+            Color32::from_gray(150)
+        };
         // Start/End terminal pill colors
         let start_pill_bg = tokens::SUCCESS;
         let start_pill_text = Color32::WHITE;
-        let end_pill_bg = if dark { Color32::from_rgb(55, 55, 70) } else { Color32::from_gray(155) };
+        let end_pill_bg = if dark {
+            Color32::from_rgb(55, 55, 70)
+        } else {
+            Color32::from_gray(155)
+        };
         let end_pill_text = Color32::WHITE;
         // Edge connection lines (theme-aware)
-        let edge_color = if dark { tokens::EDGE_COLOR } else { Color32::from_gray(180) };
+        let edge_color = if dark {
+            tokens::EDGE_COLOR
+        } else {
+            Color32::from_gray(180)
+        };
 
         // Pre-compute search state so it can be used throughout without borrow conflicts
         let search_query = self.canvas_search.to_lowercase();
@@ -541,7 +577,11 @@ impl EditorApp {
             if grid >= 8.0 {
                 let offset_x = (self.canvas_pan.x * z).rem_euclid(grid);
                 let offset_y = (self.canvas_pan.y * z).rem_euclid(grid);
-                let grid_color = if dark { Color32::from_gray(42) } else { Color32::from_gray(230) };
+                let grid_color = if dark {
+                    Color32::from_gray(42)
+                } else {
+                    Color32::from_gray(230)
+                };
                 let stroke = egui::Stroke::new(1.0, grid_color);
                 let mut x = resp.rect.min.x + offset_x;
                 while x <= resp.rect.max.x {
@@ -1220,10 +1260,8 @@ impl EditorApp {
             }
 
             // Left color stripe — thin (3 px), category color only element.
-            let stripe = Rect::from_min_size(
-                node_rect.min,
-                Vec2::new((3.0 * z).max(2.0), NODE_H * z),
-            );
+            let stripe =
+                Rect::from_min_size(node_rect.min, Vec2::new((3.0 * z).max(2.0), NODE_H * z));
             painter.rect_filled(stripe, tokens::ROUNDING_CARD, cat_color);
 
             // Progressive node content based on zoom level
@@ -2385,31 +2423,6 @@ impl EditorApp {
                 }
             }
             self.canvas_search = search_text;
-        }
-
-        // Persistent "?" button at bottom-right (left of minimap) — DESIGN.md §6 discoverability
-        {
-            let btn_size = 24.0;
-            let btn_pos = egui::pos2(
-                resp.rect.max.x - MM_W - MM_MARGIN - btn_size - 6.0,
-                resp.rect.max.y - MM_H - MM_MARGIN - btn_size - 6.0,
-            );
-            egui::Area::new(egui::Id::new("canvas_help_fab"))
-                .fixed_pos(btn_pos)
-                .order(egui::Order::Foreground)
-                .show(ui.ctx(), |ui| {
-                    if ui
-                        .add(
-                            egui::Button::new("?")
-                                .min_size(egui::Vec2::splat(btn_size))
-                                .corner_radius(egui::CornerRadius::same(12)),
-                        )
-                        .on_hover_text("キーボードショートカット一覧 (?)")
-                        .clicked()
-                    {
-                        self.canvas_help_open = !self.canvas_help_open;
-                    }
-                });
         }
 
         // Canvas keyboard shortcut help overlay (toggled by `?`)

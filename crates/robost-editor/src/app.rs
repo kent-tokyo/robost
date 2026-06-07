@@ -9,7 +9,7 @@ use crate::flow_helpers::{
     count_child_steps, default_canvas_cols, default_canvas_pos, get_step_key, step_display_name,
     step_summary, NODE_H, NODE_W,
 };
-use crate::i18n::S;
+use crate::i18n::{Lang, S};
 use crate::settings::save_settings;
 use crate::state::EditorApp;
 use crate::step_templates::{step_icon, StepTemplate, STEP_TEMPLATES};
@@ -17,6 +17,93 @@ use crate::types::{
     category_color, step_key_category, AiMessage, BottomTab, ConfirmAction, DragPayload, LogEntry,
     LogLevel, NodesPanelTab, PropView, SidebarTab, StepAction, ViewMode,
 };
+
+impl EditorApp {
+    fn show_step_editor(&mut self, ui: &mut egui::Ui, idx: usize, show_parse_error: bool) {
+        if idx >= self.steps.len() {
+            self.selected = None;
+            return;
+        }
+
+        if show_parse_error {
+            if let Some(ref err) = self.parse_error.clone() {
+                let err_label = match self.settings.lang {
+                    Lang::Ja => "構文エラー",
+                    Lang::En => "Syntax error",
+                    Lang::Zh => "语法错误",
+                };
+                egui::Frame::new()
+                    .fill(crate::tokens::ERROR.gamma_multiply(0.28))
+                    .inner_margin(egui::Margin::symmetric(8, 4))
+                    .show(ui, |ui| {
+                        ui.colored_label(crate::tokens::ERROR, format!("{err_label}: {err}"));
+                    });
+                ui.add_space(crate::tokens::SPACING_SM);
+            }
+        }
+
+        let key = get_step_key(&self.steps[idx]);
+        let cat = step_key_category(key);
+        let color = category_color(cat);
+        ui.horizontal(|ui| {
+            let stripe_rect = {
+                let rect = ui.available_rect_before_wrap();
+                egui::Rect::from_min_size(rect.min, egui::vec2(3.0, 24.0))
+            };
+            ui.allocate_rect(stripe_rect, egui::Sense::hover());
+            ui.painter()
+                .rect_filled(stripe_rect, crate::tokens::ROUNDING_UI, color);
+            ui.add_space(crate::tokens::SPACING_XS);
+
+            let tab_reserved = 132.0_f32;
+            let title_w = (ui.available_width() - tab_reserved).max(48.0);
+            let row_h = ui.spacing().interact_size.y;
+            ui.add_sized(
+                [title_w, row_h],
+                egui::Label::new(
+                    egui::RichText::new(format!("{}  {}", idx + 1, step_display_name(key)))
+                        .strong(),
+                )
+                .truncate(),
+            );
+            let form_label = match self.settings.lang {
+                Lang::Ja => "フォーム",
+                Lang::En => "Form",
+                Lang::Zh => "表单",
+            };
+            ui.selectable_value(&mut self.prop_view, PropView::Form, form_label);
+            ui.selectable_value(&mut self.prop_view, PropView::Yaml, "YAML");
+        });
+        ui.add(egui::Separator::default().spacing(6.0));
+
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::symmetric(12, 10))
+            .show(ui, |ui| {
+                if self.prop_view == PropView::Form {
+                    self.show_property_form(ui, idx);
+                } else {
+                    let response = egui::ScrollArea::vertical()
+                        .id_salt(("yaml_editor", idx))
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::TextEdit::multiline(&mut self.edit_buf)
+                                    .code_editor()
+                                    .desired_rows(22)
+                                    .desired_width(f32::INFINITY),
+                            )
+                        });
+                    if response.inner.gained_focus() {
+                        let snap = self.snapshot();
+                        self.undo_stack.push_back(snap);
+                        self.redo_stack.clear();
+                    }
+                    if response.inner.changed() {
+                        self.flush_edit();
+                    }
+                }
+            });
+    }
+}
 
 impl eframe::App for EditorApp {
     fn ui(&mut self, _ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -32,16 +119,15 @@ impl eframe::App for EditorApp {
 
         let s = S::for_lang(&self.settings.lang);
         let ui_dark = matches!(self.settings.theme, crate::settings::Theme::Dark);
+        let text_input_active = ctx.wants_keyboard_input();
         if self.bottom_tab != BottomTab::Variables {
             self.var_highlight = None;
         }
 
         // ── Snap flash: expire stale entries and schedule repaint ─────────────
         {
-            let flash_dur =
-                std::time::Duration::from_millis(crate::tokens::SNAP_FLASH_MS);
-            self.snap_flashes
-                .retain(|_, t| t.elapsed() < flash_dur);
+            let flash_dur = std::time::Duration::from_millis(crate::tokens::SNAP_FLASH_MS);
+            self.snap_flashes.retain(|_, t| t.elapsed() < flash_dur);
             if let Some(min_remaining) = self
                 .snap_flashes
                 .values()
@@ -106,6 +192,7 @@ impl eframe::App for EditorApp {
         }
         // Canvas-mode Delete/Backspace: route through confirm for both single and bulk
         if self.view_mode == ViewMode::Canvas
+            && !text_input_active
             && !self.add_menu_open
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| {
@@ -122,7 +209,8 @@ impl eframe::App for EditorApp {
                 }
             }
         }
-        if !self.add_menu_open
+        if !text_input_active
+            && !self.add_menu_open
             && self.confirm_dialog.is_none()
             && self.prop_view != PropView::Yaml
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Delete))
@@ -136,26 +224,30 @@ impl eframe::App for EditorApp {
                 }
             }
         }
-        if !self.add_menu_open
+        if !text_input_active
+            && !self.add_menu_open
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::C))
         {
             self.copy_selected_steps();
         }
-        if !self.add_menu_open
+        if !text_input_active
+            && !self.add_menu_open
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::X))
         {
             self.copy_selected_steps();
             self.delete_selected_steps();
         }
-        if !self.add_menu_open
+        if !text_input_active
+            && !self.add_menu_open
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::V))
         {
             self.paste_steps();
         }
-        if !self.add_menu_open
+        if !text_input_active
+            && !self.add_menu_open
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::D))
         {
@@ -733,6 +825,13 @@ impl eframe::App for EditorApp {
                                     ));
                                 } else {
                                     let count = new_steps.len();
+                                    let base_pos = {
+                                        let cols = default_canvas_cols(self.steps.len());
+                                        self.canvas_positions
+                                            .get(&idx)
+                                            .copied()
+                                            .unwrap_or_else(|| default_canvas_pos(idx, cols))
+                                    };
                                     self.push_undo();
                                     self.steps.remove(idx);
                                     Self::canvas_shift_positions(
@@ -758,6 +857,24 @@ impl eframe::App for EditorApp {
                                             1,
                                         );
                                     }
+                                    let generated_step =
+                                        NODE_H + crate::tokens::AI_GENERATED_NODE_GAP_Y;
+                                    let generated_span =
+                                        (count.saturating_sub(1)) as f32 * generated_step;
+                                    if generated_span > 0.0 {
+                                        for (pos_idx, pos) in self.canvas_positions.iter_mut() {
+                                            if *pos_idx >= idx + count && pos.y >= base_pos.y {
+                                                pos.y += generated_span;
+                                            }
+                                        }
+                                    }
+                                    for j in 0..count {
+                                        self.canvas_positions.insert(
+                                            idx + j,
+                                            base_pos + egui::vec2(0.0, j as f32 * generated_step),
+                                        );
+                                    }
+                                    self.canvas_layout_dirty = true;
                                     self.selected = Some(idx);
                                     self.multi_selected.clear();
                                     self.edit_buf = self
@@ -786,318 +903,393 @@ impl eframe::App for EditorApp {
 
         // ── Menu bar ─────────────────────────────────────────────────────────
         #[allow(deprecated)]
-        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                let sty = ui.style_mut();
-                sty.spacing.button_padding = egui::vec2(2.0, 0.0);
-                sty.visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
-                sty.visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
-                sty.visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
-                sty.visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
-                ui.set_min_size(egui::vec2(
-                    ui.available_width(),
-                    ui.spacing().interact_size.y,
-                ));
+        egui::TopBottomPanel::top("menu_bar")
+            .frame(
+                egui::Frame::none()
+                    .fill(crate::tokens::toolbar_bg(ui_dark))
+                    .inner_margin(egui::Margin::symmetric(6, 2)),
+            )
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let sty = ui.style_mut();
+                    sty.spacing.button_padding = egui::vec2(8.0, 4.0);
+                    sty.visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
+                    sty.visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
+                    sty.visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
+                    sty.visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
+                    ui.set_min_size(egui::vec2(
+                        ui.available_width(),
+                        ui.spacing().interact_size.y,
+                    ));
 
-                let bar_id = ui.id();
+                    let bar_id = ui.id();
 
-                // FILE
-                {
-                    let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
-                    let r = ui.add(egui::Button::new(s.menu_file));
-                    bs.bar_menu(&r, |ui| {
-                        if ui.button(s.menu_new).clicked() {
-                            ui.close();
-                            if !self.dirty {
-                                self.name = "new_scenario".into();
-                                self.steps.clear();
-                                self.scenario_vars.clear();
-                                self.selected = None;
-                                self.path = None;
-                                self.dirty = false;
-                            } else {
-                                self.confirm_dialog = Some(ConfirmAction::NewFile);
-                            }
-                        }
-                        if ui.button(s.menu_open).clicked() {
-                            ui.close();
-                            self.open_file();
-                        }
-                        ui.separator();
-                        if ui.button(s.menu_save).clicked() {
-                            ui.close();
-                            self.save_file();
-                        }
-                        if ui.button(s.menu_save_as).clicked() {
-                            ui.close();
-                            self.save_file_as();
-                        }
-                        ui.separator();
-                        if ui.button(s.menu_settings).clicked() {
-                            ui.close();
-                            self.settings_open = true;
-                        }
-                    });
-                    bs.store(ui.ctx(), bar_id);
-                }
-
-                // EDIT
-                {
-                    let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
-                    let r = ui.add(egui::Button::new(s.menu_edit));
-                    bs.bar_menu(&r, |ui| {
-                        ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
-                            if ui.button(s.menu_undo).clicked() {
+                    // FILE
+                    {
+                        let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
+                        let r = ui.add(egui::Button::new(s.menu_file));
+                        bs.bar_menu(&r, |ui| {
+                            if ui.button(s.menu_new).clicked() {
                                 ui.close();
-                                self.undo();
-                            }
-                        });
-                        ui.add_enabled_ui(!self.redo_stack.is_empty(), |ui| {
-                            if ui.button(s.menu_redo).clicked() {
-                                ui.close();
-                                self.redo();
-                            }
-                        });
-                        ui.separator();
-                        if ui.button(s.menu_add_step).clicked() {
-                            ui.close();
-                            self.add_menu_open = true;
-                            self.add_menu_just_opened = true;
-                            self.add_filter.clear();
-                        }
-                        ui.separator();
-                        let has_sel = !self.multi_selected.is_empty();
-                        let has_clip = !self.step_clipboard.is_empty();
-                        ui.add_enabled_ui(has_sel, |ui| {
-                            if ui.button(s.menu_copy).clicked() {
-                                ui.close();
-                                self.copy_selected_steps();
-                            }
-                        });
-                        ui.add_enabled_ui(has_sel, |ui| {
-                            if ui.button(s.menu_cut).clicked() {
-                                ui.close();
-                                self.copy_selected_steps();
-                                self.delete_selected_steps();
-                            }
-                        });
-                        ui.add_enabled_ui(has_clip, |ui| {
-                            if ui.button(s.menu_paste).clicked() {
-                                ui.close();
-                                self.paste_steps();
-                            }
-                        });
-                        ui.add_enabled_ui(has_sel, |ui| {
-                            if ui.button(s.menu_duplicate).clicked() {
-                                ui.close();
-                                self.copy_selected_steps();
-                                self.paste_steps();
-                            }
-                        });
-                        ui.separator();
-                        ui.add_enabled_ui(has_sel, |ui| {
-                            if ui.button(s.menu_delete_step).clicked() {
-                                ui.close();
-                                if self.multi_selected.len() > 1 {
-                                    let count = self.multi_selected.len();
-                                    self.confirm_dialog = Some(ConfirmAction::DeleteSteps(count));
-                                } else if let Some(idx) = self.selected {
-                                    self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
+                                if !self.dirty {
+                                    self.name = "new_scenario".into();
+                                    self.steps.clear();
+                                    self.scenario_vars.clear();
+                                    self.selected = None;
+                                    self.path = None;
+                                    self.dirty = false;
+                                } else {
+                                    self.confirm_dialog = Some(ConfirmAction::NewFile);
                                 }
                             }
+                            if ui.button(s.menu_open).clicked() {
+                                ui.close();
+                                self.open_file();
+                            }
+                            ui.separator();
+                            if ui.button(s.menu_save).clicked() {
+                                ui.close();
+                                self.save_file();
+                            }
+                            if ui.button(s.menu_save_as).clicked() {
+                                ui.close();
+                                self.save_file_as();
+                            }
+                            ui.separator();
+                            if ui.button(s.menu_settings).clicked() {
+                                ui.close();
+                                self.settings_open = true;
+                            }
                         });
-                    });
-                    bs.store(ui.ctx(), bar_id);
-                }
+                        bs.store(ui.ctx(), bar_id);
+                    }
 
-                // VIEW
-                {
-                    let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
-                    let r = ui.add(egui::Button::new(s.menu_view));
-                    bs.bar_menu(&r, |ui| {
-                        if ui
-                            .selectable_label(self.view_mode == ViewMode::List, s.menu_list)
-                            .clicked()
-                        {
-                            self.view_mode = ViewMode::List;
-                            ui.close();
-                        }
-                        if ui
-                            .selectable_label(self.view_mode == ViewMode::Flow, s.menu_flow)
-                            .clicked()
-                        {
-                            self.view_mode = ViewMode::Flow;
-                            self.selected_child = None;
-                            ui.close();
-                        }
-                        if ui
-                            .selectable_label(self.view_mode == ViewMode::Canvas, s.menu_canvas)
-                            .clicked()
-                        {
-                            self.view_mode = ViewMode::Canvas;
-                            self.selected_child = None;
-                            self.ensure_canvas_layout();
-                            ui.close();
-                        }
-                        ui.separator();
-                        if ui
-                            .selectable_label(self.ai_panel_open, s.menu_ai_panel)
-                            .clicked()
-                        {
-                            self.ai_panel_open = !self.ai_panel_open;
-                            ui.close();
-                        }
-                    });
-                    bs.store(ui.ctx(), bar_id);
-                }
-
-                // RUN
-                {
-                    let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
-                    let r = ui.add(egui::Button::new(s.menu_run_menu));
-                    bs.bar_menu(&r, |ui| {
-                        if self.run_child.is_some() {
-                            if ui.button(s.menu_stop).clicked() {
-                                ui.close();
-                                self.stop_run();
-                            }
-                        } else {
-                            if ui.button(s.menu_run).clicked() {
-                                ui.close();
-                                self.run_scenario();
-                            }
-                            ui.add_enabled_ui(!self.multi_selected.is_empty(), |ui| {
-                                if ui.button(s.menu_run_selection).clicked() {
+                    // EDIT
+                    {
+                        let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
+                        let r = ui.add(egui::Button::new(s.menu_edit));
+                        bs.bar_menu(&r, |ui| {
+                            ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
+                                if ui.button(s.menu_undo).clicked() {
                                     ui.close();
-                                    self.run_selection();
+                                    self.undo();
                                 }
                             });
-                        }
-                    });
-                    bs.store(ui.ctx(), bar_id);
-                }
+                            ui.add_enabled_ui(!self.redo_stack.is_empty(), |ui| {
+                                if ui.button(s.menu_redo).clicked() {
+                                    ui.close();
+                                    self.redo();
+                                }
+                            });
+                            ui.separator();
+                            if ui.button(s.menu_add_step).clicked() {
+                                ui.close();
+                                self.add_menu_open = true;
+                                self.add_menu_just_opened = true;
+                                self.add_filter.clear();
+                            }
+                            ui.separator();
+                            let has_sel = !self.multi_selected.is_empty();
+                            let has_clip = !self.step_clipboard.is_empty();
+                            ui.add_enabled_ui(has_sel, |ui| {
+                                if ui.button(s.menu_copy).clicked() {
+                                    ui.close();
+                                    self.copy_selected_steps();
+                                }
+                            });
+                            ui.add_enabled_ui(has_sel, |ui| {
+                                if ui.button(s.menu_cut).clicked() {
+                                    ui.close();
+                                    self.copy_selected_steps();
+                                    self.delete_selected_steps();
+                                }
+                            });
+                            ui.add_enabled_ui(has_clip, |ui| {
+                                if ui.button(s.menu_paste).clicked() {
+                                    ui.close();
+                                    self.paste_steps();
+                                }
+                            });
+                            ui.add_enabled_ui(has_sel, |ui| {
+                                if ui.button(s.menu_duplicate).clicked() {
+                                    ui.close();
+                                    self.copy_selected_steps();
+                                    self.paste_steps();
+                                }
+                            });
+                            ui.separator();
+                            ui.add_enabled_ui(has_sel, |ui| {
+                                if ui.button(s.menu_delete_step).clicked() {
+                                    ui.close();
+                                    if self.multi_selected.len() > 1 {
+                                        let count = self.multi_selected.len();
+                                        self.confirm_dialog =
+                                            Some(ConfirmAction::DeleteSteps(count));
+                                    } else if let Some(idx) = self.selected {
+                                        self.confirm_dialog = Some(ConfirmAction::DeleteStep(idx));
+                                    }
+                                }
+                            });
+                        });
+                        bs.store(ui.ctx(), bar_id);
+                    }
 
-                // HELP
-                {
-                    let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
-                    let r = ui.add(egui::Button::new(s.menu_help));
-                    bs.bar_menu(&r, |ui| {
-                        if ui
-                            .selectable_label(self.manual_open, s.menu_manual)
-                            .clicked()
-                        {
-                            self.manual_open = !self.manual_open;
-                            ui.close();
-                        }
-                        ui.separator();
-                        if ui.button(s.menu_about).clicked() {
-                            ui.close();
-                            self.about_open = true;
-                        }
-                    });
-                    bs.store(ui.ctx(), bar_id);
-                }
+                    // VIEW
+                    {
+                        let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
+                        let r = ui.add(egui::Button::new(s.menu_view));
+                        bs.bar_menu(&r, |ui| {
+                            if ui
+                                .selectable_label(self.view_mode == ViewMode::List, s.menu_list)
+                                .clicked()
+                            {
+                                self.view_mode = ViewMode::List;
+                                ui.close();
+                            }
+                            if ui
+                                .selectable_label(self.view_mode == ViewMode::Flow, s.menu_flow)
+                                .clicked()
+                            {
+                                self.view_mode = ViewMode::Flow;
+                                self.selected_child = None;
+                                ui.close();
+                            }
+                            if ui
+                                .selectable_label(self.view_mode == ViewMode::Canvas, s.menu_canvas)
+                                .clicked()
+                            {
+                                self.view_mode = ViewMode::Canvas;
+                                self.selected_child = None;
+                                self.ensure_canvas_layout();
+                                ui.close();
+                            }
+                            ui.separator();
+                            if ui
+                                .selectable_label(self.ai_panel_open, s.menu_ai_panel)
+                                .clicked()
+                            {
+                                self.ai_panel_open = !self.ai_panel_open;
+                                ui.close();
+                            }
+                            ui.separator();
+                            use crate::settings::Theme;
+                            ui.weak(match self.settings.lang {
+                                Lang::Ja => "テーマ",
+                                Lang::En => "Theme",
+                                Lang::Zh => "主题",
+                            });
+                            if ui
+                                .selectable_label(
+                                    self.settings.theme == Theme::Light,
+                                    match self.settings.lang {
+                                        Lang::Ja => "ライト",
+                                        Lang::En => "Light",
+                                        Lang::Zh => "浅色",
+                                    },
+                                )
+                                .clicked()
+                            {
+                                self.settings.theme = Theme::Light;
+                                crate::apply_style(ui.ctx(), &self.settings.theme);
+                                save_settings(&self.settings);
+                                ui.close();
+                            }
+                            if ui
+                                .selectable_label(
+                                    self.settings.theme == Theme::Dark,
+                                    match self.settings.lang {
+                                        Lang::Ja => "ダーク",
+                                        Lang::En => "Dark",
+                                        Lang::Zh => "深色",
+                                    },
+                                )
+                                .clicked()
+                            {
+                                self.settings.theme = Theme::Dark;
+                                crate::apply_style(ui.ctx(), &self.settings.theme);
+                                save_settings(&self.settings);
+                                ui.close();
+                            }
+                            ui.separator();
+                            ui.weak(match self.settings.lang {
+                                Lang::Ja => "言語",
+                                Lang::En => "Language",
+                                Lang::Zh => "语言",
+                            });
+                            if ui
+                                .selectable_label(self.settings.lang == Lang::Ja, "日本語")
+                                .clicked()
+                            {
+                                self.settings.lang = Lang::Ja;
+                                save_settings(&self.settings);
+                                ui.close();
+                            }
+                            if ui
+                                .selectable_label(self.settings.lang == Lang::En, "English")
+                                .clicked()
+                            {
+                                self.settings.lang = Lang::En;
+                                save_settings(&self.settings);
+                                ui.close();
+                            }
+                            if ui
+                                .selectable_label(self.settings.lang == Lang::Zh, "中文")
+                                .clicked()
+                            {
+                                self.settings.lang = Lang::Zh;
+                                save_settings(&self.settings);
+                                ui.close();
+                            }
+                        });
+                        bs.store(ui.ctx(), bar_id);
+                    }
+
+                    // RUN
+                    {
+                        let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
+                        let r = ui.add(egui::Button::new(s.menu_run_menu));
+                        bs.bar_menu(&r, |ui| {
+                            if self.run_child.is_some() {
+                                if ui.button(s.menu_stop).clicked() {
+                                    ui.close();
+                                    self.stop_run();
+                                }
+                            } else {
+                                if ui.button(s.menu_run).clicked() {
+                                    ui.close();
+                                    self.run_scenario();
+                                }
+                                ui.add_enabled_ui(!self.multi_selected.is_empty(), |ui| {
+                                    if ui.button(s.menu_run_selection).clicked() {
+                                        ui.close();
+                                        self.run_selection();
+                                    }
+                                });
+                            }
+                        });
+                        bs.store(ui.ctx(), bar_id);
+                    }
+
+                    // HELP
+                    {
+                        let mut bs = egui::menu::BarState::load(ui.ctx(), bar_id);
+                        let r = ui.add(egui::Button::new(s.menu_help));
+                        bs.bar_menu(&r, |ui| {
+                            if ui
+                                .selectable_label(self.manual_open, s.menu_manual)
+                                .clicked()
+                            {
+                                self.manual_open = !self.manual_open;
+                                ui.close();
+                            }
+                            ui.separator();
+                            if ui.button(s.menu_about).clicked() {
+                                ui.close();
+                                self.about_open = true;
+                            }
+                        });
+                        bs.store(ui.ctx(), bar_id);
+                    }
+                });
             });
-        });
 
         // ── Toolbar ──────────────────────────────────────────────────────────
-        egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
-            // ── Single row: view selector | Undo Redo | Scenario name | Run/Stop | [theme] ─
-            ui.horizontal(|ui| {
-                // View selector — always visible on the left
-                ui.selectable_value(&mut self.view_mode, ViewMode::List, s.menu_list)
-                    .on_hover_text("リストビュー — ステップを縦一覧で表示");
-                if ui
-                    .selectable_value(&mut self.view_mode, ViewMode::Flow, s.menu_flow)
-                    .on_hover_text("フローチャートビュー — 分岐を木構造で表示")
-                    .clicked()
-                {
-                    self.selected_child = None;
-                    self.scroll_to_selected = true;
-                }
-                if ui
-                    .selectable_value(&mut self.view_mode, ViewMode::Canvas, s.menu_canvas)
-                    .on_hover_text("キャンバスビュー — ノードをドラッグで自由配置")
-                    .clicked()
-                {
-                    self.selected_child = None;
-                    self.ensure_canvas_layout();
-                }
-                ui.separator();
-                ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
-                    let undo_tip = if self.last_undo_name.is_empty() {
-                        "アンドゥ (Cmd+Z)".to_owned()
-                    } else {
-                        format!("アンドゥ: {} (Cmd+Z)", self.last_undo_name)
-                    };
+        egui::TopBottomPanel::top("toolbar")
+            .exact_height(crate::tokens::TOOLBAR_HEIGHT)
+            .frame(
+                egui::Frame::none()
+                    .fill(crate::tokens::toolbar_bg(ui_dark))
+                    .stroke(egui::Stroke::new(1.0, crate::tokens::border(ui_dark)))
+                    .inner_margin(egui::Margin::symmetric(8, 4)),
+            )
+            .show(ctx, |ui| {
+                // ── Single row: view selector | Undo Redo | Scenario name | Run/Stop | [theme] ─
+                ui.horizontal(|ui| {
+                    // View selector — always visible on the left
+                    ui.selectable_value(&mut self.view_mode, ViewMode::List, s.menu_list)
+                        .on_hover_text("リストビュー — ステップを縦一覧で表示");
                     if ui
-                        .button(ph::ARROW_COUNTER_CLOCKWISE)
-                        .on_hover_text(undo_tip)
+                        .selectable_value(&mut self.view_mode, ViewMode::Flow, s.menu_flow)
+                        .on_hover_text("フローチャートビュー — 分岐を木構造で表示")
                         .clicked()
                     {
-                        self.undo();
+                        self.selected_child = None;
+                        self.scroll_to_selected = true;
                     }
-                });
-                ui.add_enabled_ui(!self.redo_stack.is_empty(), |ui| {
-                    let redo_tip = self
-                        .redo_stack
-                        .back()
-                        .filter(|s| !s.action_name.is_empty())
-                        .map(|s| format!("リドゥ: {} (Cmd+Shift+Z)", s.action_name))
-                        .unwrap_or_else(|| "リドゥ (Cmd+Shift+Z)".to_owned());
                     if ui
-                        .button(ph::ARROW_CLOCKWISE)
-                        .on_hover_text(redo_tip)
+                        .selectable_value(&mut self.view_mode, ViewMode::Canvas, s.menu_canvas)
+                        .on_hover_text("キャンバスビュー — ノードをドラッグで自由配置")
                         .clicked()
                     {
-                        self.redo();
+                        self.selected_child = None;
+                        self.ensure_canvas_layout();
                     }
-                });
-                ui.separator();
-                // Scenario name — fixed width so Run/Stop fits on the same row
-                ui.label(format!("{}:", s.scenario_name_label));
-                if ui
-                    .add(egui::TextEdit::singleline(&mut self.name).desired_width(200.0))
-                    .changed()
-                {
-                    self.dirty = true;
-                }
-                ui.separator();
-                // ── Run / Stop ────────────────────────────────────────────────
-                if self.run_child.is_some() {
-                    if ui
-                        .button(format!("{} {}", ph::STOP_CIRCLE, s.btn_stop))
-                        .on_hover_text(format!("{} (F5)", s.btn_stop))
-                        .clicked()
-                    {
-                        self.stop_run();
-                    }
-                } else if ui
-                    .button(format!("{} {}", ph::PLAY, s.btn_run))
-                    .on_hover_text(format!("{} (F5)", s.btn_run))
-                    .clicked()
-                {
-                    self.run_scenario();
-                }
-
-                // ── Theme toggle (right-aligned) ──────────────────────────
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    use crate::settings::Theme;
-                    let (icon, tooltip) = match self.settings.theme {
-                        Theme::Light => ("🌙", "ダークモードに切り替え"),
-                        Theme::Dark => ("☀", "ライトモードに切り替え"),
-                    };
-                    if ui.button(icon).on_hover_text(tooltip).clicked() {
-                        self.settings.theme = match self.settings.theme {
-                            Theme::Light => Theme::Dark,
-                            Theme::Dark => Theme::Light,
+                    ui.separator();
+                    ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
+                        let undo_tip = if self.last_undo_name.is_empty() {
+                            "アンドゥ (Cmd+Z)".to_owned()
+                        } else {
+                            format!("アンドゥ: {} (Cmd+Z)", self.last_undo_name)
                         };
-                        crate::apply_style(ui.ctx(), &self.settings.theme);
-                        save_settings(&self.settings);
+                        if ui
+                            .button(ph::ARROW_COUNTER_CLOCKWISE)
+                            .on_hover_text(undo_tip)
+                            .clicked()
+                        {
+                            self.undo();
+                        }
+                    });
+                    ui.add_enabled_ui(!self.redo_stack.is_empty(), |ui| {
+                        let redo_tip = self
+                            .redo_stack
+                            .back()
+                            .filter(|s| !s.action_name.is_empty())
+                            .map(|s| format!("リドゥ: {} (Cmd+Shift+Z)", s.action_name))
+                            .unwrap_or_else(|| "リドゥ (Cmd+Shift+Z)".to_owned());
+                        if ui
+                            .button(ph::ARROW_CLOCKWISE)
+                            .on_hover_text(redo_tip)
+                            .clicked()
+                        {
+                            self.redo();
+                        }
+                    });
+                    ui.separator();
+                    // Scenario name — fixed width so Run/Stop fits on the same row
+                    ui.weak(format!("{}:", s.scenario_name_label));
+                    if ui
+                        .add(egui::TextEdit::singleline(&mut self.name).desired_width(200.0))
+                        .changed()
+                    {
+                        self.dirty = true;
                     }
+                    ui.separator();
+                    // ── Run / Stop ────────────────────────────────────────────────
+                    if self.run_child.is_some() {
+                        if ui
+                            .button(format!("{} {}", ph::STOP_CIRCLE, s.btn_stop))
+                            .on_hover_text(format!("{} (F5)", s.btn_stop))
+                            .clicked()
+                        {
+                            self.stop_run();
+                        }
+                    } else if ui
+                        .button(format!("{} {}", ph::PLAY, s.btn_run))
+                        .on_hover_text(format!("{} (F5)", s.btn_run))
+                        .clicked()
+                    {
+                        self.run_scenario();
+                    }
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.weak(match self.settings.lang {
+                            Lang::Ja => "表示メニューでテーマと言語を変更",
+                            Lang::En => "Theme and language are in View",
+                            Lang::Zh => "主题和语言在视图菜单中",
+                        });
+                    });
                 });
             });
-        });
 
         // ── Status bar (pinned to the very bottom, below bottom_panel) ───────
         {
@@ -1161,7 +1353,8 @@ impl eframe::App for EditorApp {
                         if self.view_mode == ViewMode::Canvas {
                             ui.colored_label(
                                 sb_dim,
-                                egui::RichText::new(format!("{:.0}%", self.canvas_zoom * 100.0)).small(),
+                                egui::RichText::new(format!("{:.0}%", self.canvas_zoom * 100.0))
+                                    .small(),
                             );
                             ui.colored_label(sb_dim, egui::RichText::new("|").small());
                         }
@@ -1190,6 +1383,12 @@ impl eframe::App for EditorApp {
             .resizable(true)
             .min_height(60.0)
             .default_height(160.0)
+            .frame(
+                egui::Frame::none()
+                    .fill(crate::tokens::panel_bg(ui_dark))
+                    .stroke(egui::Stroke::new(1.0, crate::tokens::border(ui_dark)))
+                    .inner_margin(egui::Margin::symmetric(8, 6)),
+            )
             .show(ctx, |ui| {
                 let problem_count = self.validate_scenario().len();
                 // Auto-switch to Problems tab when new errors appear
@@ -1231,14 +1430,66 @@ impl eframe::App for EditorApp {
                             });
                     }
                     BottomTab::Variables => {
+                        let mut delete_var: Option<serde_yml::Value> = None;
+                        let mut add_var = false;
                         egui::ScrollArea::vertical().show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.strong(match self.settings.lang {
+                                    Lang::Ja => "新しい変数",
+                                    Lang::En => "New variable",
+                                    Lang::Zh => "新变量",
+                                });
+                                ui.add_sized(
+                                    [160.0, ui.spacing().interact_size.y],
+                                    egui::TextEdit::singleline(&mut self.var_new_name).hint_text(
+                                        match self.settings.lang {
+                                            Lang::Ja => "変数名",
+                                            Lang::En => "name",
+                                            Lang::Zh => "变量名",
+                                        },
+                                    ),
+                                );
+                                ui.add_sized(
+                                    [220.0, ui.spacing().interact_size.y],
+                                    egui::TextEdit::singleline(&mut self.var_new_value).hint_text(
+                                        match self.settings.lang {
+                                            Lang::Ja => "初期値",
+                                            Lang::En => "initial value",
+                                            Lang::Zh => "初始值",
+                                        },
+                                    ),
+                                );
+                                let can_add = !self.var_new_name.trim().is_empty();
+                                if ui
+                                    .add_enabled(
+                                        can_add,
+                                        egui::Button::new(match self.settings.lang {
+                                            Lang::Ja => "追加",
+                                            Lang::En => "Add",
+                                            Lang::Zh => "添加",
+                                        }),
+                                    )
+                                    .clicked()
+                                {
+                                    add_var = true;
+                                }
+                            });
+                            ui.weak(match self.settings.lang {
+                                Lang::Ja => {
+                                    "ステップ内では {{ variable_name }} の形で参照できます。"
+                                }
+                                Lang::En => "Use variables inside steps as {{ variable_name }}.",
+                                Lang::Zh => "在步骤中使用 {{ variable_name }} 引用变量。",
+                            });
+                            ui.add(egui::Separator::default().spacing(8.0));
                             egui::Grid::new("vars_grid")
                                 .striped(true)
-                                .num_columns(2)
+                                .num_columns(3)
                                 .min_col_width(120.0)
                                 .show(ui, |ui| {
                                     ui.strong(s.vars_name_header);
                                     ui.strong(s.vars_initial_header);
+                                    ui.strong("");
                                     ui.end_row();
                                     let keys: Vec<serde_yml::Value> =
                                         self.scenario_vars.keys().cloned().collect();
@@ -1269,14 +1520,62 @@ impl eframe::App for EditorApp {
                                             }
                                         }
                                         ui.label(&val_str);
+                                        if ui
+                                            .small_button(match self.settings.lang {
+                                                Lang::Ja => "削除",
+                                                Lang::En => "Delete",
+                                                Lang::Zh => "删除",
+                                            })
+                                            .clicked()
+                                        {
+                                            delete_var = Some(key.clone());
+                                        }
                                         ui.end_row();
                                     }
                                     if self.scenario_vars.is_empty() {
-                                        ui.weak("(変数なし)");
+                                        ui.weak(match self.settings.lang {
+                                            Lang::Ja => "(変数なし)",
+                                            Lang::En => "(no variables)",
+                                            Lang::Zh => "(没有变量)",
+                                        });
+                                        ui.label("");
+                                        ui.label("");
                                         ui.end_row();
                                     }
                                 });
                         });
+                        if add_var {
+                            let name = self.var_new_name.trim().to_owned();
+                            if !name.is_empty() {
+                                self.push_undo_named(match self.settings.lang {
+                                    Lang::Ja => "変数追加",
+                                    Lang::En => "Add variable",
+                                    Lang::Zh => "添加变量",
+                                });
+                                self.scenario_vars.insert(
+                                    serde_yml::Value::String(name.clone()),
+                                    serde_yml::Value::String(self.var_new_value.clone()),
+                                );
+                                self.var_highlight = Some(name);
+                                self.var_new_name.clear();
+                                self.var_new_value.clear();
+                                self.dirty = true;
+                            }
+                        }
+                        if let Some(key) = delete_var {
+                            self.push_undo_named(match self.settings.lang {
+                                Lang::Ja => "変数削除",
+                                Lang::En => "Delete variable",
+                                Lang::Zh => "删除变量",
+                            });
+                            if let Some(name) = key.as_str() {
+                                if self.var_highlight.as_deref() == Some(name) {
+                                    self.var_highlight = None;
+                                }
+                            }
+                            self.scenario_vars.remove(&key);
+                            self.dirty = true;
+                        }
                     }
                     BottomTab::Problems => {
                         let issues = self.validate_scenario();
@@ -1330,7 +1629,8 @@ impl eframe::App for EditorApp {
                         let icon_color = if active {
                             egui::Color32::WHITE
                         } else {
-                            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 102) // 40% opacity
+                            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 102)
+                            // 40% opacity
                         };
                         let cell_rect = ui.available_rect_before_wrap();
                         let cell_rect = egui::Rect::from_min_size(
@@ -1398,13 +1698,19 @@ impl eframe::App for EditorApp {
             .frame(
                 egui::Frame::none()
                     .fill(crate::tokens::sidebar_bg(ui_dark))
-                    .inner_margin(egui::Margin { left: 0, right: 0, top: 0, bottom: 0 }),
+                    .inner_margin(egui::Margin {
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                    }),
             )
             .show(ctx, |ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
                 // Sidebar title with padding
                 let sidebar_title = match self.sidebar_tab {
-                    SidebarTab::Steps | SidebarTab::Nodes => "STEP PALETTE",
+                    SidebarTab::Steps => "SCENARIO",
+                    SidebarTab::Nodes => "STEP PALETTE",
                     SidebarTab::Templates => "TEMPLATES",
                 };
                 ui.add_space(4.0);
@@ -1418,6 +1724,64 @@ impl eframe::App for EditorApp {
                 });
                 ui.add_space(2.0);
                 ui.add(egui::Separator::default().spacing(0.0));
+
+                if self.sidebar_tab == SidebarTab::Steps {
+                    let mut select_idx: Option<usize> = None;
+                    let mut open_in_list: Option<usize> = None;
+                    egui::ScrollArea::vertical()
+                        .id_salt("activity_steps_list")
+                        .show(ui, |ui| {
+                            if self.steps.is_empty() {
+                                ui.add_space(crate::tokens::SPACING_SM);
+                                ui.weak("ステップはまだありません");
+                            }
+                            for i in 0..self.steps.len() {
+                                let key = get_step_key(&self.steps[i]);
+                                let cat = step_key_category(key);
+                                let color = category_color(cat);
+                                let summary = step_summary(&self.steps[i]);
+                                let selected = self.selected == Some(i);
+                                let disabled =
+                                    crate::state::EditorApp::step_is_disabled(&self.steps[i]);
+                                let label = if disabled {
+                                    egui::RichText::new(format!("{}  {}", i + 1, summary))
+                                        .strikethrough()
+                                        .color(crate::tokens::FG_DIM)
+                                } else {
+                                    egui::RichText::new(format!("{}  {}", i + 1, summary))
+                                };
+                                let row_resp = ui
+                                    .horizontal(|ui| {
+                                        ui.set_min_height(crate::tokens::STEP_ROW_HEIGHT);
+                                        ui.colored_label(color, "▌");
+                                        ui.selectable_label(selected, label)
+                                    })
+                                    .inner;
+                                if row_resp.clicked() {
+                                    select_idx = Some(i);
+                                }
+                                if row_resp.double_clicked() {
+                                    open_in_list = Some(i);
+                                }
+                                row_resp
+                                    .on_hover_text(format!("{}\nダブルクリックでリスト編集", key));
+                            }
+                        });
+                    ui.add(egui::Separator::default().spacing(4.0));
+                    if ui.button(s.btn_add_step).clicked() {
+                        self.add_menu_open = true;
+                        self.add_menu_just_opened = true;
+                        self.add_filter.clear();
+                    }
+                    if let Some(i) = select_idx {
+                        self.select_step(i);
+                    }
+                    if let Some(i) = open_in_list {
+                        self.select_step(i);
+                        self.view_mode = ViewMode::List;
+                    }
+                    return;
+                }
 
                 // Sync nodes_panel_tab from sidebar_tab
                 match self.sidebar_tab {
@@ -2135,138 +2499,125 @@ impl eframe::App for EditorApp {
         // ── AI side panel (must be before CentralPanel) ───────────────────
         self.show_ai_panel(ctx);
 
-        // ── Center: flowchart or YAML editor / onboarding ────────────────
-        egui::CentralPanel::default().show(ctx, |ui| {
-            if self.view_mode == ViewMode::Flow {
-                self.show_flowchart(ui);
-                return;
-            }
-            if self.view_mode == ViewMode::Canvas {
-                let drop_screen_pos = ui.input(|i| i.pointer.hover_pos());
-                let (canvas_outer, released) =
-                    ui.dnd_drop_zone::<DragPayload, _>(egui::Frame::default(), |ui| {
-                        self.show_canvas(ui);
+        // ── Right: selected-step inspector for spatial views ──────────────
+        let inspector_has_selection = self.selected.is_some();
+        let inspector_width = if inspector_has_selection {
+            crate::tokens::INSPECTOR_WIDTH_DEFAULT
+        } else {
+            crate::tokens::INSPECTOR_WIDTH_COLLAPSED
+        };
+        egui::SidePanel::right("inspector_panel")
+            .resizable(inspector_has_selection)
+            .default_width(inspector_width)
+            .min_width(if inspector_has_selection {
+                crate::tokens::INSPECTOR_WIDTH_MIN
+            } else {
+                crate::tokens::INSPECTOR_WIDTH_COLLAPSED
+            })
+            .max_width(if inspector_has_selection {
+                crate::tokens::INSPECTOR_WIDTH_MAX
+            } else {
+                crate::tokens::INSPECTOR_WIDTH_COLLAPSED
+            })
+            .frame(
+                egui::Frame::none()
+                    .fill(crate::tokens::sidebar_bg(ui_dark))
+                    .stroke(egui::Stroke::new(1.0, crate::tokens::border(ui_dark)))
+                    .inner_margin(if inspector_has_selection {
+                        egui::Margin::symmetric(10, 8)
+                    } else {
+                        egui::Margin::symmetric(0, 8)
+                    }),
+            )
+            .show_animated(ctx, self.view_mode != ViewMode::List, |ui| {
+                if let Some(idx) = self.selected {
+                    ui.label(
+                        egui::RichText::new("INSPECTOR")
+                            .size(11.0)
+                            .color(crate::tokens::FG_DIM),
+                    );
+                    ui.add(egui::Separator::default().spacing(6.0));
+                    self.show_step_editor(ui, idx, true);
+                } else {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(crate::tokens::SPACING_SM);
+                        ui.label(
+                            egui::RichText::new(egui_phosphor::regular::SIDEBAR_SIMPLE)
+                                .color(crate::tokens::FG_DIM)
+                                .size(18.0),
+                        )
+                        .on_hover_text("ステップを選択するとインスペクタを表示");
                     });
-                if let Some(payload) = released {
-                    if let DragPayload::NewStep(yaml) = *payload {
-                        if let Ok(v) = serde_yml::from_str::<serde_yml::Value>(yaml) {
-                            self.push_undo();
-                            let idx = self.steps.len();
-                            self.steps.push(v);
-                            let z = self.canvas_zoom;
-                            let origin = canvas_outer.response.rect.min;
-                            let canvas_pos = if let Some(sp) = drop_screen_pos {
-                                let rel = sp - origin;
-                                egui::pos2(
-                                    rel.x / z - self.canvas_pan.x,
-                                    rel.y / z - self.canvas_pan.y,
-                                )
-                            } else {
-                                default_canvas_pos(idx, default_canvas_cols(idx + 1))
-                            };
-                            self.canvas_positions.insert(idx, canvas_pos);
-                            self.select_step(idx);
-                            self.log_info("ノードをドロップしました");
-                        }
-                    }
                 }
-                return;
-            }
+            });
 
-            if let Some(idx) = self.selected {
-                // Bounds-check: idx may be stale after file load or step deletion
-                if idx >= self.steps.len() {
-                    self.selected = None;
+        // ── Center: flowchart or YAML editor / onboarding ────────────────
+        egui::CentralPanel::default()
+            .frame(egui::Frame::none().fill(crate::tokens::editor_bg(ui_dark)))
+            .show(ctx, |ui| {
+                if self.view_mode == ViewMode::Flow {
+                    self.show_flowchart(ui);
                     return;
                 }
-                // Inline parse error banner
-                if let Some(ref err) = self.parse_error.clone() {
-                    egui::Frame::new()
-                        .fill(crate::tokens::ERROR.gamma_multiply(0.35))
-                        .inner_margin(egui::Margin::symmetric(8, 4))
-                        .show(ui, |ui| {
-                            ui.colored_label(
-                                egui::Color32::from_rgb(255, 160, 150), // tokens::ERROR の明るいトーン
-                                format!("⚠ 構文エラー: {err}"),
-                            );
+                if self.view_mode == ViewMode::Canvas {
+                    let drop_screen_pos = ui.input(|i| i.pointer.hover_pos());
+                    let (canvas_outer, released) =
+                        ui.dnd_drop_zone::<DragPayload, _>(egui::Frame::default(), |ui| {
+                            self.show_canvas(ui);
                         });
+                    if let Some(payload) = released {
+                        if let DragPayload::NewStep(yaml) = *payload {
+                            if let Ok(v) = serde_yml::from_str::<serde_yml::Value>(yaml) {
+                                self.push_undo();
+                                let idx = self.steps.len();
+                                self.steps.push(v);
+                                let z = self.canvas_zoom;
+                                let origin = canvas_outer.response.rect.min;
+                                let canvas_pos = if let Some(sp) = drop_screen_pos {
+                                    let rel = sp - origin;
+                                    egui::pos2(
+                                        rel.x / z - self.canvas_pan.x,
+                                        rel.y / z - self.canvas_pan.y,
+                                    )
+                                } else {
+                                    default_canvas_pos(idx, default_canvas_cols(idx + 1))
+                                };
+                                self.canvas_positions.insert(idx, canvas_pos);
+                                self.select_step(idx);
+                                self.log_info("ノードをドロップしました");
+                            }
+                        }
+                    }
+                    return;
                 }
 
-                let key = get_step_key(&self.steps[idx]);
-                let cat = step_key_category(key);
-                let color = category_color(cat);
-                // Single row: title (truncated, fixed width) + tabs on the right
-                ui.horizontal(|ui| {
-                    ui.colored_label(color, "▌");
-                    // Reserve ~140px for the two tab buttons; title gets the rest
-                    let tab_reserved = 140.0_f32;
-                    let title_w = (ui.available_width() - tab_reserved).max(30.0);
-                    let row_h = ui.spacing().interact_size.y;
-                    ui.add_sized(
-                        [title_w, row_h],
-                        egui::Label::new(
-                            egui::RichText::new(format!(
-                                "ステップ {}  —  {}",
-                                idx,
-                                step_display_name(key)
-                            ))
-                            .strong(),
-                        )
-                        .truncate(),
-                    );
-                    ui.selectable_value(&mut self.prop_view, PropView::Yaml, "YAML");
-                    ui.selectable_value(&mut self.prop_view, PropView::Form, "フォーム");
-                });
-                ui.separator();
-
-                if self.prop_view == PropView::Form {
-                    self.show_property_form(ui, idx);
+                if let Some(idx) = self.selected {
+                    ui.add_space(crate::tokens::SPACING_SM);
+                    self.show_step_editor(ui, idx, true);
+                } else if self.steps.is_empty() {
+                    // Onboarding guide
+                    ui.add_space(50.0);
+                    ui.vertical_centered(|ui| {
+                        ui.heading("robost");
+                        ui.add_space(20.0);
+                        ui.label(s.onboard_1);
+                        ui.add_space(8.0);
+                        ui.label(s.onboard_2);
+                        ui.add_space(8.0);
+                        ui.label(s.onboard_3);
+                        ui.add_space(8.0);
+                        ui.label(s.onboard_4);
+                        ui.add_space(24.0);
+                        ui.separator();
+                        ui.add_space(8.0);
+                        ui.weak(s.onboard_open);
+                    });
                 } else {
-                    let response =
-                        egui::ScrollArea::vertical()
-                            .id_salt("yaml_editor")
-                            .show(ui, |ui| {
-                                ui.add(
-                                    egui::TextEdit::multiline(&mut self.edit_buf)
-                                        .code_editor()
-                                        .desired_rows(20)
-                                        .desired_width(f32::INFINITY),
-                                )
-                            });
-                    if response.inner.gained_focus() {
-                        // Snapshot before the user starts typing so Cmd+Z can revert the edit
-                        let snap = self.snapshot();
-                        self.undo_stack.push_back(snap);
-                        self.redo_stack.clear();
-                    }
-                    if response.inner.changed() {
-                        self.flush_edit();
-                    }
+                    ui.centered_and_justified(|ui| {
+                        ui.label(s.empty_select_step);
+                    });
                 }
-            } else if self.steps.is_empty() {
-                // Onboarding guide
-                ui.add_space(50.0);
-                ui.vertical_centered(|ui| {
-                    ui.heading("robost");
-                    ui.add_space(20.0);
-                    ui.label(s.onboard_1);
-                    ui.add_space(8.0);
-                    ui.label(s.onboard_2);
-                    ui.add_space(8.0);
-                    ui.label(s.onboard_3);
-                    ui.add_space(8.0);
-                    ui.label(s.onboard_4);
-                    ui.add_space(24.0);
-                    ui.separator();
-                    ui.add_space(8.0);
-                    ui.weak(s.onboard_open);
-                });
-            } else {
-                ui.centered_and_justified(|ui| {
-                    ui.label(s.empty_select_step);
-                });
-            }
-        });
+            });
 
         // ── Add step popup ────────────────────────────────────────────────
         if self.add_menu_open {

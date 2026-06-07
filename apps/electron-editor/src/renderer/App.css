@@ -1,0 +1,106 @@
+.workbench {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-primary);
+}
+
+.workbench > :first-child {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.editor-area {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+}
+
+/* Activity Bar */
+.activity-bar {
+  display: flex;
+  flex-direction: column;
+  width: var(--size-activity-bar);
+  background: var(--color-bg-primary);
+  border-right: 1px solid var(--color-border);
+  justify-content: space-between;
+  padding: var(--spacing-md) 0;
+}
+
+.activity-bar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: var(--size-activity-bar);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  border: 2px solid transparent;
+  border-left: 2px solid transparent;
+  transition: all 200ms;
+  font-size: 20px;
+}
+
+.activity-bar-button:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+.activity-bar-button.active {
+  color: var(--color-text-primary);
+  border-left-color: var(--color-accent);
+  background: var(--color-bg-secondary);
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--size-panel-default);
+  background: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border);
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.sidebar-header {
+  padding: var(--spacing-md);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sidebar-content {
+  padding: var(--spacing-sm);
+}
+
+/* Status Bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--size-status-bar);
+  background: var(--color-accent);
+  color: white;
+  padding: 0 var(--spacing-md);
+  font-size: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.status-bar-left,
+.status-bar-right {
+  display: flex;
+  gap: var(--spacing-md);
+}
+
+.status-bar-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0 var(--spacing-sm);
+}
+
+.status-bar-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
