@@ -24,6 +24,16 @@ const createWindow = () => {
       nodeIntegration: false,
       contextIsolation: true,
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+          imgSrc: ["'self'", "data:"],
+          fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net"],
+          connectSrc: ["'self'", "http://127.0.0.1:*"],
+        },
+      },
     },
   });
 

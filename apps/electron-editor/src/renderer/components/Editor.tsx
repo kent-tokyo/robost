@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ReactFlowProvider } from 'reactflow';
 import Canvas from './Canvas';
 import YAMLEditor from './YAMLEditor';
 import ScreenPanel from './ScreenPanel';
@@ -18,10 +19,10 @@ const Editor: React.FC<EditorProps> = ({ scenarioPath, onNodeSelect }) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const { canUndo, canRedo, undo, redo } = useEditorStore();
 
-  const handleNodeSelect = (nodeId: string | null) => {
+  const handleNodeSelect = useCallback((nodeId: string | null) => {
     setSelectedNodeId(nodeId);
     onNodeSelect?.(nodeId);
-  };
+  }, [onNodeSelect]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
@@ -89,7 +90,11 @@ const Editor: React.FC<EditorProps> = ({ scenarioPath, onNodeSelect }) => {
 
       {/* View content */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        {viewMode === 'canvas' && <Canvas onNodeSelect={handleNodeSelect} />}
+        {viewMode === 'canvas' && (
+          <ReactFlowProvider>
+            <Canvas onNodeSelect={handleNodeSelect} />
+          </ReactFlowProvider>
+        )}
         {viewMode === 'list' && (
           <div style={{
             padding: 'var(--spacing-lg)',
