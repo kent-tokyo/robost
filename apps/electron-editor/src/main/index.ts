@@ -129,7 +129,7 @@ const createMenu = () => {
                 type: 'info',
                 title: 'About Robost Editor',
                 message: 'Robost Editor',
-                detail: 'A powerful visual RPA editor built with Electron & React.\n\nVersion: 1.0.0\nPowered by Rust RPA Core',
+                detail: 'A visual RPA automation editor.\n\nVersion: 1.0.0',
               });
             }
           },
