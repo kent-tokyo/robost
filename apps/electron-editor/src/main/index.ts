@@ -22,9 +22,14 @@ const createWindow = () => {
 
   const startURL = isDev
     ? 'http://localhost:3000'
-    : `file://${path.join(__dirname, '..', '..', '.webpack', 'renderer', 'index.html')}`;
+    : `file://${path.join(__dirname, '..', '..', '.webpack', 'renderer', 'main_window', 'index.html')}`;
 
   mainWindow.loadURL(startURL);
+
+  // Show window when ready
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+  });
 
   if (isDev) {
     mainWindow.webContents.openDevTools();
