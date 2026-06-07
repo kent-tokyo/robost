@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from '../store/settingsStore';
+import { MoonIcon, SunIcon, ChevronDownIcon, ChevronRightIcon } from './Icons';
 import './SettingsPanel.css';
 
 const SettingsPanel: React.FC = () => {
@@ -54,14 +55,16 @@ const SettingsPanel: React.FC = () => {
               <button
                 className={`theme-button ${theme === 'dark' ? 'active' : ''}`}
                 onClick={() => setTheme('dark')}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}
               >
-                🌙 {t('settings.darkMode')}
+                <MoonIcon size={14} /> {t('settings.darkMode')}
               </button>
               <button
                 className={`theme-button ${theme === 'light' ? 'active' : ''}`}
                 onClick={() => setTheme('light')}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}
               >
-                ☀️ {t('settings.lightMode')}
+                <SunIcon size={14} /> {t('settings.lightMode')}
               </button>
             </div>
           </div>
@@ -120,8 +123,9 @@ const SettingsPanel: React.FC = () => {
           <button
             className="toggle-api-keys"
             onClick={() => setShowApiKeys(!showApiKeys)}
+            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
           >
-            {showApiKeys ? '▼' : '▶'} {t('settings.apiKeys')}
+            {showApiKeys ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />} {t('settings.apiKeys')}
           </button>
 
           {showApiKeys && (

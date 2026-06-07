@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRunStore } from '../store/runStore';
+import { ClipboardListIcon, PauseIcon, RunIcon } from './Icons';
 import './ProgressPanel.css';
 
 const ProgressPanel: React.FC = () => {
@@ -14,7 +15,7 @@ const ProgressPanel: React.FC = () => {
   return (
     <div className="progress-panel">
       <div className="progress-header">
-        <span>📋 {t('progressPanel.executionLog')}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><ClipboardListIcon size={14} /> {t('progressPanel.executionLog')}</span>
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
           <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
             {logs.length} {t('progressPanel.entries')}
@@ -36,7 +37,7 @@ const ProgressPanel: React.FC = () => {
                   }}
                   title="Pause execution"
                 >
-                  ⏸
+                  <PauseIcon size={12} />
                 </button>
               ) : (
                 <button
@@ -53,7 +54,7 @@ const ProgressPanel: React.FC = () => {
                   }}
                   title="Resume execution"
                 >
-                  ▶
+                  <RunIcon size={12} />
                 </button>
               )}
             </>

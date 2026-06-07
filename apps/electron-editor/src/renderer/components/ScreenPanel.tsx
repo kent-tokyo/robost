@@ -12,6 +12,7 @@ import {
   Region,
   Coordinate,
 } from '../utils/coordinatePicker';
+import { RefreshIcon, AlertIcon, CameraIcon, CopyIcon, CloseIcon } from './Icons';
 import './ScreenPanel.css';
 
 const ScreenPanel: React.FC = () => {
@@ -233,7 +234,7 @@ const ScreenPanel: React.FC = () => {
       <div className="screen-panel-header">
         <div className="screen-panel-controls">
           <button onClick={captureScreen} disabled={loading} title={t('common.refresh')}>
-            {loading ? <span className="loading-spinner"></span> : '🔄'} {t('common.refresh')}
+            {loading ? <span className="loading-spinner"></span> : <RefreshIcon size={14} />} {t('common.refresh')}
           </button>
 
           {/* Auto-refresh toggle */}
@@ -279,7 +280,7 @@ const ScreenPanel: React.FC = () => {
       </div>
 
       {/* Error message */}
-      {error && <div className="screen-error">⚠️ {error}</div>}
+      {error && <div className="screen-error"><AlertIcon size={14} /> {error}</div>}
 
       {/* Content */}
       <div className="screen-panel-content">
@@ -339,7 +340,7 @@ const ScreenPanel: React.FC = () => {
         ) : (
           <div className="screen-preview-container">
             <div className="screen-empty-state">
-              <div className="screen-empty-state-icon">📷</div>
+              <div className="screen-empty-state-icon"><CameraIcon size={32} /></div>
               <div className="screen-empty-state-text">{t('editor.screenCaptureHint')}</div>
               <button onClick={captureScreen}>{t('editor.captureNow')}</button>
             </div>
@@ -417,7 +418,7 @@ const ScreenPanel: React.FC = () => {
                           onClick={() => handleCopyCoordinate(coord, 'csv')}
                           title={t('editor.copyAsCSV')}
                         >
-                          📋
+                          <CopyIcon size={12} />
                         </button>
                         <button
                           onClick={() => handleCopyCoordinate(coord, 'json')}
@@ -429,7 +430,7 @@ const ScreenPanel: React.FC = () => {
                           onClick={() => removePickedCoordinate(coord.id)}
                           title={t('common.delete')}
                         >
-                          ✕
+                          <CloseIcon size={12} />
                         </button>
                       </div>
                     </div>

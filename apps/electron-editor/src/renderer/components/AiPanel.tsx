@@ -134,7 +134,7 @@ const AiPanel: React.FC = () => {
                 <span className="spinner"></span> {t('common.loading') || 'Generating...'}
               </>
             ) : (
-              <>✨ {t('ai.generateSteps') || 'Generate Steps'}</>
+              <><SparklesIcon size={14} /> {t('ai.generateSteps') || 'Generate Steps'}</>
             )}
           </button>
         </div>
@@ -213,7 +213,7 @@ const AiPanel: React.FC = () => {
                   onClick={() => handleCopyYaml(suggestion)}
                   title={t('ai.copyYaml') || 'Copy YAML'}
                 >
-                  {copiedIndex === index ? '✓' : '📋'}
+                  {copiedIndex === index ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
                 </button>
               </div>
             ))}
@@ -248,7 +248,7 @@ const AiPanel: React.FC = () => {
       {/* Empty State */}
       {!loading && suggestions.length === 0 && history.length === 0 && (
         <div className="ai-empty-state">
-          <div className="ai-empty-icon">✨</div>
+          <div className="ai-empty-icon"><SparklesIcon size={32} /></div>
           <p>{t('ai.emptyState') || 'Describe what you want to automate'}</p>
           <small>{t('ai.emptyStateHint') || 'AI will suggest steps to add'}</small>
         </div>

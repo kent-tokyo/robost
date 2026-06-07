@@ -81,12 +81,12 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
           borderBottom: '1px solid var(--color-border)',
         }}
       >
-        <span style={{ fontSize: '13px', fontWeight: '600' }}>
-          {panel === 'explorer' && `📁 ${t('sidebar.explorer')}`}
-          {panel === 'search' && `🔍 ${t('sidebar.search')}`}
-          {panel === 'run' && `▶️ ${t('sidebar.run')}`}
-          {panel === 'extensions' && `🧩 ${t('sidebar.extensions')}`}
-          {panel === 'settings' && `⚙️ ${t('sidebar.settings')}`}
+        <span style={{ fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {panel === 'explorer' && <><ExplorerIcon size={14} /> {t('sidebar.explorer')}</>}
+          {panel === 'search' && <><SearchIcon size={14} /> {t('sidebar.search')}</>}
+          {panel === 'run' && <><RunIcon size={14} /> {t('sidebar.run')}</>}
+          {panel === 'extensions' && <><ExtensionsIcon size={14} /> {t('sidebar.extensions')}</>}
+          {panel === 'settings' && <><SettingsIcon size={14} /> {t('sidebar.settings')}</>}
         </span>
       </div>
 
@@ -114,10 +114,14 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
                 cursor: 'pointer',
                 fontSize: '11px',
                 fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
               }}
               title="Create a new scenario"
             >
-              📄 New
+              <NewFileIcon size={12} /> New
             </button>
             <button
               onClick={handleOpenScenario}
@@ -130,10 +134,14 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
                 cursor: 'pointer',
                 fontSize: '11px',
                 fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
               }}
               title="Open a scenario file"
             >
-              📂 Open
+              <OpenFolderIcon size={12} /> Open
             </button>
             <button
               onClick={handleSaveScenario}
@@ -148,10 +156,14 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
                 fontSize: '11px',
                 fontWeight: '500',
                 opacity: scenarioPath ? 1 : 0.5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
               }}
               title="Save the current scenario"
             >
-              💾 Save
+              <SaveIcon size={12} /> Save
             </button>
             <button
               onClick={handleSaveAsScenario}
@@ -164,10 +176,14 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
                 cursor: 'pointer',
                 fontSize: '11px',
                 fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
               }}
               title="Save with a new filename"
             >
-              ⤳ Save As
+              <SaveAsIcon size={12} /> Save As
             </button>
           </div>
 
@@ -201,7 +217,7 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
                 {tab === 'explorer' && 'Explorer'}
                 {tab === 'recent' && 'Recent'}
                 {tab === 'templates' && 'Templates'}
-                {tab === 'ai' && '✨ AI'}
+                {tab === 'ai' && <><SparklesIcon size={12} /> AI</>}
               </button>
             ))}
           </div>
@@ -298,8 +314,8 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
                           (e.currentTarget as HTMLDivElement).style.cursor = 'grab';
                         }}
                       >
-                        <div style={{ fontWeight: '500' }}>
-                          {template.icon} {template.name}
+                        <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {getStepTypeIcon(template.iconKey, 14)} {template.name}
                         </div>
                         <div style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
                           {template.description}
@@ -339,8 +355,8 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
                           (e.currentTarget as HTMLDivElement).style.cursor = 'grab';
                         }}
                       >
-                        <div style={{ fontWeight: '500' }}>
-                          {template.icon} {template.name}
+                        <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {getStepTypeIcon(template.iconKey, 14)} {template.name}
                         </div>
                         <div style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
                           {template.description}
@@ -380,8 +396,8 @@ const Sidebar: React.FC<SidebarProps> = ({ panel, scenarioPath }) => {
                           (e.currentTarget as HTMLDivElement).style.cursor = 'grab';
                         }}
                       >
-                        <div style={{ fontWeight: '500' }}>
-                          {template.icon} {template.name}
+                        <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {getStepTypeIcon(template.iconKey, 14)} {template.name}
                         </div>
                         <div style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
                           {template.description}

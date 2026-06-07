@@ -228,7 +228,7 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
   }, [handleKeyDown]);
 
   return (
-    <div className="canvas-container" onDragOver={onDragOver} onDrop={onDrop}>
+    <div className="canvas-container">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -237,6 +237,8 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
         onConnect={onConnect}
         nodeTypes={NODE_TYPES}
         fitView
+        onDragOver={onDragOver}
+        onDrop={onDrop}
       >
         <Background color="#aaa" gap={16} />
         <Controls />
