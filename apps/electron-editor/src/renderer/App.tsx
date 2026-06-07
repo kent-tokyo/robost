@@ -75,60 +75,60 @@ const App: React.FC = () => {
 
   return (
     <div className="workbench">
-      {/* Activity Bar (left) */}
-      <ActivityBar activePanel={activePanel} onPanelChange={setActivePanel} />
+      {/* Main body: ActivityBar + Sidebar + Editor + Inspector */}
+      <div className="workbench-body">
+        {/* Activity Bar (left) */}
+        <ActivityBar activePanel={activePanel} onPanelChange={setActivePanel} />
 
-      {/* Main content area */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-        {/* Sidebar + Editor + Inspector */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          {/* Sidebar */}
-          {activePanel && <Sidebar panel={activePanel} scenarioPath={scenarioPath || ''} />}
+        {/* Sidebar */}
+        {activePanel && <Sidebar panel={activePanel} scenarioPath={scenarioPath || ''} />}
 
-          {/* Main Editor Area */}
+        {/* Main content area: Editor + Inspector */}
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+          {/* Editor Area */}
           <div className="editor-area">
             <Editor scenarioPath={scenarioPath || ''} onNodeSelect={setSelectedNodeId} />
           </div>
 
-          {/* Inspector Panel */}
-          {showInspector && (
-            <div style={{
-              width: '340px',
-              borderLeft: '1px solid var(--color-border)',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-            }}>
-              <div style={{
-                padding: '8px 16px',
-                borderBottom: '1px solid var(--color-border)',
-                fontSize: '12px',
-                fontWeight: '600',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}>
-                <span>{t('inspector.inspector')}</span>
-                <button
-                  onClick={() => setShowInspector(false)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--color-text-secondary)',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-              <Inspector selectedNodeId={selectedNodeId} />
-            </div>
-          )}
+          {/* Progress/Log Panel */}
+          <ProgressPanel />
         </div>
 
-        {/* Progress/Log Panel */}
-        <ProgressPanel />
+        {/* Inspector Panel */}
+        {showInspector && (
+          <div style={{
+            width: '340px',
+            borderLeft: '1px solid var(--color-border)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            <div style={{
+              padding: '8px 16px',
+              borderBottom: '1px solid var(--color-border)',
+              fontSize: '12px',
+              fontWeight: '600',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <span>{t('inspector.inspector')}</span>
+              <button
+                onClick={() => setShowInspector(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-secondary)',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <Inspector selectedNodeId={selectedNodeId} />
+          </div>
+        )}
       </div>
 
       {/* Status Bar (bottom) */}

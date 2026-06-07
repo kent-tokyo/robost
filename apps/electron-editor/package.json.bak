@@ -1,6 +1,6 @@
 {
   "name": "robost-editor",
-  "productName": "Robost Editor",
+  "productName": "robost-editor",
   "version": "1.0.0",
   "description": "Visual RPA Scenario Editor - Electron + Rust Backend",
   "main": ".webpack/main",

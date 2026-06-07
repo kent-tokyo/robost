@@ -24,13 +24,10 @@ i18n
   });
 
 // Listen for locale changes in settings store
-useSettingsStore.subscribe(
-  (state) => state.locale,
-  (locale: string | undefined) => {
-    if (locale) {
-      i18n.changeLanguage(locale);
-    }
+useSettingsStore.subscribe((state, prevState) => {
+  if (state.locale !== prevState.locale && state.locale) {
+    i18n.changeLanguage(state.locale);
   }
-);
+});
 
 export default i18n;
