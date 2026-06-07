@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ReactFlowProvider } from 'reactflow';
+import { CanvasIcon, ListIcon, CodeIcon, ScreenIcon, UndoIcon, RedoIcon } from './Icons';
 import Canvas from './Canvas';
 import YAMLEditor from './YAMLEditor';
 import ScreenPanel from './ScreenPanel';
@@ -49,12 +50,15 @@ const Editor: React.FC<EditorProps> = ({ scenarioPath, onNodeSelect }) => {
                 borderBottom: viewMode === mode ? '2px solid var(--color-accent)' : 'none',
                 fontSize: '12px',
                 textTransform: 'capitalize',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
             >
-              {mode === 'canvas' && `🎨 ${t('editor.canvas')}`}
-              {mode === 'list' && `📋 ${t('editor.list')}`}
-              {mode === 'code' && `📝 ${t('editor.code')}`}
-              {mode === 'screen' && `🖥️ ${t('editor.screen')}`}
+              {mode === 'canvas' && <><CanvasIcon size={14} /> {t('editor.canvas')}</>}
+              {mode === 'list' && <><ListIcon size={14} /> {t('editor.list')}</>}
+              {mode === 'code' && <><CodeIcon size={14} /> {t('editor.code')}</>}
+              {mode === 'screen' && <><ScreenIcon size={14} /> {t('editor.screen')}</>}
             </button>
           ))}
         </div>
@@ -69,9 +73,12 @@ const Editor: React.FC<EditorProps> = ({ scenarioPath, onNodeSelect }) => {
               fontSize: '12px',
               opacity: canUndo() ? 1 : 0.5,
               cursor: canUndo() ? 'pointer' : 'not-allowed',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
             }}
           >
-            ↶ {t('editor.undo')}
+            <UndoIcon size={14} /> {t('editor.undo')}
           </button>
           <button
             onClick={redo}
@@ -81,9 +88,12 @@ const Editor: React.FC<EditorProps> = ({ scenarioPath, onNodeSelect }) => {
               fontSize: '12px',
               opacity: canRedo() ? 1 : 0.5,
               cursor: canRedo() ? 'pointer' : 'not-allowed',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
             }}
           >
-            ↷ {t('editor.redo')}
+            <RedoIcon size={14} /> {t('editor.redo')}
           </button>
         </div>
       </div>

@@ -4,7 +4,7 @@ export interface TemplateDefinition {
   id: string;
   name: string;
   description: string;
-  icon: string;
+  iconKey: string;
   category: 'action' | 'control' | 'utility';
   generateSteps: () => ScenarioStep[];
 }
@@ -17,7 +17,7 @@ export const templates: TemplateDefinition[] = [
     id: 'template-click-image',
     name: 'Click Image',
     description: 'Click on an image target on screen',
-    icon: '🖱️',
+    iconKey: 'click_image',
     category: 'action',
     generateSteps: () => [
       {
@@ -37,7 +37,7 @@ export const templates: TemplateDefinition[] = [
     id: 'template-wait-image',
     name: 'Wait Image',
     description: 'Wait for an image to appear on screen',
-    icon: '⏳',
+    iconKey: 'wait_image',
     category: 'action',
     generateSteps: () => [
       {
@@ -57,7 +57,7 @@ export const templates: TemplateDefinition[] = [
     id: 'template-type-text',
     name: 'Type Text',
     description: 'Type text into the active input field',
-    icon: '⌨️',
+    iconKey: 'type',
     category: 'action',
     generateSteps: () => [
       {
@@ -78,7 +78,7 @@ export const templates: TemplateDefinition[] = [
     id: 'template-if',
     name: 'If Statement',
     description: 'Conditional branch - execute steps if condition is true',
-    icon: '🔀',
+    iconKey: 'if',
     category: 'control',
     generateSteps: () => [
       {
@@ -97,7 +97,7 @@ export const templates: TemplateDefinition[] = [
     id: 'template-foreach',
     name: 'For Each Loop',
     description: 'Loop through items in a collection',
-    icon: '🔁',
+    iconKey: 'foreach',
     category: 'control',
     generateSteps: () => [
       {
@@ -117,7 +117,7 @@ export const templates: TemplateDefinition[] = [
     id: 'template-while',
     name: 'While Loop',
     description: 'Loop while condition is true',
-    icon: '🔄',
+    iconKey: 'while',
     category: 'control',
     generateSteps: () => [
       {
@@ -139,7 +139,7 @@ export const templates: TemplateDefinition[] = [
     id: 'template-try-catch',
     name: 'Try-Catch',
     description: 'Handle errors gracefully with try-catch block',
-    icon: '🛡️',
+    iconKey: 'try_catch',
     category: 'utility',
     generateSteps: () => [
       {
@@ -161,7 +161,7 @@ export const templates: TemplateDefinition[] = [
     id: 'template-group',
     name: 'Group',
     description: 'Group related steps together for organization',
-    icon: '📦',
+    iconKey: 'group',
     category: 'utility',
     generateSteps: () => [
       {

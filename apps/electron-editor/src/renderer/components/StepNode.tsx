@@ -3,6 +3,7 @@ import { Handle, Position } from 'reactflow';
 import { useCanvasStore } from '../store/canvasStore';
 import { useScenarioStore } from '../store/scenarioStore';
 import { useEditorStore } from '../store/editorStore';
+import { getStepTypeIcon, CopyIcon, CopyPlusIcon, CommentIcon, TrashIcon } from './Icons';
 import './StepNode.css';
 
 interface StepNodeProps {
@@ -25,28 +26,7 @@ const StepNode: React.FC<StepNodeProps> = ({ id, data, isConnecting, selected })
   const { updateStep, deleteStep, duplicateStep } = useScenarioStore();
   const { saveSnapshot, setSelectedNodeId } = useEditorStore();
 
-  const getIconForType = (type: string) => {
-    const icons: Record<string, string> = {
-      click_image: '🖱️',
-      wait_image: '⏳',
-      type: '⌨️',
-      press: '📌',
-      script: '📝',
-      if: '◇',
-      foreach: '🔄',
-      while: '↩️',
-      repeat: '🔁',
-      set: '📌',
-      calc: '🧮',
-      log: '📋',
-      shell: '💻',
-      library: '📚',
-      call_scenario: '📞',
-      try_catch: '🛡️',
-      group: '📦',
-    };
-    return icons[type] || '📍';
-  };
+  const getNodeTypeIcon = (type: string): React.ReactNode => getStepTypeIcon(type, 12);
 
   const getNodeColorClass = (type: string) => {
     const colorMap: Record<string, string> = {
@@ -128,14 +108,14 @@ const StepNode: React.FC<StepNodeProps> = ({ id, data, isConnecting, selected })
       <Handle type="target" position={Position.Top} />
 
       <div className="step-node-header">
-        <span className="step-node-icon">{getIconForType(data.type)}</span>
+        <span className="step-node-icon">{getNodeTypeIcon(data.type)}</span>
         <div className="step-node-label-container">
           <span className="step-node-label">{data.label}</span>
           {data.childCount ? <span className="step-node-badge">{data.childCount}</span> : null}
         </div>
       </div>
 
-      {data.comment && <div className="step-node-comment">💬 {data.comment}</div>}
+      {data.comment && <div className="step-node-comment" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><CommentIcon size={10} /> {data.comment}</div>}
 
       <div
         className="step-node-context"
@@ -147,17 +127,17 @@ const StepNode: React.FC<StepNodeProps> = ({ id, data, isConnecting, selected })
 
       {showMenu && (
         <div className="step-node-menu" ref={menuRef}>
-          <div className="step-node-menu-item" onClick={handleCopy}>
-            📋 Copy
+          <div className="step-node-menu-item" onClick={handleCopy} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <CopyIcon size={12} /> Copy
           </div>
-          <div className="step-node-menu-item" onClick={handleDuplicate}>
-            🔀 Duplicate
+          <div className="step-node-menu-item" onClick={handleDuplicate} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <CopyPlusIcon size={12} /> Duplicate
           </div>
-          <div className="step-node-menu-item" onClick={handleAddComment}>
-            💬 Add Comment
+          <div className="step-node-menu-item" onClick={handleAddComment} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <CommentIcon size={12} /> Add Comment
           </div>
-          <div className="step-node-menu-item step-node-menu-item-danger" onClick={handleDelete}>
-            🗑️ Delete
+          <div className="step-node-menu-item step-node-menu-item-danger" onClick={handleDelete} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <TrashIcon size={12} /> Delete
           </div>
         </div>
       )}

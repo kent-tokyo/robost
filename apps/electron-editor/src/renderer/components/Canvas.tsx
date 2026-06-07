@@ -15,6 +15,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import StepNode from './StepNode';
 import SearchCanvas from './SearchCanvas';
+import { SearchIcon, LayoutIcon, GroupIcon, UngroupIcon, RunIcon, StopIcon } from './Icons';
 import { useScenarioStore } from '../store/scenarioStore';
 import { useEditorStore } from '../store/editorStore';
 import { useRunStore } from '../store/runStore';
@@ -246,36 +247,42 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
             className="canvas-toolbar-btn"
             onClick={() => setShowSearchModal(true)}
             title="Search canvas (Cmd+F)"
+            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
           >
-            🔍 Search
+            <SearchIcon size={14} /> Search
           </button>
           <button
             className="canvas-toolbar-btn"
             onClick={handleAutoLayout}
             title="Auto-layout nodes"
+            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
           >
-            📐 Layout
+            <LayoutIcon size={14} /> Layout
           </button>
           <button
             className="canvas-toolbar-btn"
             onClick={handleGroupSelected}
             title="Group selected steps"
             disabled={getSelectedNodeIds().length < 2}
+            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
           >
-            📦 Group
+            <GroupIcon size={14} /> Group
           </button>
           <button
             className="canvas-toolbar-btn"
             onClick={handleUngroupSelected}
             title="Ungroup selected steps"
+            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
           >
-            📂 Ungroup
+            <UngroupIcon size={14} /> Ungroup
           </button>
         </Panel>
 
         <Panel position="top-right" className="canvas-panel">
           <div style={{ padding: '8px', fontSize: '12px', color: '#ccc' }}>
-            <div>🎨 {nodes.length} steps</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <SearchIcon size={12} /> {nodes.length} steps
+            </div>
             {isRunning && (
               <div style={{ marginTop: '4px', fontSize: '11px' }}>
                 Running: {currentStepIndex}/{totalSteps}
@@ -297,8 +304,13 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
               fontSize: '12px',
               fontWeight: 'bold',
             }}
+            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
           >
-            {isRunning ? '⏹ Stop' : '▶ Run'}
+            {isRunning ? (
+              <><StopIcon size={14} /> Stop</>
+            ) : (
+              <><RunIcon size={14} /> Run</>
+            )}
           </button>
         </Panel>
       </ReactFlow>
