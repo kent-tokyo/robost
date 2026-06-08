@@ -89,7 +89,9 @@ pub async fn run_server(bind_addr: &str) -> Result<(Arc<broadcast::Sender<Progre
     let app_clone = app;
     eprintln!("[server] spawning HTTP server for port {bound_port}");
     tokio::spawn(async move {
-        eprintln!("[server] HTTP server task started, about to call axum::serve for port {bound_port}");
+        eprintln!(
+            "[server] HTTP server task started, about to call axum::serve for port {bound_port}"
+        );
         let result = axum::serve(listener, app_clone).await;
         eprintln!("[server] HTTP server task finished axum::serve for port {bound_port}");
         match result {

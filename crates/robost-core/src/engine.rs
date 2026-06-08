@@ -238,7 +238,10 @@ impl ScenarioEngine {
     }
 
     /// Set a broadcast channel to send progress events (e.g., for HTTP/SSE streaming).
-    pub fn with_progress_channel(mut self, tx: Option<Arc<broadcast::Sender<ProgressEvent>>>) -> Self {
+    pub fn with_progress_channel(
+        mut self,
+        tx: Option<Arc<broadcast::Sender<ProgressEvent>>>,
+    ) -> Self {
         self.progress_tx = tx;
         self
     }
@@ -546,9 +549,7 @@ impl ScenarioEngine {
         Box::pin(async move {
             // Send scenario start event.
             if let Some(ref tx) = self.progress_tx {
-                let _ = tx.send(ProgressEvent::ScenarioStart {
-                    total: steps.len(),
-                });
+                let _ = tx.send(ProgressEvent::ScenarioStart { total: steps.len() });
             }
 
             for (i, step) in steps.iter().enumerate() {
