@@ -353,7 +353,8 @@ impl eframe::App for EditorApp {
                 self.canvas_search_open = true;
             }
         }
-        if !self.add_menu_open
+        if self.view_mode == ViewMode::Canvas
+            && !self.add_menu_open
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::ArrowUp))
         {
@@ -416,7 +417,8 @@ impl eframe::App for EditorApp {
                 }
             }
         }
-        if !self.add_menu_open
+        if self.view_mode == ViewMode::Canvas
+            && !self.add_menu_open
             && self.confirm_dialog.is_none()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::ArrowDown))
         {

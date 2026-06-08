@@ -445,19 +445,19 @@ impl EditorApp {
             Color32::from_gray(255)
         };
         let node_bg_disabled = if dark {
-            Color32::from_gray(30)
+            tokens::NODE_BG_DISABLED
         } else {
-            Color32::from_gray(240)
+            tokens::NODE_BG_DISABLED_LIGHT
         };
         let node_bg_selected = if dark {
             tokens::NODE_BG_SELECTED
         } else {
-            Color32::from_rgb(0xCC, 0xE0, 0xFF)
+            tokens::NODE_BG_SELECTED_LIGHT
         };
         let node_bg_running = if dark {
             tokens::NODE_BG_RUNNING
         } else {
-            Color32::from_rgb(0xFF, 0xF5, 0xCC)
+            tokens::NODE_BG_RUNNING_LIGHT
         };
         // Node border — near-invisible (1 step lighter/darker than node bg)
         let node_border = if dark {
@@ -733,10 +733,11 @@ impl EditorApp {
                 start_pill_bg,
             );
             if z >= 0.5 {
+                let s = crate::i18n::S::for_lang(&self.settings.lang);
                 painter.text(
                     start_c,
                     Align2::CENTER_CENTER,
-                    "▶  開始",
+                    s.hint_start_terminal,
                     FontId::proportional(10.0 * z),
                     start_pill_text,
                 );
@@ -767,10 +768,11 @@ impl EditorApp {
                 end_pill_bg,
             );
             if z >= 0.5 {
+                let s = crate::i18n::S::for_lang(&self.settings.lang);
                 painter.text(
                     end_c,
                     Align2::CENTER_CENTER,
-                    "■  終了",
+                    s.hint_end_terminal,
                     FontId::proportional(10.0 * z),
                     end_pill_text,
                 );
@@ -945,10 +947,11 @@ impl EditorApp {
                 painter.circle_filled(from_p, 5.0 * z, tokens::ACCENT);
                 painter.circle_filled(end_pos, 5.0 * z, tokens::ACCENT);
                 // Label anchored to the source port — doesn't move with cursor
+                let s = crate::i18n::S::for_lang(&self.settings.lang);
                 painter.text(
                     from_p + egui::Vec2::new(10.0 * z, -12.0 * z),
                     egui::Align2::LEFT_BOTTOM,
-                    "→ ここに移動",
+                    s.hint_drag_move,
                     egui::FontId::proportional(10.0 * z),
                     tokens::ACCENT,
                 );
@@ -1048,69 +1051,102 @@ impl EditorApp {
                 let s = crate::i18n::S::for_lang(&self.settings.lang);
                 {
                     let is_dis = crate::state::EditorApp::step_is_disabled(&self.steps[idx]);
-                    let toggle_label = if is_dis {
-                        "● 有効化"
-                    } else {
-                        "○ 無効化"
-                    };
-                    if ui.button(toggle_label).clicked() {
+                    let toggle_label = if is_dis { s.node_enable } else { s.node_disable };
+                    if ui.button(toggle_label)
+                        .on_hover_text(if is_dis { "Enable this step" } else { "Disable this step" })
+                        .clicked()
+                    {
                         canvas_ctx_action = Some(CanvasContextAction::ToggleEnabled(idx));
                         ui.close();
                     }
                     ui.separator();
                 }
-                if ui.button(s.ctx_copy).clicked() {
+                if ui.button(s.ctx_copy)
+                    .on_hover_text("Cmd+C")
+                    .clicked()
+                {
                     canvas_ctx_action = Some(CanvasContextAction::CopySelected);
                     ui.close();
                 }
-                if ui.button(s.ctx_cut).clicked() {
+                if ui.button(s.ctx_cut)
+                    .on_hover_text("Cmd+X")
+                    .clicked()
+                {
                     canvas_ctx_action = Some(CanvasContextAction::CutSelected);
                     ui.close();
                 }
-                if ui.button(s.ctx_duplicate).clicked() {
+                if ui.button(s.ctx_duplicate)
+                    .on_hover_text("Cmd+D")
+                    .clicked()
+                {
                     canvas_ctx_action = Some(CanvasContextAction::Duplicate(idx));
                     ui.close();
                 }
-                if !self.step_clipboard.is_empty() && ui.button(s.ctx_paste).clicked() {
+                if !self.step_clipboard.is_empty()
+                    && ui.button(s.ctx_paste)
+                        .on_hover_text("Cmd+V")
+                        .clicked()
+                {
                     canvas_ctx_action = Some(CanvasContextAction::Paste);
                     ui.close();
                 }
                 ui.separator();
-                if ui.button(s.ctx_delete).clicked() {
+                if ui.button(s.ctx_delete)
+                    .on_hover_text("Delete")
+                    .clicked()
+                {
                     canvas_ctx_action = Some(CanvasContextAction::Delete(idx));
                     ui.close();
                 }
                 ui.separator();
-                if ui.button(s.ctx_open_in_list).clicked() {
+                if ui.button(s.ctx_open_in_list)
+                    .on_hover_text("Switch to List view")
+                    .clicked()
+                {
                     canvas_ctx_action = Some(CanvasContextAction::OpenInList(idx));
                     ui.close();
                 }
-                if self.run_child.is_none()
-                    && ui
-                        .button(format!("▶ ここから実行 (ステップ {}〜)", idx + 1))
-                        .on_hover_text("このステップ以降のみを実行します")
+                if self.run_child.is_none() {
+                    let label = s.ctx_run_from_here.replace("{}", &(idx + 1).to_string());
+                    if ui
+                        .button(&label)
+                        .on_hover_text("Execute this step and subsequent steps only")
                         .clicked()
-                {
-                    canvas_ctx_action = Some(CanvasContextAction::RunFrom(idx));
-                    ui.close();
+                    {
+                        canvas_ctx_action = Some(CanvasContextAction::RunFrom(idx));
+                        ui.close();
+                    }
                 }
                 if self.multi_selected.len() >= 2 && self.multi_selected.contains(&idx) {
                     ui.separator();
-                    ui.weak(format!("{} ({})", s.ctx_align, self.multi_selected.len()));
-                    if ui.button("← 左揃え").clicked() {
+                    let align_label = s.ctx_align_label.replace("{}", &self.multi_selected.len().to_string());
+                    ui.weak(&align_label);
+                    if ui.button(s.ctx_align_left)
+                        .on_hover_text("Align selected nodes to the leftmost")
+                        .clicked()
+                    {
                         canvas_ctx_action = Some(CanvasContextAction::AlignLeft);
                         ui.close();
                     }
-                    if ui.button("↑ 上揃え").clicked() {
+                    if ui.button(s.ctx_align_top)
+                        .on_hover_text("Align selected nodes to the topmost")
+                        .clicked()
+                    {
                         canvas_ctx_action = Some(CanvasContextAction::AlignTop);
                         ui.close();
                     }
                     if self.multi_selected.len() >= 3 {
-                        if ui.button("↔ 水平等間隔").clicked() {
+                        if ui.button(s.ctx_distribute_h)
+                            .on_hover_text("Distribute selected nodes horizontally")
+                            .clicked()
+                        {
                             canvas_ctx_action = Some(CanvasContextAction::DistributeH);
                             ui.close();
                         }
-                        if ui.button("↕ 垂直等間隔").clicked() {
+                        if ui.button(s.ctx_distribute_v)
+                            .on_hover_text("Distribute selected nodes vertically")
+                            .clicked()
+                        {
                             canvas_ctx_action = Some(CanvasContextAction::DistributeV);
                             ui.close();
                         }
@@ -1150,7 +1186,8 @@ impl EditorApp {
                         ui.label(&full_label);
                     });
                 } else if self.selected != Some(idx) {
-                    node_resp.on_hover_text("ダブルクリックで List ビューで編集");
+                    let s = crate::i18n::S::for_lang(&self.settings.lang);
+                    node_resp.on_hover_text(s.hint_dblclick_list);
                 }
             }
 
@@ -1514,7 +1551,8 @@ impl EditorApp {
                     let tip_rect =
                         egui::Rect::from_center_size(port_center, egui::vec2(20.0 * z, 12.0 * z));
                     let tip_resp = ui.allocate_rect(tip_rect, Sense::hover());
-                    tip_resp.on_hover_text("ドラッグして並び替え");
+                    let s = crate::i18n::S::for_lang(&self.settings.lang);
+                    tip_resp.on_hover_text(s.hint_drag_reorder);
                 }
             }
             // Input port highlight when an edge drag is hovering over this node
@@ -1761,7 +1799,7 @@ impl EditorApp {
                 self.add_filter.clear();
                 ui.close();
             }
-            if ui.button("📝 コメントを追加").clicked() {
+            if ui.button(s.ctx_add_comment).clicked() {
                 if let Some(click_screen) = ui.input(|i| i.pointer.interact_pos()) {
                     let canvas_pos = egui::pos2(
                         (click_screen.x - origin.x) / z - self.canvas_pan.x,
@@ -1772,7 +1810,7 @@ impl EditorApp {
                 ui.close();
             }
             ui.separator();
-            if ui.button("全選択").clicked() {
+            if ui.button(s.ctx_select_all).clicked() {
                 canvas_ctx_action = Some(CanvasContextAction::SelectAll);
                 ui.close();
             }
@@ -1782,21 +1820,22 @@ impl EditorApp {
             }
             if self.multi_selected.len() >= 2 {
                 ui.separator();
-                ui.weak(format!("整列 ({} 選択)", self.multi_selected.len()));
-                if ui.button("← 左揃え").clicked() {
+                let align_label = s.ctx_align_label.replace("{}", &self.multi_selected.len().to_string());
+                ui.weak(&align_label);
+                if ui.button(s.ctx_align_left).clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::AlignLeft);
                     ui.close();
                 }
-                if ui.button("↑ 上揃え").clicked() {
+                if ui.button(s.ctx_align_top).clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::AlignTop);
                     ui.close();
                 }
                 if self.multi_selected.len() >= 3 {
-                    if ui.button("↔ 水平等間隔").clicked() {
+                    if ui.button(s.ctx_distribute_h).clicked() {
                         canvas_ctx_action = Some(CanvasContextAction::DistributeH);
                         ui.close();
                     }
-                    if ui.button("↕ 垂直等間隔").clicked() {
+                    if ui.button(s.ctx_distribute_v).clicked() {
                         canvas_ctx_action = Some(CanvasContextAction::DistributeV);
                         ui.close();
                     }
@@ -1939,14 +1978,14 @@ impl EditorApp {
                     Align2::CENTER_CENTER,
                     s.empty_canvas_no_file,
                     FontId::proportional(13.0),
-                    Color32::from_gray(100),
+                    tokens::TEXT_MUTED,
                 );
                 painter.text(
                     center + egui::vec2(0.0, 10.0),
                     Align2::CENTER_CENTER,
-                    "Cmd+N で新規シナリオ / Cmd+O で開く",
+                    s.hint_cmd_new_open,
                     FontId::proportional(11.0),
-                    Color32::from_gray(65),
+                    tokens::TEXT_MUTED_SECONDARY,
                 );
             } else {
                 // Clickable "add first step" button in the canvas center
@@ -1956,10 +1995,10 @@ impl EditorApp {
                     .show(ui.ctx(), |ui| {
                         if ui
                             .add(
-                                egui::Button::new("＋ ステップを追加")
+                                egui::Button::new(s.btn_add_first_step)
                                     .min_size(egui::vec2(140.0, 36.0)),
                             )
-                            .on_hover_text("Cmd+Shift+A でも追加できます")
+                            .on_hover_text(s.hint_add_step_shortcut)
                             .clicked()
                         {
                             self.add_menu_open = true;
@@ -2071,10 +2110,7 @@ impl EditorApp {
                 painter.rect_stroke(
                     comment_rect,
                     3.0 * z,
-                    egui::Stroke::new(
-                        1.0,
-                        egui::Color32::from_rgba_premultiplied(180, 160, 50, 200),
-                    ),
+                    egui::Stroke::new(1.0, tokens::COMMENT_BORDER),
                     egui::StrokeKind::Inside,
                 );
 
@@ -2095,7 +2131,13 @@ impl EditorApp {
                         ),
                         te,
                     );
-                    if te_resp.lost_focus() {
+                    // Esc: cancel editing (discard changes)
+                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                        self.canvas_editing_comment = None;
+                        self.canvas_layout_dirty = true;
+                    }
+                    // Lost focus or explicit finish: confirm editing
+                    else if te_resp.lost_focus() {
                         self.canvas_editing_comment = None;
                         self.canvas_layout_dirty = true;
                     }
@@ -2107,7 +2149,7 @@ impl EditorApp {
                         egui::Align2::LEFT_TOP,
                         &c.text,
                         egui::FontId::proportional((11.0 * z).max(9.0)),
-                        egui::Color32::from_gray(30),
+                        tokens::COMMENT_TEXT,
                     );
                 }
 
@@ -2118,7 +2160,7 @@ impl EditorApp {
                         egui::Align2::RIGHT_TOP,
                         "📝",
                         egui::FontId::proportional(9.0 * z),
-                        egui::Color32::from_rgba_premultiplied(100, 80, 0, 180),
+                        tokens::COMMENT_ICON_COLOR,
                     );
                 }
 
@@ -2137,6 +2179,8 @@ impl EditorApp {
                         .unwrap_or(comment_rect.min);
                     let offset = cursor - comment_rect.min;
                     self.canvas_comment_drag = Some((ci, offset));
+                    // Stop editing when drag starts
+                    self.canvas_editing_comment = None;
                 }
                 if comment_resp.dragged() {
                     if let Some((drag_ci, offset)) = self.canvas_comment_drag {

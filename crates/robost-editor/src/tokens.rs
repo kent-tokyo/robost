@@ -105,12 +105,39 @@ pub(crate) const BADGE_BG: Color32 = Color32::from_rgb(0x4D, 0x4D, 0x4D);
 pub(crate) const CANVAS_BG: Color32 = EDITOR_BG;
 /// Step node base background.
 pub(crate) const NODE_BG: Color32 = Color32::from_rgb(0x2D, 0x2D, 0x2D);
+/// Disabled node background (dark mode).
+pub(crate) const NODE_BG_DISABLED: Color32 = Color32::from_gray(30);
+/// Disabled node background (light mode).
+pub(crate) const NODE_BG_DISABLED_LIGHT: Color32 = Color32::from_gray(240);
 /// Selected node background.
 pub(crate) const NODE_BG_SELECTED: Color32 = LIST_SELECTION;
+/// Selected node background (light mode).
+pub(crate) const NODE_BG_SELECTED_LIGHT: Color32 = Color32::from_rgb(0xCC, 0xE0, 0xFF);
 /// Running node background.
 pub(crate) const NODE_BG_RUNNING: Color32 = Color32::from_rgb(0x30, 0x28, 0x00);
+/// Running node background (light mode).
+pub(crate) const NODE_BG_RUNNING_LIGHT: Color32 = Color32::from_rgb(0xFF, 0xF5, 0xCC);
 /// Flow edge / connection line color.
 pub(crate) const EDGE_COLOR: Color32 = Color32::from_rgb(0x5F, 0x5F, 0x5F);
+
+// ── Comment / annotation colors ───────────────────────────────────────────────
+
+/// Comment sticky note background (yellow with alpha).
+#[allow(dead_code)]
+pub(crate) const COMMENT_FILL: Color32 = Color32::from_rgba_premultiplied(255, 220, 80, 35);
+/// Comment border (darker yellow).
+pub(crate) const COMMENT_BORDER: Color32 = Color32::from_rgba_premultiplied(180, 160, 50, 200);
+/// Comment text color (dark mode).
+pub(crate) const COMMENT_TEXT: Color32 = Color32::from_gray(30);
+/// Comment icon (📝 indicator in corner).
+pub(crate) const COMMENT_ICON_COLOR: Color32 = Color32::from_rgba_premultiplied(100, 80, 0, 180);
+
+// ── Empty state / muted text ──────────────────────────────────────────────────
+
+/// Muted text (gray, used for empty state descriptions).
+pub(crate) const TEXT_MUTED: Color32 = Color32::from_gray(100);
+/// Secondary muted text (lighter, for additional context).
+pub(crate) const TEXT_MUTED_SECONDARY: Color32 = Color32::from_gray(65);
 
 // ── Spacing (4 px grid) ───────────────────────────────────────────────────────
 
