@@ -53,7 +53,7 @@ A Rust-based OSS desktop automation (RPA) tool.
 - **Transient UI capture** — hotkey freezes the screen so you can select dropdowns and tooltips that would otherwise disappear
 - **WASM plugins** — sandboxed extensions; a crashing plugin can't bring down the runner
 - **Plain YAML scenarios** — variables, loops, branches, inline Rhai scripts, sub-scenarios, data sources
-- **Visual editor** — list and Canvas view (free-placement, zoom/pan, minimap, snap), AI step creation from natural language, AI scenario assistant (Anthropic/OpenAI), EN/JA/ZH UI
+- **Visual editor** — list and Canvas view (free-placement, zoom/pan, minimap, snap, align/distribute), AI step creation from natural language, AI scenario assistant (Anthropic/OpenAI), context menu tooltips, full i18n (EN/JA/ZH)
 
 ## Comparison with Automation Tools
 
