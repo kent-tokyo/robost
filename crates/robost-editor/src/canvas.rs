@@ -1051,9 +1051,18 @@ impl EditorApp {
                 let s = crate::i18n::S::for_lang(&self.settings.lang);
                 {
                     let is_dis = crate::state::EditorApp::step_is_disabled(&self.steps[idx]);
-                    let toggle_label = if is_dis { s.node_enable } else { s.node_disable };
-                    if ui.button(toggle_label)
-                        .on_hover_text(if is_dis { "Enable this step" } else { "Disable this step" })
+                    let toggle_label = if is_dis {
+                        s.node_enable
+                    } else {
+                        s.node_disable
+                    };
+                    if ui
+                        .button(toggle_label)
+                        .on_hover_text(if is_dis {
+                            "Enable this step"
+                        } else {
+                            "Disable this step"
+                        })
                         .clicked()
                     {
                         canvas_ctx_action = Some(CanvasContextAction::ToggleEnabled(idx));
@@ -1061,45 +1070,32 @@ impl EditorApp {
                     }
                     ui.separator();
                 }
-                if ui.button(s.ctx_copy)
-                    .on_hover_text("Cmd+C")
-                    .clicked()
-                {
+                if ui.button(s.ctx_copy).on_hover_text("Cmd+C").clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::CopySelected);
                     ui.close();
                 }
-                if ui.button(s.ctx_cut)
-                    .on_hover_text("Cmd+X")
-                    .clicked()
-                {
+                if ui.button(s.ctx_cut).on_hover_text("Cmd+X").clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::CutSelected);
                     ui.close();
                 }
-                if ui.button(s.ctx_duplicate)
-                    .on_hover_text("Cmd+D")
-                    .clicked()
-                {
+                if ui.button(s.ctx_duplicate).on_hover_text("Cmd+D").clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::Duplicate(idx));
                     ui.close();
                 }
                 if !self.step_clipboard.is_empty()
-                    && ui.button(s.ctx_paste)
-                        .on_hover_text("Cmd+V")
-                        .clicked()
+                    && ui.button(s.ctx_paste).on_hover_text("Cmd+V").clicked()
                 {
                     canvas_ctx_action = Some(CanvasContextAction::Paste);
                     ui.close();
                 }
                 ui.separator();
-                if ui.button(s.ctx_delete)
-                    .on_hover_text("Delete")
-                    .clicked()
-                {
+                if ui.button(s.ctx_delete).on_hover_text("Delete").clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::Delete(idx));
                     ui.close();
                 }
                 ui.separator();
-                if ui.button(s.ctx_open_in_list)
+                if ui
+                    .button(s.ctx_open_in_list)
                     .on_hover_text("Switch to List view")
                     .clicked()
                 {
@@ -1119,16 +1115,20 @@ impl EditorApp {
                 }
                 if self.multi_selected.len() >= 2 && self.multi_selected.contains(&idx) {
                     ui.separator();
-                    let align_label = s.ctx_align_label.replace("{}", &self.multi_selected.len().to_string());
+                    let align_label = s
+                        .ctx_align_label
+                        .replace("{}", &self.multi_selected.len().to_string());
                     ui.weak(&align_label);
-                    if ui.button(s.ctx_align_left)
+                    if ui
+                        .button(s.ctx_align_left)
                         .on_hover_text("Align selected nodes to the leftmost")
                         .clicked()
                     {
                         canvas_ctx_action = Some(CanvasContextAction::AlignLeft);
                         ui.close();
                     }
-                    if ui.button(s.ctx_align_top)
+                    if ui
+                        .button(s.ctx_align_top)
                         .on_hover_text("Align selected nodes to the topmost")
                         .clicked()
                     {
@@ -1136,14 +1136,16 @@ impl EditorApp {
                         ui.close();
                     }
                     if self.multi_selected.len() >= 3 {
-                        if ui.button(s.ctx_distribute_h)
+                        if ui
+                            .button(s.ctx_distribute_h)
                             .on_hover_text("Distribute selected nodes horizontally")
                             .clicked()
                         {
                             canvas_ctx_action = Some(CanvasContextAction::DistributeH);
                             ui.close();
                         }
-                        if ui.button(s.ctx_distribute_v)
+                        if ui
+                            .button(s.ctx_distribute_v)
                             .on_hover_text("Distribute selected nodes vertically")
                             .clicked()
                         {
@@ -1820,7 +1822,9 @@ impl EditorApp {
             }
             if self.multi_selected.len() >= 2 {
                 ui.separator();
-                let align_label = s.ctx_align_label.replace("{}", &self.multi_selected.len().to_string());
+                let align_label = s
+                    .ctx_align_label
+                    .replace("{}", &self.multi_selected.len().to_string());
                 ui.weak(&align_label);
                 if ui.button(s.ctx_align_left).clicked() {
                     canvas_ctx_action = Some(CanvasContextAction::AlignLeft);
