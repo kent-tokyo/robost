@@ -2131,13 +2131,8 @@ impl EditorApp {
                         ),
                         te,
                     );
-                    // Esc: cancel editing (discard changes)
-                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                        self.canvas_editing_comment = None;
-                        self.canvas_layout_dirty = true;
-                    }
-                    // Lost focus or explicit finish: confirm editing
-                    else if te_resp.lost_focus() {
+                    // Esc or lost focus: end editing
+                    if ui.input(|i| i.key_pressed(egui::Key::Escape)) || te_resp.lost_focus() {
                         self.canvas_editing_comment = None;
                         self.canvas_layout_dirty = true;
                     }
