@@ -35,7 +35,7 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
   const { saveSnapshot } = useEditorStore();
   const { isRunning, currentStepIndex, totalSteps, elapsedMs } = useRunStore();
   const { runScenario, stopScenario } = useRpaServer();
-  const { getZoom, getViewport, setCenter } = useReactFlow();
+  const { getZoom, getViewport, setCenter, screenToFlowPosition } = useReactFlow();
   const { getSelectedNodeIds, clearSelection, searchHighlightIds, getFromClipboard, clearClipboard, filterType } = useCanvasStore();
   const [showSearchModal, setShowSearchModal] = useState(false);
 
@@ -82,6 +82,7 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
 
   const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
   }, []);
 
@@ -89,16 +90,7 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // Get canvas position from mouse coordinates
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
-    const canvasX = e.clientX - rect.left;
-    const canvasY = e.clientY - rect.top;
-
-    // Convert screen coordinates to canvas coordinates using current viewport
-    const viewport = getViewport();
-    const zoom = getZoom();
-    const nodeX = (canvasX - viewport.x) / zoom;
-    const nodeY = (canvasY - viewport.y) / zoom;
+    const { x: nodeX, y: nodeY } = screenToFlowPosition({ x: e.clientX, y: e.clientY });
 
     // Try to get template data first (from template gallery)
     const templateData = e.dataTransfer.getData('templateData');
@@ -115,7 +107,7 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
             },
           };
           addStep(newStep);
-          xOffset += 250; // Offset each step horizontally
+          xOffset += 250;
         });
         saveSnapshot(`Add template: ${steps[0]?.name || 'unknown'}`);
       } catch (err) {
@@ -141,7 +133,7 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
 
     addStep(newStep);
     saveSnapshot(`Add step: ${stepType}`);
-  }, [addStep, saveSnapshot, getViewport, getZoom]);
+  }, [addStep, saveSnapshot, screenToFlowPosition]);
 
   const handleDeleteNode = useCallback((nodeId: string) => {
     deleteStep(nodeId);
@@ -252,6 +244,27 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  // Sync scenario.steps to canvas nodes whenever steps change
+  useEffect(() => {
+    setNodes((currentNodes) => {
+      const positionMap = new Map(currentNodes.map((n) => [n.id, n.position]));
+      return scenario.steps.map((step, index) => ({
+        id: step.id,
+        type: 'stepNode',
+        data: {
+          label: step.name,
+          type: step.type,
+          comment: step.comment,
+          isGrouped: step.type === 'group',
+          childCount: step.childSteps?.length || 0,
+        },
+        position: positionMap.get(step.id)
+          ?? canvasLayout.nodes[index]?.position
+          ?? { x: 250, y: index * 150 },
+      }));
+    });
+  }, [scenario.steps, canvasLayout.nodes, setNodes]);
+
   return (
     <div className="canvas-container" onDragOver={onDragOver} onDrop={onDrop}>
       <ReactFlow
@@ -328,8 +341,10 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
               cursor: 'pointer',
               fontSize: '12px',
               fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
             }}
-            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
           >
             {isRunning ? (
               <><StopIcon size={14} /> Stop</>
