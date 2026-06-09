@@ -109,6 +109,26 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
           addStep(newStep);
           xOffset += 250;
         });
+
+        // Update canvas nodes after adding steps
+        setNodes((currentNodes) => {
+          const positionMap = new Map(currentNodes.map((n) => [n.id, n.position]));
+          return scenario.steps.map((step, index) => ({
+            id: step.id,
+            type: 'stepNode',
+            data: {
+              label: step.name,
+              type: step.type,
+              comment: step.comment,
+              isGrouped: step.type === 'group',
+              childCount: step.childSteps?.length || 0,
+            },
+            position: positionMap.get(step.id)
+              ?? canvasLayout.nodes[index]?.position
+              ?? { x: 250, y: index * 150 },
+          }));
+        });
+
         saveSnapshot(`Add template: ${steps[0]?.name || 'unknown'}`);
       } catch (err) {
         console.error('Failed to parse template data:', err);
@@ -132,8 +152,28 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
     };
 
     addStep(newStep);
+
+    // Update canvas nodes after adding step
+    setNodes((currentNodes) => {
+      const positionMap = new Map(currentNodes.map((n) => [n.id, n.position]));
+      return scenario.steps.map((step, index) => ({
+        id: step.id,
+        type: 'stepNode',
+        data: {
+          label: step.name,
+          type: step.type,
+          comment: step.comment,
+          isGrouped: step.type === 'group',
+          childCount: step.childSteps?.length || 0,
+        },
+        position: positionMap.get(step.id)
+          ?? canvasLayout.nodes[index]?.position
+          ?? { x: 250, y: index * 150 },
+      }));
+    });
+
     saveSnapshot(`Add step: ${stepType}`);
-  }, [addStep, saveSnapshot, screenToFlowPosition]);
+  }, [addStep, saveSnapshot, screenToFlowPosition, setNodes]);
 
   const handleDeleteNode = useCallback((nodeId: string) => {
     deleteStep(nodeId);
@@ -243,27 +283,6 @@ const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
-
-  // Sync scenario.steps to canvas nodes whenever steps change
-  useEffect(() => {
-    setNodes((currentNodes) => {
-      const positionMap = new Map(currentNodes.map((n) => [n.id, n.position]));
-      return scenario.steps.map((step, index) => ({
-        id: step.id,
-        type: 'stepNode',
-        data: {
-          label: step.name,
-          type: step.type,
-          comment: step.comment,
-          isGrouped: step.type === 'group',
-          childCount: step.childSteps?.length || 0,
-        },
-        position: positionMap.get(step.id)
-          ?? canvasLayout.nodes[index]?.position
-          ?? { x: 250, y: index * 150 },
-      }));
-    });
-  }, [scenario.steps, canvasLayout.nodes, setNodes]);
 
   return (
     <div className="canvas-container" onDragOver={onDragOver} onDrop={onDrop}>
