@@ -173,7 +173,6 @@ pub(crate) enum SidebarTab {
 pub(crate) enum CanvasContextAction {
     Delete(usize),
     Duplicate(usize),
-    OpenInList(usize),
     RunFrom(usize),
     CopySelected,
     CutSelected,
@@ -192,8 +191,6 @@ pub(crate) enum CanvasContextAction {
 #[derive(PartialEq, Clone, Copy, Default)]
 pub(crate) enum ViewMode {
     #[default]
-    List,
-    Flow,
     Canvas,
 }
 
@@ -216,16 +213,6 @@ pub(crate) struct ValidationIssue {
     pub(crate) step_idx: usize,
     pub(crate) message: String,
     pub(crate) level: LogLevel,
-}
-
-pub(crate) struct FlowNode {
-    pub(crate) step_idx: usize,
-    pub(crate) depth: usize,
-    pub(crate) label: String,
-    pub(crate) color: egui::Color32,
-    pub(crate) expand_key: Option<usize>,
-    pub(crate) is_expanded: bool,
-    pub(crate) is_header: bool,
 }
 
 // ---- log --------------------------------------------------------------------

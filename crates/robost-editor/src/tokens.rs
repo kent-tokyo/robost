@@ -9,7 +9,7 @@ use egui::{Color32, CornerRadius};
 pub(crate) const ACTIVITY_BAR_BG: Color32 = Color32::from_rgb(0x33, 0x33, 0x33);
 /// Sidebar panel background — dark mode.
 pub(crate) const SIDEBAR_BG: Color32 = Color32::from_rgb(0x25, 0x25, 0x26);
-/// Canvas / List / Flow editor area — dark mode.
+/// Canvas editor area — dark mode.
 pub(crate) const EDITOR_BG: Color32 = Color32::from_rgb(0x1E, 0x1E, 0x1E);
 /// Status bar — accent blue (same in both themes).
 pub(crate) const STATUSBAR_BG: Color32 = Color32::from_rgb(0x00, 0x7A, 0xCC);
@@ -117,7 +117,7 @@ pub(crate) const NODE_BG_SELECTED_LIGHT: Color32 = Color32::from_rgb(0xCC, 0xE0,
 pub(crate) const NODE_BG_RUNNING: Color32 = Color32::from_rgb(0x30, 0x28, 0x00);
 /// Running node background (light mode).
 pub(crate) const NODE_BG_RUNNING_LIGHT: Color32 = Color32::from_rgb(0xFF, 0xF5, 0xCC);
-/// Flow edge / connection line color.
+/// Canvas edge / connection line color.
 pub(crate) const EDGE_COLOR: Color32 = Color32::from_rgb(0x5F, 0x5F, 0x5F);
 
 // ── Comment / annotation colors ───────────────────────────────────────────────
@@ -179,9 +179,6 @@ pub(crate) const SIDEBAR_WIDTH_DEFAULT: f32 = 240.0;
 #[allow(dead_code)]
 pub(crate) const SIDEBAR_WIDTH_MIN: f32 = 180.0;
 pub(crate) const INSPECTOR_WIDTH_DEFAULT: f32 = 340.0;
-pub(crate) const INSPECTOR_WIDTH_MIN: f32 = 280.0;
-pub(crate) const INSPECTOR_WIDTH_COLLAPSED: f32 = 48.0;
-pub(crate) const INSPECTOR_WIDTH_MAX: f32 = 560.0;
 pub(crate) const AI_GENERATED_NODE_GAP_Y: f32 = 56.0;
 
 // ── Interaction ───────────────────────────────────────────────────────────────

@@ -1,11 +1,8 @@
 // ---- flow / canvas helpers --------------------------------------------------
 
 use anyhow::Result;
-use eframe::egui;
-use std::collections::HashSet;
 
 use crate::step_templates::STEP_TEMPLATES;
-use crate::types::{category_color, step_key_category, FlowNode};
 
 pub(crate) fn get_inner_steps(step: &serde_yml::Value) -> Vec<(String, Vec<serde_yml::Value>)> {
     let m = match step.as_mapping() {
@@ -110,96 +107,6 @@ pub(crate) fn count_child_steps(step: &serde_yml::Value) -> usize {
 
 pub(crate) fn default_canvas_cols(n: usize) -> usize {
     ((n as f32).sqrt() as usize + 1).clamp(4, 8)
-}
-
-/// Maximum visual depth in Flow view — deeper branches are shown as a count
-/// summary to prevent runaway indentation (DESIGN.md §F).
-const MAX_RENDER_DEPTH: usize = 4;
-
-pub(crate) fn collect_nodes(
-    steps: &[serde_yml::Value],
-    depth: usize,
-    expanded: &HashSet<usize>,
-    nodes: &mut Vec<FlowNode>,
-) {
-    collect_nodes_impl(steps, depth, None, expanded, nodes);
-}
-
-/// Inner recursive worker.
-/// `root_idx`: the depth-0 ancestor's step index, used for click-to-select on
-/// nested nodes so that clicking any branch child selects the parent step.
-fn collect_nodes_impl(
-    steps: &[serde_yml::Value],
-    depth: usize,
-    root_idx: Option<usize>,
-    expanded: &HashSet<usize>,
-    nodes: &mut Vec<FlowNode>,
-) {
-    for (i, step) in steps.iter().enumerate() {
-        let key = get_step_key(step);
-        let color = category_color(step_key_category(key));
-        let summary = step_summary(step);
-        let is_compound = matches!(
-            key,
-            "if" | "foreach" | "repeat" | "while" | "do_while" | "try_catch" | "group" | "switch"
-        );
-
-        // depth-0: expandable via toggle (key = step index for canvas compatibility).
-        // depth 1+: compound steps always show their children inline — no toggle
-        // needed, avoids key-stability issues with the shared expanded_steps set.
-        let (expand_key, is_expanded) = if depth == 0 && is_compound {
-            (Some(i), expanded.contains(&i))
-        } else if depth > 0 && is_compound {
-            (None, true)
-        } else {
-            (None, false)
-        };
-
-        let step_idx = root_idx.unwrap_or(i);
-        let label = if depth == 0 {
-            format!("{i}  {summary}")
-        } else {
-            summary
-        };
-
-        nodes.push(FlowNode {
-            step_idx,
-            depth,
-            label,
-            color,
-            expand_key,
-            is_expanded,
-            is_header: false,
-        });
-
-        if is_compound && is_expanded {
-            for (branch_name, branch_steps) in get_inner_steps(step) {
-                nodes.push(FlowNode {
-                    step_idx,
-                    depth: depth + 1,
-                    label: format!("─ {branch_name}:"),
-                    color: egui::Color32::from_gray(100),
-                    expand_key: None,
-                    is_expanded: false,
-                    is_header: true,
-                });
-                if depth + 2 > MAX_RENDER_DEPTH {
-                    // Show a collapsed summary instead of recursing deeper
-                    nodes.push(FlowNode {
-                        step_idx,
-                        depth: depth + 2,
-                        label: format!("… {} ステップ (折りたたみ)", branch_steps.len()),
-                        color: egui::Color32::from_gray(80),
-                        expand_key: None,
-                        is_expanded: false,
-                        is_header: false,
-                    });
-                    continue;
-                }
-                collect_nodes_impl(&branch_steps, depth + 2, Some(step_idx), expanded, nodes);
-            }
-        }
-    }
 }
 
 pub(crate) fn step_display_name(key: &str) -> &str {

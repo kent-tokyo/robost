@@ -36,12 +36,12 @@ Mixed Japanese/Latin UI labels must use the same CJK metrics box to avoid uneven
 ┌─────────────────────────────────────────────────────────┐
 │ Menu bar (File / Edit / View / Run / Help)               │  24 px
 ├─────────────────────────────────────────────────────────┤
-│ Toolbar (view selector · undo/redo · name · run/stop)    │  34 px
+│ Toolbar (undo/redo · name · run/stop)                    │  34 px
 ├────┬──────────┬─────────────────────┬───────────────────┤
-│Act │ Unified  │ Optional step list  │ Editor surface    │ Inspector
-│48px│ Sidebar  │ List/Flow only      │ (List / Flow /    │ Canvas/Flow
-│    │ 220 px   │ 220 px min          │  Canvas)          │ 340 px default
-│    │min 180   │                     │                   │ min 280 / max 560
+│Act │ Unified  │ Canvas editor surface                   │ Inspector
+│48px│ Sidebar  │ Freeform node canvas                    │ Canvas overlay
+│    │ 220 px   │                                        │ 340 px default
+│    │min 180   │                                        │
 ├──────────┴──────────────────────────┴───────────────────┤
 │ Bottom panel: Variables · Log · Problems        160 px   │  resizable
 ├─────────────────────────────────────────────────────────┤
@@ -55,29 +55,27 @@ The Activity Bar is always the leftmost 48 px strip. Its icon clicks select one 
 
 | Activity | Sidebar content | Extra behavior |
 |----------|-----------------|----------------|
-| Steps | Scenario step list | Also switches the editor to List view |
-| Nodes | Searchable step palette | Keeps current editor view |
-| Templates | PNG template gallery | Keeps current editor view |
+| Steps | Scenario step list | Selects canvas nodes |
+| Nodes | Searchable step palette | Drag/drop or double-click to add steps |
+| Templates | PNG template gallery | Sets template paths on selected image steps |
 
-The unified sidebar is resizable, defaults to 220 px, and has an 11 px uppercase title (`SCENARIO`, `STEP PALETTE`, `TEMPLATES`). List and Flow modes also show a legacy step list panel to the right of the unified sidebar. Canvas mode hides that legacy step list so the canvas gets the working width.
+The unified sidebar is resizable, defaults to 220 px, and has an 11 px uppercase title (`SCENARIO`, `STEP PALETTE`, `TEMPLATES`). There is no separate List or Flow editor mode; Canvas is the only central editing surface.
 
 ### Inspector
 
-In Canvas and Flow modes, selecting a step opens the right inspector. The inspector contains:
+Selecting a step opens the canvas inspector overlay. The inspector contains:
 
 1. Compact selected-step header: category stripe, 1-based index, display name.
-2. Tabs: `フォーム` first, `YAML` second.
-3. The same property form and YAML editor used by List mode.
+2. One-line description of what the selected action does.
+3. Tabs: `フォーム` first, `YAML` second.
+4. The property form and YAML editor for the selected step.
 
-If nothing is selected, the inspector collapses to a 48 px rail with an icon hint. List mode keeps the property editor in the central area because the step list already occupies the left working column.
+The inspector is hidden when nothing is selected. When visible, it is an immediate right-edge overlay inside the canvas area and must not resize or push the canvas left.
+Floating utility windows, including Manual, take precedence over the canvas inspector; while Manual is open, the inspector overlay is hidden so it cannot cover the guide.
 
 ### Central editor surface
 
-| Mode | Central content |
-|------|-----------------|
-| Canvas | Freeform node canvas with start/end terminals, grid, minimap, comments, lasso, context menus, and drag/drop insertion |
-| Flow | Structured flowchart view of nested control steps |
-| List | Selected-step Form/YAML editor, onboarding guide when empty, or select-step empty state |
+The central editor surface is always the freeform Canvas with start/end terminals, grid, minimap, comments, lasso, context menus, and drag/drop insertion.
 
 ---
 
@@ -89,11 +87,11 @@ Canvas | ステップ 3: click_image  保存しました …        ● 実行�
 
 | Zone | Content | Clears |
 |------|---------|--------|
-| Far left | View mode text: `List` / `Flow` / `Canvas` | On mode change |
+| Far left | Fixed editor mode text: `Canvas` | Static |
 | Left-center | Selected step summary, or total step count | Every frame |
 | Center | Temporary message (save result, undo description, error) | After 3 s |
 | Right-center | `● 実行中 ステップ N` / `■ 停止中` | Every frame |
-| Far right | Canvas mode only: zoom percentage | Every frame |
+| Far right | Zoom percentage | Every frame |
 
 The status bar uses StatusBarBg with white text. Temporary messages currently use white text; logs and toasts carry success/error color.
 
@@ -117,7 +115,6 @@ Problems auto-opens when the validation issue count increases. The right side of
 
 | Button | Tooltip format | Notes |
 |--------|---------------|-------|
-| List / Flow / Canvas | `"{mode} — {one-line description}"` | e.g. `"リストビュー — ステップを縦一覧で表示"` |
 | Undo | `"アンドゥ: {action} (Cmd+Z)"` when action is known, else `"アンドゥ (Cmd+Z)"` | Action name injected from `last_undo_name` |
 | Redo | Same pattern with `"リドゥ"` | Uses top of redo stack's action name |
 | Run | `"シナリオを実行 (F5)"` | |
@@ -128,11 +125,10 @@ Tooltip delay: 300 ms. All interactive controls must have a tooltip.
 
 Toolbar layout, left to right:
 
-1. View selector: List / Flow / Canvas.
-2. Undo and redo icon buttons.
-3. Scenario name text field, fixed 200 px.
-4. Run or Stop button with Phosphor icon and label.
-5. Right-aligned hint that theme and language live under View.
+1. Undo and redo icon buttons.
+2. Scenario name text field, fixed 200 px.
+3. Run or Stop button with Phosphor icon and label.
+4. Right-aligned hint that theme and language live under View.
 
 ---
 
@@ -220,7 +216,7 @@ Toolbar layout, left to right:
 
 ### Double-click
 
-- On node → switch to List view with that step selected and property panel focused.
+- On node → select that step and focus the canvas inspector.
 
 ### Snap grid
 
@@ -277,7 +273,6 @@ For `scenario.yaml`, canvas positions and comments are saved to sibling file `sc
 | 複製 | Selection is non-empty |
 | 貼り付け | Clipboard is non-empty |
 | 削除 | Selection is non-empty |
-| リストビューで開く | Always |
 | ▶ ここから実行 | Scenario is not currently running |
 | 整列 (← ↑) | `multi_selected.len() >= 2` |
 | 等間隔 (↔ ↕) | `multi_selected.len() >= 3` |
@@ -340,6 +335,7 @@ Triggered by `Cmd+Shift+A`, Edit → Add Step, the sidebar Add Step button, edge
 
 - Window title: `"ステップを追加"`.
 - Default size: 300 x 500 px, resizable, non-collapsible.
+- Top-right `X` icon closes the popup without inserting.
 - Text input at top, placeholder `"検索…"`, focused on open.
 - Empty query shows a category tree, default-open, with category colors.
 - Non-empty query shows a flat filtered list.
@@ -357,7 +353,7 @@ Insertion target:
 | Canvas background `ここにステップを追加` | At clicked canvas position |
 | Branch `+` in a compound step | Append to that branch sub-list |
 
-The Nodes sidebar uses the same step templates. Double-clicking a palette row inserts after the selected step; drag/drop to the canvas inserts at the drop position.
+The Nodes sidebar uses the same step templates. Double-clicking a palette row inserts after the selected step; drag/drop to the canvas inserts at the drop position. During a compatible drag, Canvas shows a drop-acceptance cue over the working area; releasing anywhere inside the canvas inserts the new node at the release position, including when the canvas is empty.
 
 ---
 
@@ -487,8 +483,8 @@ Derived from VS Code `activitybarPart.ts`. Fixed 48 px wide, leftmost panel, non
 ### Interaction
 
 - Click any icon → switches sidebar tab.
-- Click Steps → also switches editor mode to List.
-- Click Nodes or Templates → keeps current editor mode.
+- Click Steps → shows the scenario step list in the unified sidebar while keeping Canvas active.
+- Click Nodes or Templates → keeps Canvas active.
 - Sidebar state persists per session.
 
 ---

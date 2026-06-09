@@ -1489,7 +1489,7 @@ impl EditorApp {
                     .show(ui, |ui| {
                         ui.collapsing("基本フロー", |ui| {
                             ui.label("1. 左のステップパレットからステップをダブルクリック、またはキャンバスへドラッグして追加します。");
-                            ui.label("2. ステップを選択し、右のインスペクタまたはリスト編集画面でパラメータを入力します。");
+                            ui.label("2. ステップを選択し、キャンバス右端のインスペクタでパラメータを入力します。");
                             ui.label("3. 画像操作ステップでは Snip で PNG テンプレートを採取し、template/path 欄へ設定します。");
                             ui.label("4. 下部の Problems タブで未設定項目や構文エラーを確認します。");
                             ui.label("5. F5 または実行ボタンでシナリオを実行します。ログとキャンバス上の完了/失敗表示で結果を確認します。");
@@ -1498,8 +1498,8 @@ impl EditorApp {
                         ui.collapsing("画面構成", |ui| {
                             ui.label("Activity Bar: 左端のアイコン列です。シナリオ内ステップ、追加ノード、テンプレート画像を切り替えます。");
                             ui.label("Sidebar: ステップ一覧、ノードパレット、テンプレートギャラリーを表示します。");
-                            ui.label("Editor surface: List / Flow / Canvas の作業面です。Canvas はノードを自由配置できます。");
-                            ui.label("Inspector: Canvas / Flow で選択中ステップを編集する右側パネルです。フォームと YAML を切り替えられます。");
+                            ui.label("Editor surface: Canvas の作業面です。ノードを自由配置できます。");
+                            ui.label("Inspector: 選択中ステップを編集するキャンバス右端のパネルです。フォームと YAML を切り替えられます。");
                             ui.label("Bottom panel: 変数、ログ、問題一覧を表示します。Problems は新しい問題が出ると自動で開きます。");
                         });
 

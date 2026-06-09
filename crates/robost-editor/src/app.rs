@@ -12,7 +12,7 @@ use crate::flow_helpers::{
 use crate::i18n::{Lang, S};
 use crate::settings::save_settings;
 use crate::state::EditorApp;
-use crate::step_templates::{step_icon, StepTemplate, STEP_TEMPLATES};
+use crate::step_templates::{step_description, step_icon, StepTemplate, STEP_TEMPLATES};
 use crate::types::{
     category_color, step_key_category, AiMessage, BottomTab, ConfirmAction, DragPayload, LogEntry,
     LogLevel, NodesPanelTab, PropView, SidebarTab, StepAction, ViewMode,
@@ -74,6 +74,12 @@ impl EditorApp {
             ui.selectable_value(&mut self.prop_view, PropView::Form, form_label);
             ui.selectable_value(&mut self.prop_view, PropView::Yaml, "YAML");
         });
+        ui.add_space(crate::tokens::SPACING_XS);
+        ui.label(
+            egui::RichText::new(step_description(key))
+                .size(11.0)
+                .color(crate::tokens::FG_DIM),
+        );
         ui.add(egui::Separator::default().spacing(6.0));
 
         egui::Frame::NONE
@@ -118,6 +124,7 @@ impl eframe::App for EditorApp {
         crate::apply_style(ctx, &self.settings.theme);
 
         let s = S::for_lang(&self.settings.lang);
+        self.view_mode = ViewMode::Canvas;
         let ui_dark = matches!(self.settings.theme, crate::settings::Theme::Dark);
         let text_input_active = ctx.wants_keyboard_input();
         if self.bottom_tab != BottomTab::Variables {
@@ -1042,31 +1049,6 @@ impl eframe::App for EditorApp {
                         let r = ui.add(egui::Button::new(s.menu_view));
                         bs.bar_menu(&r, |ui| {
                             if ui
-                                .selectable_label(self.view_mode == ViewMode::List, s.menu_list)
-                                .clicked()
-                            {
-                                self.view_mode = ViewMode::List;
-                                ui.close();
-                            }
-                            if ui
-                                .selectable_label(self.view_mode == ViewMode::Flow, s.menu_flow)
-                                .clicked()
-                            {
-                                self.view_mode = ViewMode::Flow;
-                                self.selected_child = None;
-                                ui.close();
-                            }
-                            if ui
-                                .selectable_label(self.view_mode == ViewMode::Canvas, s.menu_canvas)
-                                .clicked()
-                            {
-                                self.view_mode = ViewMode::Canvas;
-                                self.selected_child = None;
-                                self.ensure_canvas_layout();
-                                ui.close();
-                            }
-                            ui.separator();
-                            if ui
                                 .selectable_label(self.ai_panel_open, s.menu_ai_panel)
                                 .clicked()
                             {
@@ -1205,28 +1187,8 @@ impl eframe::App for EditorApp {
                     .inner_margin(egui::Margin::symmetric(8, 4)),
             )
             .show(ctx, |ui| {
-                // ── Single row: view selector | Undo Redo | Scenario name | Run/Stop | [theme] ─
+                // ── Single row: Undo Redo | Scenario name | Run/Stop | [theme] ─
                 ui.horizontal(|ui| {
-                    // View selector — always visible on the left
-                    ui.selectable_value(&mut self.view_mode, ViewMode::List, s.menu_list)
-                        .on_hover_text("リストビュー — ステップを縦一覧で表示");
-                    if ui
-                        .selectable_value(&mut self.view_mode, ViewMode::Flow, s.menu_flow)
-                        .on_hover_text("フローチャートビュー — 分岐を木構造で表示")
-                        .clicked()
-                    {
-                        self.selected_child = None;
-                        self.scroll_to_selected = true;
-                    }
-                    if ui
-                        .selectable_value(&mut self.view_mode, ViewMode::Canvas, s.menu_canvas)
-                        .on_hover_text("キャンバスビュー — ノードをドラッグで自由配置")
-                        .clicked()
-                    {
-                        self.selected_child = None;
-                        self.ensure_canvas_layout();
-                    }
-                    ui.separator();
                     ui.add_enabled_ui(!self.undo_stack.is_empty(), |ui| {
                         let undo_tip = if self.last_undo_name.is_empty() {
                             "アンドゥ (Cmd+Z)".to_owned()
@@ -1318,13 +1280,8 @@ impl eframe::App for EditorApp {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = tokens::SPACING_SM;
 
-                    // Left: view mode
-                    let mode_label = match self.view_mode {
-                        ViewMode::List => "List",
-                        ViewMode::Flow => "Flow",
-                        ViewMode::Canvas => "Canvas",
-                    };
-                    ui.colored_label(sb_text, egui::RichText::new(mode_label).small().strong());
+                    // Left: fixed editor mode
+                    ui.colored_label(sb_text, egui::RichText::new("Canvas").small().strong());
                     ui.colored_label(sb_dim, egui::RichText::new("|").small());
 
                     // Left-center: selection info
@@ -1352,14 +1309,12 @@ impl eframe::App for EditorApp {
                     // Right: run state + canvas zoom
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Canvas zoom %
-                        if self.view_mode == ViewMode::Canvas {
-                            ui.colored_label(
-                                sb_dim,
-                                egui::RichText::new(format!("{:.0}%", self.canvas_zoom * 100.0))
-                                    .small(),
-                            );
-                            ui.colored_label(sb_dim, egui::RichText::new("|").small());
-                        }
+                        ui.colored_label(
+                            sb_dim,
+                            egui::RichText::new(format!("{:.0}%", self.canvas_zoom * 100.0))
+                                .small(),
+                        );
+                        ui.colored_label(sb_dim, egui::RichText::new("|").small());
                         // Run state
                         if self.run_child.is_some() {
                             let step_info = self
@@ -1645,8 +1600,6 @@ impl eframe::App for EditorApp {
                             self.sidebar_tab = *tab;
                             match *tab {
                                 SidebarTab::Steps => {
-                                    // Steps tab = switch to List view so step list is visible
-                                    self.view_mode = ViewMode::List;
                                     self.nodes_panel_tab = NodesPanelTab::Nodes;
                                 }
                                 SidebarTab::Templates => {
@@ -1729,7 +1682,6 @@ impl eframe::App for EditorApp {
 
                 if self.sidebar_tab == SidebarTab::Steps {
                     let mut select_idx: Option<usize> = None;
-                    let mut open_in_list: Option<usize> = None;
                     egui::ScrollArea::vertical()
                         .id_salt("activity_steps_list")
                         .show(ui, |ui| {
@@ -1763,10 +1715,9 @@ impl eframe::App for EditorApp {
                                     select_idx = Some(i);
                                 }
                                 if row_resp.double_clicked() {
-                                    open_in_list = Some(i);
+                                    select_idx = Some(i);
                                 }
-                                row_resp
-                                    .on_hover_text(format!("{}\nダブルクリックでリスト編集", key));
+                                row_resp.on_hover_text(format!("{key}\nクリックで選択"));
                             }
                         });
                     ui.add(egui::Separator::default().spacing(4.0));
@@ -1777,10 +1728,6 @@ impl eframe::App for EditorApp {
                     }
                     if let Some(i) = select_idx {
                         self.select_step(i);
-                    }
-                    if let Some(i) = open_in_list {
-                        self.select_step(i);
-                        self.view_mode = ViewMode::List;
                     }
                     return;
                 }
@@ -2020,7 +1967,7 @@ impl eframe::App for EditorApp {
                 }
             });
 
-        // ── Left: step list (visible in List/Flow modes) ─────────────────────
+        // ── Legacy step list panel (kept disabled; Activity Steps is the Canvas list) ──
         egui::SidePanel::left("steps_panel")
             .min_width(220.0)
             .frame(egui::Frame::none().fill(crate::tokens::sidebar_bg(ui_dark)))
@@ -2383,17 +2330,13 @@ impl eframe::App for EditorApp {
                 if let Some(payload) = drop_payload {
                     match payload {
                         DragPayload::NewStep(yaml) => {
-                            if let Ok(v) = serde_yml::from_str::<serde_yml::Value>(yaml) {
-                                self.push_undo();
-                                self.steps.insert(drop_insert_idx, v);
-                                Self::canvas_shift_positions(
-                                    &mut self.canvas_positions,
-                                    drop_insert_idx,
-                                    1,
-                                );
-                                self.select_step(drop_insert_idx);
-                                self.log_info("ノードをドロップしました");
-                            }
+                            self.insert_step_from_template_at(
+                                yaml,
+                                drop_insert_idx,
+                                None,
+                                "ステップ追加",
+                                "ノードをドロップしました",
+                            );
                         }
                         DragPayload::ReorderStep(from_indices) => {
                             if from_indices.len() == 1 {
@@ -2501,125 +2444,98 @@ impl eframe::App for EditorApp {
         // ── AI side panel (must be before CentralPanel) ───────────────────
         self.show_ai_panel(ctx);
 
-        // ── Right: selected-step inspector for spatial views ──────────────
-        let inspector_has_selection = self.selected.is_some();
-        let inspector_width = if inspector_has_selection {
-            crate::tokens::INSPECTOR_WIDTH_DEFAULT
-        } else {
-            crate::tokens::INSPECTOR_WIDTH_COLLAPSED
-        };
-        egui::SidePanel::right("inspector_panel")
-            .resizable(inspector_has_selection)
-            .default_width(inspector_width)
-            .min_width(if inspector_has_selection {
-                crate::tokens::INSPECTOR_WIDTH_MIN
-            } else {
-                crate::tokens::INSPECTOR_WIDTH_COLLAPSED
-            })
-            .max_width(if inspector_has_selection {
-                crate::tokens::INSPECTOR_WIDTH_MAX
-            } else {
-                crate::tokens::INSPECTOR_WIDTH_COLLAPSED
-            })
-            .frame(
-                egui::Frame::none()
-                    .fill(crate::tokens::sidebar_bg(ui_dark))
-                    .stroke(egui::Stroke::new(1.0, crate::tokens::border(ui_dark)))
-                    .inner_margin(if inspector_has_selection {
-                        egui::Margin::symmetric(10, 8)
-                    } else {
-                        egui::Margin::symmetric(0, 8)
-                    }),
-            )
-            .show_animated(ctx, self.view_mode != ViewMode::List, |ui| {
-                if let Some(idx) = self.selected {
-                    ui.label(
-                        egui::RichText::new("INSPECTOR")
-                            .size(11.0)
-                            .color(crate::tokens::FG_DIM),
-                    );
-                    ui.add(egui::Separator::default().spacing(6.0));
-                    self.show_step_editor(ui, idx, true);
-                } else {
-                    ui.vertical_centered(|ui| {
-                        ui.add_space(crate::tokens::SPACING_SM);
-                        ui.label(
-                            egui::RichText::new(egui_phosphor::regular::SIDEBAR_SIMPLE)
-                                .color(crate::tokens::FG_DIM)
-                                .size(18.0),
-                        )
-                        .on_hover_text("ステップを選択するとインスペクタを表示");
-                    });
-                }
-            });
-
-        // ── Center: flowchart or YAML editor / onboarding ────────────────
+        // ── Center: Canvas editor ────────────────────────────────────────
+        let mut canvas_inspector_rect: Option<egui::Rect> = None;
         egui::CentralPanel::default()
             .frame(egui::Frame::none().fill(crate::tokens::editor_bg(ui_dark)))
             .show(ctx, |ui| {
-                if self.view_mode == ViewMode::Flow {
-                    self.show_flowchart(ui);
-                    return;
-                }
-                if self.view_mode == ViewMode::Canvas {
-                    let drop_screen_pos = ui.input(|i| i.pointer.hover_pos());
-                    let (canvas_outer, released) =
-                        ui.dnd_drop_zone::<DragPayload, _>(egui::Frame::default(), |ui| {
-                            self.show_canvas(ui);
-                        });
-                    if let Some(payload) = released {
-                        if let DragPayload::NewStep(yaml) = *payload {
-                            if let Ok(v) = serde_yml::from_str::<serde_yml::Value>(yaml) {
-                                self.push_undo();
-                                let idx = self.steps.len();
-                                self.steps.push(v);
-                                let z = self.canvas_zoom;
-                                let origin = canvas_outer.response.rect.min;
-                                let canvas_pos = if let Some(sp) = drop_screen_pos {
-                                    let rel = sp - origin;
-                                    egui::pos2(
-                                        rel.x / z - self.canvas_pan.x,
-                                        rel.y / z - self.canvas_pan.y,
-                                    )
-                                } else {
-                                    default_canvas_pos(idx, default_canvas_cols(idx + 1))
-                                };
-                                self.canvas_positions.insert(idx, canvas_pos);
-                                self.select_step(idx);
-                                self.log_info("ノードをドロップしました");
-                            }
-                        }
-                    }
-                    return;
+                let drop_screen_pos = ui.input(|i| i.pointer.hover_pos());
+                let (canvas_outer, released) =
+                    ui.dnd_drop_zone::<DragPayload, _>(egui::Frame::default(), |ui| {
+                        self.show_canvas(ui);
+                    });
+
+                let drop_rect = canvas_outer.response.rect;
+                canvas_inspector_rect = Some(drop_rect);
+                let accepts_drop = egui::DragAndDrop::has_payload_of_type::<DragPayload>(ui.ctx());
+                let pointer_over_canvas = canvas_outer.response.contains_pointer()
+                    || drop_screen_pos.is_some_and(|pos| drop_rect.contains(pos));
+                if accepts_drop && pointer_over_canvas {
+                    ui.painter().rect_stroke(
+                        drop_rect.shrink(2.0),
+                        crate::tokens::ROUNDING_CARD,
+                        egui::Stroke::new(2.0, crate::tokens::ACCENT),
+                        egui::StrokeKind::Inside,
+                    );
                 }
 
-                if let Some(idx) = self.selected {
-                    ui.add_space(crate::tokens::SPACING_SM);
-                    self.show_step_editor(ui, idx, true);
-                } else if self.steps.is_empty() {
-                    // Onboarding guide
-                    ui.add_space(50.0);
-                    ui.vertical_centered(|ui| {
-                        ui.heading("robost");
-                        ui.add_space(20.0);
-                        ui.label(s.onboard_1);
-                        ui.add_space(8.0);
-                        ui.label(s.onboard_2);
-                        ui.add_space(8.0);
-                        ui.label(s.onboard_3);
-                        ui.add_space(8.0);
-                        ui.label(s.onboard_4);
-                        ui.add_space(24.0);
-                        ui.separator();
-                        ui.add_space(8.0);
-                        ui.weak(s.onboard_open);
-                    });
-                } else {
-                    ui.centered_and_justified(|ui| {
-                        ui.label(s.empty_select_step);
-                    });
+                let mut released_payload = released.map(|payload| (*payload).clone());
+                if released_payload.is_none()
+                    && pointer_over_canvas
+                    && ui.input(|i| i.pointer.any_released())
+                {
+                    released_payload = egui::DragAndDrop::take_payload::<DragPayload>(ui.ctx())
+                        .map(|payload| (*payload).clone());
+                }
+
+                if let Some(DragPayload::NewStep(yaml)) = released_payload {
+                    let idx = self.steps.len();
+                    let z = self.canvas_zoom;
+                    let origin = drop_rect.min;
+                    let canvas_pos = drop_screen_pos
+                        .filter(|pos| drop_rect.contains(*pos))
+                        .map(|sp| {
+                            let rel = sp - origin;
+                            egui::pos2(rel.x / z - self.canvas_pan.x, rel.y / z - self.canvas_pan.y)
+                        })
+                        .unwrap_or_else(|| default_canvas_pos(idx, default_canvas_cols(idx + 1)));
+                    self.insert_step_from_template_at(
+                        yaml,
+                        idx,
+                        Some(canvas_pos),
+                        "ステップ追加",
+                        "ノードをドロップしました",
+                    );
                 }
             });
+
+        // Canvas inspector is an overlay, not a SidePanel, so selecting a node does not
+        // resize the canvas or push its content left.
+        if !self.manual_open {
+            if let (Some(idx), Some(canvas_rect)) = (self.selected, canvas_inspector_rect) {
+                let width = crate::tokens::INSPECTOR_WIDTH_DEFAULT.min(canvas_rect.width() * 0.45);
+                let height = canvas_rect.height();
+                let pos = egui::pos2(canvas_rect.right() - width, canvas_rect.top());
+                egui::Area::new(egui::Id::new("canvas_inspector_overlay"))
+                    .fixed_pos(pos)
+                    .order(egui::Order::Foreground)
+                    .show(ctx, |ui| {
+                        ui.set_min_width(width);
+                        ui.set_max_width(width);
+                        ui.set_min_height(height);
+                        ui.set_max_height(height);
+                        egui::Frame::none()
+                            .fill(crate::tokens::sidebar_bg(ui_dark))
+                            .stroke(egui::Stroke::new(1.0, crate::tokens::border(ui_dark)))
+                            .inner_margin(egui::Margin::symmetric(10, 8))
+                            .show(ui, |ui| {
+                                ui.set_width(width - 20.0);
+                                ui.set_height(height - 16.0);
+                                ui.label(
+                                    egui::RichText::new("INSPECTOR")
+                                        .size(11.0)
+                                        .color(crate::tokens::FG_DIM),
+                                );
+                                ui.add(egui::Separator::default().spacing(6.0));
+                                egui::ScrollArea::vertical()
+                                    .id_salt("canvas_inspector_overlay_scroll")
+                                    .show(ui, |ui| {
+                                        self.show_step_editor(ui, idx, true);
+                                    });
+                            });
+                    });
+            }
+        }
 
         // ── Add step popup ────────────────────────────────────────────────
         if self.add_menu_open {
@@ -2631,6 +2547,15 @@ impl eframe::App for EditorApp {
                 .resizable(true)
                 .default_size([300.0, 500.0])
                 .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.strong("ステップを追加");
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button(ph::X).on_hover_text("閉じる").clicked() {
+                                close = true;
+                            }
+                        });
+                    });
+                    ui.add(egui::Separator::default().spacing(4.0));
                     let filter_resp = ui.add(
                         egui::TextEdit::singleline(&mut self.add_filter)
                             .hint_text("検索…")
@@ -2778,7 +2703,7 @@ impl eframe::App for EditorApp {
             if let Some(yaml) = insert {
                 match serde_yml::from_str::<serde_yml::Value>(yaml) {
                     Ok(v) => {
-                        self.push_undo();
+                        self.push_undo_named("ステップ追加");
                         if let Some((parent_idx, branch_name)) = self.add_branch_target.take() {
                             // Insert into a branch sub-list
                             let new_ci = self
@@ -2795,12 +2720,16 @@ impl eframe::App for EditorApp {
                             self.log_info("ブランチにステップを追加しました");
                         } else {
                             let idx = self.selected.map(|i| i + 1).unwrap_or(self.steps.len());
+                            let canvas_pos = self.canvas_pending_insert_pos.take();
                             self.steps.insert(idx, v);
                             Self::canvas_shift_positions(&mut self.canvas_positions, idx, 1);
-                            if let Some(pos) = self.canvas_pending_insert_pos.take() {
+                            Self::form_edit_buffers_shift(&mut self.form_edit_buffers, idx, 1);
+                            if let Some(pos) = canvas_pos {
                                 self.canvas_positions.insert(idx, pos);
                             }
                             self.select_step(idx);
+                            self.dirty = true;
+                            self.canvas_layout_dirty = true;
                             self.log_info("ステップを追加しました");
                         }
                     }
@@ -2815,14 +2744,14 @@ impl eframe::App for EditorApp {
 
         // ── Handle palette double-click insert ───────────────────────────
         if let Some(yaml) = palette_insert {
-            if let Ok(v) = serde_yml::from_str::<serde_yml::Value>(yaml) {
-                self.push_undo_named("ステップ追加");
-                let idx = self.selected.map(|i| i + 1).unwrap_or(self.steps.len());
-                self.steps.insert(idx, v);
-                Self::canvas_shift_positions(&mut self.canvas_positions, idx, 1);
-                self.select_step(idx);
-                self.log_info("ノードを追加しました");
-            }
+            let idx = self.selected.map(|i| i + 1).unwrap_or(self.steps.len());
+            self.insert_step_from_template_at(
+                yaml,
+                idx,
+                None,
+                "ステップ追加",
+                "ノードを追加しました",
+            );
         }
 
         // ── Handle Templates tab double-click: set template field on image step ─

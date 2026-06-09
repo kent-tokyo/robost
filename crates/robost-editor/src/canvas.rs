@@ -9,7 +9,7 @@ use crate::flow_helpers::{
 };
 use crate::state::EditorApp;
 use crate::tokens;
-use crate::types::{CanvasComment, CanvasContextAction, ConfirmAction, ViewMode};
+use crate::types::{CanvasComment, CanvasContextAction, ConfirmAction};
 
 pub(crate) fn layout_path(scenario_path: &std::path::Path) -> std::path::PathBuf {
     let mut p = scenario_path.to_path_buf();
@@ -1093,15 +1093,6 @@ impl EditorApp {
                     canvas_ctx_action = Some(CanvasContextAction::Delete(idx));
                     ui.close();
                 }
-                ui.separator();
-                if ui
-                    .button(s.ctx_open_in_list)
-                    .on_hover_text("Switch to List view")
-                    .clicked()
-                {
-                    canvas_ctx_action = Some(CanvasContextAction::OpenInList(idx));
-                    ui.close();
-                }
                 if self.run_child.is_none() {
                     let label = s.ctx_run_from_here.replace("{}", &(idx + 1).to_string());
                     if ui
@@ -1188,8 +1179,7 @@ impl EditorApp {
                         ui.label(&full_label);
                     });
                 } else if self.selected != Some(idx) {
-                    let s = crate::i18n::S::for_lang(&self.settings.lang);
-                    node_resp.on_hover_text(s.hint_dblclick_list);
+                    node_resp.on_hover_text("ダブルクリックでインスペクタを表示");
                 }
             }
 
@@ -1761,9 +1751,7 @@ impl EditorApp {
         }
         if let Some(idx) = double_clicked_node {
             self.select_step(idx);
-            self.view_mode = ViewMode::List;
             self.selected_child = None;
-            self.scroll_to_selected = true;
         }
         if let Some(idx) = badge_toggle_idx {
             if self.expanded_steps.contains(&idx) {
@@ -1773,15 +1761,8 @@ impl EditorApp {
             }
         }
         if let Some((idx, branch_name)) = panel_click_step {
-            // Switch to List view and open the branch editor directly.
-            // This gives a direct path from the canvas expand badge to the
-            // branch property form, avoiding the manual "find step → open
-            // accordion" detour.
-            use crate::types::ViewMode;
-            self.view_mode = ViewMode::List;
             self.select_step(idx);
             self.selected_child = Some((branch_name, 0));
-            self.scroll_to_selected = true;
         }
 
         // Background right-click menu (shown when clicking empty canvas space, not on a node)
@@ -1914,12 +1895,6 @@ impl EditorApp {
                         }
                         self.dirty = true;
                     }
-                }
-                CanvasContextAction::OpenInList(idx) => {
-                    self.select_step(idx);
-                    self.view_mode = ViewMode::List;
-                    self.scroll_to_selected = true;
-                    self.selected_child = None;
                 }
                 CanvasContextAction::RunFrom(idx) => {
                     self.run_from_step(idx);
@@ -2497,7 +2472,7 @@ impl EditorApp {
                                 ("Cmd+Z / Shift+Z", "アンドゥ / リドゥ"),
                                 ("Cmd+G", "ノード検索"),
                                 ("Cmd+Shift+A", "ステップ追加メニュー"),
-                                ("ダブルクリック", "List ビューで開く"),
+                                ("ダブルクリック", "インスペクタを表示"),
                                 ("右クリック", "コンテキストメニュー"),
                                 ("ドラッグハンドル", "ステップを並び替え"),
                                 ("?", "このヘルプを閉じる"),

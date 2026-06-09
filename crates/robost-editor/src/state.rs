@@ -4,12 +4,10 @@ use eframe::egui;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 
-use crate::flow_helpers::{
-    build_scenario_yaml, collect_nodes, parse_scenario_steps, NODE_H, NODE_W,
-};
+use crate::flow_helpers::{build_scenario_yaml, parse_scenario_steps, NODE_H, NODE_W};
 use crate::settings::{load_settings, AppSettings};
 use crate::types::{
-    AiMessage, BottomTab, CanvasComment, ConfirmAction, EditorState, FlowNode, LogEntry, LogLevel,
+    AiMessage, BottomTab, CanvasComment, ConfirmAction, EditorState, LogEntry, LogLevel,
     NodesPanelTab, PropView, Toast, ValidationIssue, ViewMode,
 };
 
@@ -30,8 +28,6 @@ pub(crate) struct EditorApp {
     pub(crate) expanded_steps: HashSet<usize>,
     pub(crate) undo_stack: VecDeque<EditorState>,
     pub(crate) redo_stack: VecDeque<EditorState>,
-    pub(crate) flow_zoom: f32,
-    pub(crate) flow_pan: egui::Vec2,
     pub(crate) run_progress_file: Option<PathBuf>,
     pub(crate) current_run_step: Option<usize>,
     pub(crate) last_progress_check: std::time::Instant,
@@ -66,8 +62,6 @@ pub(crate) struct EditorApp {
     pub(crate) md_cache: egui_commonmark::CommonMarkCache,
     pub(crate) manual_open: bool,
     pub(crate) manual_search: String,
-    /// When true, flowchart will pan to center the selected node on next frame.
-    pub(crate) scroll_to_selected: bool,
     pub(crate) settings_test_result: Option<(bool, String)>,
     pub(crate) settings_test_rx: Option<std::sync::mpsc::Receiver<(bool, String)>>,
     pub(crate) scenario_vars: serde_yml::Mapping,
@@ -166,8 +160,6 @@ impl Default for EditorApp {
             expanded_steps: HashSet::new(),
             undo_stack: VecDeque::new(),
             redo_stack: VecDeque::new(),
-            flow_zoom: 1.0,
-            flow_pan: egui::Vec2::ZERO,
             run_progress_file: None,
             current_run_step: None,
             last_progress_check: std::time::Instant::now(),
@@ -195,7 +187,6 @@ impl Default for EditorApp {
             md_cache: egui_commonmark::CommonMarkCache::default(),
             manual_open: false,
             manual_search: String::new(),
-            scroll_to_selected: false,
             settings_test_result: None,
             settings_test_rx: None,
             scenario_vars: serde_yml::Mapping::new(),
@@ -285,6 +276,39 @@ impl EditorApp {
     }
     pub(crate) fn log_info(&mut self, msg: impl Into<String>) {
         self.push_log(msg, LogLevel::Info);
+    }
+
+    pub(crate) fn insert_step_from_template_at(
+        &mut self,
+        yaml: &str,
+        idx: usize,
+        canvas_pos: Option<egui::Pos2>,
+        action_name: &str,
+        log_msg: &str,
+    ) -> bool {
+        match serde_yml::from_str::<serde_yml::Value>(yaml) {
+            Ok(step) => {
+                self.push_undo_named(action_name);
+                let idx = idx.min(self.steps.len());
+                self.steps.insert(idx, step);
+                Self::canvas_shift_positions(&mut self.canvas_positions, idx, 1);
+                Self::form_edit_buffers_shift(&mut self.form_edit_buffers, idx, 1);
+                if let Some(pos) = canvas_pos {
+                    self.canvas_positions.insert(idx, pos);
+                }
+                self.select_step(idx);
+                self.dirty = true;
+                self.canvas_layout_dirty = true;
+                self.log_info(log_msg);
+                true
+            }
+            Err(e) => {
+                self.log_err(format!(
+                    "テンプレートエラー: {e} — ステップテンプレートの YAML 構文を確認してください"
+                ));
+                false
+            }
+        }
     }
 
     /// Set a temporary status bar message that auto-clears after 3 seconds.
@@ -768,12 +792,6 @@ impl EditorApp {
                 self.log_err(format!("起動に失敗しました: {e}"));
             }
         }
-    }
-
-    pub(crate) fn build_flow_nodes(&self) -> Vec<FlowNode> {
-        let mut nodes = Vec::new();
-        collect_nodes(&self.steps, 0, &self.expanded_steps, &mut nodes);
-        nodes
     }
 }
 
@@ -1282,5 +1300,76 @@ impl EditorApp {
             }
         }
         issues
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn insert_template_at_empty_canvas_records_position_and_selection() {
+        let mut app = EditorApp::default();
+        let pos = egui::pos2(120.0, 80.0);
+
+        assert!(app.insert_step_from_template_at(
+            "wait_ms: 500\n",
+            0,
+            Some(pos),
+            "ステップ追加",
+            "added",
+        ));
+
+        assert_eq!(app.steps.len(), 1);
+        assert_eq!(crate::flow_helpers::get_step_key(&app.steps[0]), "wait_ms");
+        assert_eq!(app.selected, Some(0));
+        assert_eq!(app.canvas_positions.get(&0).copied(), Some(pos));
+        assert!(app.dirty);
+        assert!(app.canvas_layout_dirty);
+    }
+
+    #[test]
+    fn insert_template_shifts_existing_canvas_positions() {
+        let mut app = EditorApp::default();
+        app.steps
+            .push(serde_yml::from_str("wait_ms: 500\n").unwrap());
+        let old_pos = egui::pos2(40.0, 40.0);
+        let new_pos = egui::pos2(10.0, 20.0);
+        app.canvas_positions.insert(0, old_pos);
+
+        assert!(app.insert_step_from_template_at(
+            "type: \"hello\"\n",
+            0,
+            Some(new_pos),
+            "ステップ追加",
+            "added",
+        ));
+
+        assert_eq!(app.steps.len(), 2);
+        assert_eq!(crate::flow_helpers::get_step_key(&app.steps[0]), "type");
+        assert_eq!(crate::flow_helpers::get_step_key(&app.steps[1]), "wait_ms");
+        assert_eq!(app.canvas_positions.get(&0).copied(), Some(new_pos));
+        assert_eq!(app.canvas_positions.get(&1).copied(), Some(old_pos));
+    }
+
+    #[test]
+    fn invalid_template_does_not_insert_step() {
+        let mut app = EditorApp::default();
+
+        assert!(!app.insert_step_from_template_at(
+            "wait_ms: [\n",
+            0,
+            None,
+            "ステップ追加",
+            "added",
+        ));
+
+        assert!(app.steps.is_empty());
+        assert!(app.canvas_positions.is_empty());
+        assert!(!app.dirty);
+        assert!(app
+            .log
+            .iter()
+            .any(|entry| entry.message.contains("テンプレートエラー")));
     }
 }

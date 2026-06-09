@@ -5,7 +5,6 @@ mod ai_integration;
 mod app;
 mod canvas;
 mod flow_helpers;
-mod flowchart;
 mod i18n;
 mod property_panel;
 mod settings;

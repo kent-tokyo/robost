@@ -26,12 +26,11 @@ robost-editor uses a VS Code-style workbench with persistent chrome:
 | Zone | Role | Visual rule |
 |------|------|-------------|
 | Menu bar | File / Edit / View / Run / Help commands | Same background as toolbar, compact text buttons |
-| Toolbar | View selector, undo/redo, scenario name, run/stop | Single fixed-height row; icon buttons for undo/redo/run actions |
+| Toolbar | Undo/redo, scenario name, run/stop | Single fixed-height row; icon buttons for undo/redo/run actions |
 | Activity bar | Top-level navigation between Steps / Nodes / Templates | Fixed 48 px, icon-only, dark in both themes |
 | Unified sidebar | Scenario list, step palette, or template gallery | Compact rows and grids, no card framing |
-| Legacy step list | List/Flow left working column | Visible in List and Flow modes only |
-| Editor surface | Canvas / Flow / List work area | Full-bleed background with no nested cards |
-| Inspector | Selected step details | Right-side panel in Canvas and Flow, property-first tabs |
+| Editor surface | Canvas work area | Full-bleed background with no nested cards |
+| Inspector | Selected step details | Right-edge Canvas overlay, property-first tabs |
 | Bottom panel | Variables / Log / Problems | Resizable, tabbed, operational diagnostics |
 | Status bar | Mode, selection, run state, zoom | Fixed 22 px accent bar at the bottom |
 
@@ -49,7 +48,7 @@ Derived from VS Code Dark+ (`colorRegistry.ts`, `workbench/common/theme.ts`).
 |-------|-----|----------------|-------|
 | ActivityBarBg | `#333333` | activityBar.background | Leftmost 48 px icon strip |
 | SidebarBg | `#252526` | sideBar.background | Sidebar panel |
-| EditorBg | `#1E1E1E` | editor.background | Canvas / List / Flow area |
+| EditorBg | `#1E1E1E` | editor.background | Canvas area |
 | PanelBg | `#1E1E1E` | panel.background | Bottom Variables/Log/Problems |
 | ToolbarBg | `#2B2B2B` | workbench chrome approximation | Menu bar and toolbar |
 | StatusBarBg | `#007ACC` | statusBar.background | Bottom status bar |

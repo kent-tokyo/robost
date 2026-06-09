@@ -205,6 +205,114 @@ pub(crate) const STEP_TEMPLATES: &[StepTemplate] = &[
     StepTemplate { category: "ユーティリティ", display_name: "デスクトップ通知",  name: "notify",         yaml: "notify:\n  title: 完了\n  message: 処理が完了しました\n" },
 ];
 
+/// Return a short Japanese description shown in the inspector for a step key.
+pub(crate) fn step_description(name: &str) -> &'static str {
+    match name {
+        "ai_create" => "プロンプトから複数のシナリオステップを生成します。",
+        "if" => "条件式の結果に応じて then / else の分岐を実行します。",
+        "foreach" => "リストの各要素に対して同じ処理を繰り返します。",
+        "repeat" => "指定した回数だけ同じ処理を繰り返します。",
+        "while" => "条件が成立している間、処理を繰り返します。",
+        "do_while" => "処理を一度実行してから、条件に応じて繰り返します。",
+        "try_catch" => "失敗する可能性のある処理を実行し、失敗時の処理を定義します。",
+        "group" => "複数のステップをひとまとまりの処理として扱います。",
+        "switch" => "値に応じて複数の分岐から実行する処理を選びます。",
+        "sub_scenario" | "call_scenario" => "別のシナリオファイルを呼び出して実行します。",
+        "exit" => "シナリオの実行を終了します。",
+        "break" => "現在の繰り返し処理を抜けます。",
+        "continue" => "現在の繰り返しをスキップし、次の繰り返しへ進みます。",
+        "wait_image" => "指定した画像が画面に現れるまで待機します。",
+        "click_image" => "指定した画像を画面上で探し、その位置をクリックします。",
+        "find_image" => "指定した画像を探し、見つかった位置を変数に保存します。",
+        "match_rect" => "指定範囲の中でテンプレート画像を探します。",
+        "wait_no_image" => "指定した画像が画面から消えるまで待機します。",
+        "wait_change" => "画面に変化が起きるまで待機します。",
+        "ocr_match" => "画面文字を OCR で読み取り、指定文字列と照合します。",
+        "ml_detect" => "ONNX モデルで画面上の対象を検出します。",
+        "screenshot_save" => "現在の画面キャプチャを画像ファイルとして保存します。",
+        "get_pixel_color" => "指定座標のピクセル色を取得して変数に保存します。",
+        "wait_color" => "指定座標が指定色に近づくまで待機します。",
+        "window_control" => "対象ウィンドウのフォーカス、最大化、最小化、終了を行います。",
+        "type" => "指定した文字列をキーボード入力します。",
+        "press" => "指定したキーを押します。",
+        "key_combo" => "Ctrl+C などの複数キー同時操作を実行します。",
+        "click_in_window" => "対象ウィンドウ内の座標をクリックします。",
+        "wait_ms" => "指定したミリ秒だけ処理を待機します。",
+        "wait_window" => "対象ウィンドウが指定状態になるまで待機します。",
+        "wait_until" => "条件式が成立するまで一定間隔で待機します。",
+        "wait_process" => "プロセスが指定状態になるまで待機します。",
+        "set" => "変数に値を設定します。",
+        "copy_var" => "変数の値を別の変数へコピーします。",
+        "get_datetime" => "現在日時を指定形式で取得します。",
+        "get_username" => "現在のユーザー名を取得します。",
+        "calc" => "式を計算し、結果を変数に保存します。",
+        "increment" => "数値変数を 1 増やします。",
+        "clipboard_set" => "クリップボードに文字列を設定します。",
+        "clipboard_get" => "クリップボードの内容を取得します。",
+        "dialog_wait" => "ユーザー確認用の待機ダイアログを表示します。",
+        "dialog_input" => "ユーザー入力を受け取り、変数に保存します。",
+        "dialog_select" => "選択肢からユーザーに値を選ばせます。",
+        "shell" => "外部コマンドを実行し、必要に応じて結果を保存します。",
+        "script" => "Rhai スクリプトを実行して一時的な処理を行います。",
+        "library" => "ビルトインまたはプラグイン関数を呼び出します。",
+        "mouse_move" => "マウスカーソルを指定座標へ移動します。",
+        "mouse_click_xy" => "指定座標をマウスクリックします。",
+        "mouse_drag" => "指定した始点から終点へマウスドラッグします。",
+        "mouse_scroll" => "マウスホイールで画面をスクロールします。",
+        "mouse_hover" => "指定座標にマウスを置いて一定時間待ちます。",
+        "process_start" => "外部プロセスを起動します。",
+        "process_kill" => "指定したプロセスを終了します。",
+        "process_exists" => "指定したプロセスが存在するか確認します。",
+        "web_open" => "ブラウザで指定 URL を開きます。",
+        "web_click" => "Web ページ上の要素をクリックします。",
+        "web_type" => "Web ページ上の入力欄へ文字列を入力します。",
+        "web_wait" | "web_wait_text" => "Web ページが指定状態になるまで待機します。",
+        "web_get" | "web_get_all" | "web_get_url" | "web_get_title" => {
+            "Web ページからテキスト、属性、URL、タイトルなどを取得します。"
+        }
+        "web_screenshot" => "Web ページのスクリーンショットを保存します。",
+        "web_close" => "ブラウザを閉じます。",
+        "web_select" => "Web ページ上の選択肢を選びます。",
+        "web_execute_js" => "Web ページ上で JavaScript を実行します。",
+        "web_switch_frame" => "操作対象の iframe を切り替えます。",
+        "web_scroll" => "Web ページをスクロールします。",
+        "web_alert" => "Web の alert / confirm / prompt を操作します。",
+        "uia_get" | "uia_find" | "uia_get_children" => {
+            "Windows UI Automation で画面要素やプロパティを取得します。"
+        }
+        "uia_set" => "Windows UI Automation で画面要素に値を設定します。",
+        "uia_click" => "Windows UI Automation で画面要素をクリックします。",
+        "uia_wait" => "Windows UI Automation の要素状態を待機します。",
+        "uia_select" => "Windows UI Automation で項目を選択します。",
+        "uia_check" => "Windows UI Automation でチェック状態を変更します。",
+        _ if name.starts_with("file_") || name.starts_with("dir_") => {
+            "ファイルまたはディレクトリを操作します。"
+        }
+        _ if name.starts_with("ftp_") => "FTP / FTPS サーバー上のファイルを操作します。",
+        _ if name.starts_with("zip_") => "ZIP アーカイブを作成、展開、確認します。",
+        _ if name.starts_with("excel_") => "Excel ファイルの読み書きやシート操作を行います。",
+        _ if name.starts_with("db_") => "データベースへ接続して SQL を実行します。",
+        _ if name.starts_with("pdf_") => "PDF ファイルから情報を取得します。",
+        _ if name.starts_with("string_") => "文字列を加工、検索、判定します。",
+        _ if name.starts_with("date_") => "日付や時刻の変換、加算、差分計算を行います。",
+        _ if name.starts_with("json_") => "JSON データの解析または文字列化を行います。",
+        _ if name.starts_with("path_") || name == "env_get" => {
+            "パスや環境変数に関する値を取得します。"
+        }
+        _ if name.starts_with("http_") => "HTTP リクエストを送信して結果を取得します。",
+        _ if name.starts_with("mail_") => "メールの送受信を行います。",
+        _ if name.starts_with("csv_") => "CSV ファイルを読み書きします。",
+        _ if name.starts_with("list_") => "リスト変数の要素を取得、追加、削除、判定します。",
+        _ if name.starts_with("base64_") => "Base64 形式への変換を行います。",
+        _ if name.starts_with("to_") || name == "var_type" || name == "number_random" => {
+            "値の型変換、型確認、数値生成などの補助処理を行います。"
+        }
+        "url_open" => "指定 URL を既定のブラウザで開きます。",
+        "notify" => "デスクトップ通知を表示します。",
+        _ => "このステップのパラメータを設定してシナリオ内で実行します。",
+    }
+}
+
 /// Return a Phosphor Regular icon character for the given step key.
 pub(crate) fn step_icon(name: &str) -> &'static str {
     use egui_phosphor::regular as ph;
