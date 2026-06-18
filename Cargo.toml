@@ -9,7 +9,6 @@ members = [
     "crates/robost-backend",
     "crates/robost-core",
     "crates/robost-snip",
-    "crates/robost-editor",
     "crates/robost-plugin-api",
     "crates/robost-plugin-host",
     "crates/robost-script",

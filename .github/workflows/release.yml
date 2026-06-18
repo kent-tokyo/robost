@@ -20,22 +20,18 @@ jobs:
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
-            bin_editor: robost-editor
-            bin_cli: rpa
-            archive_editor: robost-editor-aarch64-apple-darwin.tar.gz
-            archive_cli: rpa-aarch64-apple-darwin.tar.gz
-          - os: macos-latest
+            bin: rpa
+            archive: rpa-aarch64-apple-darwin.tar.gz
+
+          - os: macos-13
             target: x86_64-apple-darwin
-            bin_editor: robost-editor
-            bin_cli: rpa
-            archive_editor: robost-editor-x86_64-apple-darwin.tar.gz
-            archive_cli: rpa-x86_64-apple-darwin.tar.gz
+            bin: rpa
+            archive: rpa-x86_64-apple-darwin.tar.gz
+
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            bin_editor: robost-editor.exe
-            bin_cli: rpa.exe
-            archive_editor: robost-editor-x86_64-windows.zip
-            archive_cli: rpa-x86_64-windows.zip
+            bin: rpa.exe
+            archive: rpa-x86_64-windows.zip
 
     steps:
       - uses: actions/checkout@v4
@@ -55,62 +51,87 @@ jobs:
           key: release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: release-${{ matrix.target }}-
 
-      - name: Build robost-editor
-        run: cargo build -p robost-editor --release --target ${{ matrix.target }}
+      # ── macOS: Tesseract via Homebrew ──────────────────────────────────────
+      - name: Install OCR deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install pkgconf tesseract tesseract-lang
 
-      - name: Build robost-cli
-        run: cargo build -p robost-cli --release --target ${{ matrix.target }}
+      # ── Windows: Tesseract + Leptonica via vcpkg ──────────────────────────
+      - name: Cache vcpkg packages
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-tesseract-x64-windows-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: vcpkg-tesseract-x64-windows-
 
+      - name: Install OCR deps (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install pkgconfiglite --no-progress -y
+          & "C:\vcpkg\vcpkg.exe" install leptonica:x64-windows tesseract:x64-windows
+
+      # ── Build ──────────────────────────────────────────────────────────────
+      - name: Build rpa (macOS)
+        if: runner.os == 'macOS'
+        run: cargo build -p robost-cli --release --features ocr --target ${{ matrix.target }}
+
+      - name: Build rpa.exe (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
+          VCPKGRS_DYNAMIC: "1"
+        run: cargo build -p robost-cli --release --features ocr --target ${{ matrix.target }}
+
+      # ── Package macOS ──────────────────────────────────────────────────────
       - name: Package (macOS)
         if: runner.os == 'macOS'
-        env:
-          TARGET: ${{ matrix.target }}
-          BIN_EDITOR: ${{ matrix.bin_editor }}
-          BIN_CLI: ${{ matrix.bin_cli }}
-          ARCHIVE_EDITOR: ${{ matrix.archive_editor }}
-          ARCHIVE_CLI: ${{ matrix.archive_cli }}
         run: |
-          # Editor archive bundles rpa alongside so the Run button works out of the box
-          tar czf "$ARCHIVE_EDITOR" -C "target/$TARGET/release" "$BIN_EDITOR" "$BIN_CLI"
-          tar czf "$ARCHIVE_CLI"   -C "target/$TARGET/release" "$BIN_CLI"
+          tar czf "${{ matrix.archive }}" \
+            -C "target/${{ matrix.target }}/release" "${{ matrix.bin }}"
+
+      # ── Package Windows (bundle DLLs so OCR works without extra install) ──
+      - name: Collect DLLs (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $out = "target\${{ matrix.target }}\release"
+          $vcpkgBin = "C:\vcpkg\installed\x64-windows\bin"
+          $patterns = @(
+            "tesseract*.dll", "leptonica*.dll",
+            "libpng*.dll", "zlib1.dll", "jpeg*.dll",
+            "tiff*.dll", "giflib*.dll", "lzma.dll",
+            "openjp2.dll", "webp*.dll"
+          )
+          foreach ($pat in $patterns) {
+            Get-ChildItem "$vcpkgBin\$pat" -ErrorAction SilentlyContinue |
+              Copy-Item -Destination $out -Force
+          }
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        env:
-          TARGET: ${{ matrix.target }}
-          BIN_EDITOR: ${{ matrix.bin_editor }}
-          BIN_CLI: ${{ matrix.bin_cli }}
-          ARCHIVE_EDITOR: ${{ matrix.archive_editor }}
-          ARCHIVE_CLI: ${{ matrix.archive_cli }}
         run: |
-          # Editor archive bundles rpa.exe alongside so the Run button works out of the box
-          Compress-Archive `
-            -Path @("target\$env:TARGET\release\$env:BIN_EDITOR",
-                    "target\$env:TARGET\release\$env:BIN_CLI") `
-            -DestinationPath $env:ARCHIVE_EDITOR
-          Compress-Archive -Path "target\$env:TARGET\release\$env:BIN_CLI" `
-            -DestinationPath $env:ARCHIVE_CLI
+          $rel = "target\${{ matrix.target }}\release"
+          $files = @("$rel\${{ matrix.bin }}") +
+                   (Get-ChildItem "$rel\*.dll" | Select-Object -ExpandProperty FullName) +
+                   @("run.bat", "stop.bat", "install_deps.bat")
+          Compress-Archive -Path $files -DestinationPath "${{ matrix.archive }}" -Force
 
-      - name: Upload editor artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.archive_editor }}
-          path: ${{ matrix.archive_editor }}
-
-      - name: Upload CLI artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.archive_cli }}
-          path: ${{ matrix.archive_cli }}
+          name: ${{ matrix.archive }}
+          path: ${{ matrix.archive }}
 
   release:
-    name: Create release
+    name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - uses: actions/download-artifact@v4
         with:
