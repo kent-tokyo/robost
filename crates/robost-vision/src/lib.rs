@@ -44,7 +44,7 @@ pub use async_util::wait_for_diff;
 #[cfg(feature = "ocr")]
 pub mod ocr;
 
-#[cfg(feature = "ml")]
+#[cfg(any(feature = "ml", feature = "ml-vision"))]
 pub mod ml;
 
 /// Load an image file as RGBA8.

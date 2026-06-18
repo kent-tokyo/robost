@@ -37,7 +37,8 @@ use crate::scenario::{
     JsonStringifyStep, KeyComboStep, LibraryStep, ListContainsStep, ListGetStep, ListLengthStep,
     ListPushStep, ListRemoveStep, LoadVarsStep, LogLevel, LogWriteStep, MailReceiveStep,
     MailSendStep, MatchRectStep, MlDetectStep, MouseClickXyStep, MouseDragStep, MouseHoverStep,
-    MouseMoveStep, MouseScrollStep, NotifyStep, NumberRandomStep, OcrMatchStep, PathBasenameStep,
+    ClickTextStep, MouseMoveStep, MouseScrollStep, MoveToTextStep, NotifyStep, NumberRandomStep,
+    OcrMatchStep, PathBasenameStep,
     PathDirnameStep, PathJoinStep, PdfExtractTextStep, PdfPageCountStep, ProcessExistsStep,
     ProcessKillStep, ProcessStartStep, ProcessWaitState, RepeatStep, SaveVarsStep, ScenarioStep,
     ScreenshotSaveStep, ScriptStep, ShellStep, StringContainsStep, StringCountStep,
@@ -867,6 +868,16 @@ impl ScenarioEngine {
             // OCR
             ScenarioStep::OcrMatch(s) => {
                 self.ocr_match(s, vars).await?;
+                Ok(Flow::Done)
+            }
+
+            ScenarioStep::ClickText(s) => {
+                self.click_text(s, vars).await?;
+                Ok(Flow::Done)
+            }
+
+            ScenarioStep::MoveToText(s) => {
+                self.move_to_text(s, vars).await?;
                 Ok(Flow::Done)
             }
 
@@ -2795,6 +2806,188 @@ impl ScenarioEngine {
                     sleep(Duration::from_millis(step.retry_interval_ms)).await;
                 }
                 Err(e) => return Err(e),
+            }
+        }
+    }
+
+    // ── Click text via OCR ──────────────────────────────────────────────────
+
+    async fn click_text(&self, step: &ClickTextStep, vars: &Variables) -> Result<()> {
+        #[cfg(not(feature = "ocr"))]
+        {
+            let _ = (step, vars);
+            return Err(EngineError::Other(
+                "click_text requires the 'ocr' feature; rebuild with: cargo build --features ocr"
+                    .to_owned(),
+            ));
+        }
+
+        #[cfg(feature = "ocr")]
+        {
+            let target = Self::capture_target(&step.window);
+            let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
+            let text = vars.expand(&step.text);
+            let lang = step.lang.clone();
+            let action = step.action.clone();
+
+            loop {
+                let backend = Arc::clone(&self.backend);
+                let tgt = target.clone();
+                let lang2 = lang.clone();
+                let text2 = text.clone();
+
+                let offset_x = step.offset_x;
+                let offset_y = step.offset_y;
+                let click_pt: Result<Option<robost_template::ScreenPoint>> =
+                    tokio::task::spawn_blocking(move || {
+                        let (img, origin) = backend.capture_with_origin(&tgt)?;
+
+                        // On HiDPI / Retina, the captured image is at physical resolution
+                        // (e.g. 2×) while click coordinates must be in logical (1×) units.
+                        // Compute the scale factor from the primary monitor.
+                        let scale: f32 = xcap::Monitor::all()
+                            .ok()
+                            .and_then(|ms| {
+                                ms.into_iter()
+                                    .find(|m| m.is_primary().unwrap_or(false))
+                                    .and_then(|m| m.scale_factor().ok())
+                            })
+                            .unwrap_or(1.0)
+                            .max(1.0);
+
+                        let found = robost_vision::ocr::OcrEngine::new(lang2)
+                            .find_text_bounds(&img, &text2)
+                            .map_err(|e| EngineError::Other(format!("click_text: {e}")))?;
+
+                        Ok(found.map(|r| {
+                            let cx = ((r.x + (r.width as i32) / 2) as f32 / scale) as i32;
+                            let cy = ((r.y + (r.height as i32) / 2) as f32 / scale) as i32;
+                            robost_template::ScreenPoint {
+                                x: origin.x + cx + offset_x,
+                                y: origin.y + cy + offset_y,
+                            }
+                        }))
+                    })
+                    .await
+                    .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+
+                match click_pt? {
+                    Some(point) => {
+                        info!(x = point.x, y = point.y, text = %text, "click_text");
+                        if let Some(ref tx) = self.progress_tx {
+                            let _ = tx.send(ProgressEvent::Log {
+                                level: "info".into(),
+                                message: format!(
+                                    "click_text: \"{text}\" → ({}, {})", point.x, point.y
+                                ),
+                            });
+                        }
+                        if !self.dry_run {
+                            match action {
+                                ClickAction::Left => self.backend.click(point)?,
+                                ClickAction::Right => self.backend.right_click(point)?,
+                                ClickAction::Double => self.backend.double_click(point)?,
+                            }
+                        } else {
+                            info!(dry_run = true, "click_text skipped");
+                        }
+                        return Ok(());
+                    }
+                    None => {
+                        if Instant::now() >= deadline {
+                            return Err(EngineError::Timeout(format!("click_text: {text:?}")));
+                        }
+                        self.check_cancelled()?;
+                        sleep(Duration::from_millis(step.retry_interval_ms)).await;
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Move mouse to text via OCR ──────────────────────────────────────────
+
+    async fn move_to_text(&self, step: &MoveToTextStep, vars: &Variables) -> Result<()> {
+        #[cfg(not(feature = "ocr"))]
+        {
+            let _ = (step, vars);
+            return Err(EngineError::Other(
+                "move_to_text requires the 'ocr' feature; rebuild with: cargo build --features ocr"
+                    .to_owned(),
+            ));
+        }
+
+        #[cfg(feature = "ocr")]
+        {
+            let target = Self::capture_target(&step.window);
+            let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
+            let text = vars.expand(&step.text);
+            let lang = step.lang.clone();
+
+            loop {
+                let backend = Arc::clone(&self.backend);
+                let tgt = target.clone();
+                let lang2 = lang.clone();
+                let text2 = text.clone();
+
+                let offset_x = step.offset_x;
+                let offset_y = step.offset_y;
+                let move_pt: Result<Option<robost_template::ScreenPoint>> =
+                    tokio::task::spawn_blocking(move || {
+                        let (img, origin) = backend.capture_with_origin(&tgt)?;
+
+                        let scale: f32 = xcap::Monitor::all()
+                            .ok()
+                            .and_then(|ms| {
+                                ms.into_iter()
+                                    .find(|m| m.is_primary().unwrap_or(false))
+                                    .and_then(|m| m.scale_factor().ok())
+                            })
+                            .unwrap_or(1.0)
+                            .max(1.0);
+
+                        let found = robost_vision::ocr::OcrEngine::new(lang2)
+                            .find_text_bounds(&img, &text2)
+                            .map_err(|e| EngineError::Other(format!("move_to_text: {e}")))?;
+
+                        Ok(found.map(|r| {
+                            let cx = ((r.x + (r.width as i32) / 2) as f32 / scale) as i32;
+                            let cy = ((r.y + (r.height as i32) / 2) as f32 / scale) as i32;
+                            robost_template::ScreenPoint {
+                                x: origin.x + cx + offset_x,
+                                y: origin.y + cy + offset_y,
+                            }
+                        }))
+                    })
+                    .await
+                    .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+
+                match move_pt? {
+                    Some(point) => {
+                        info!(x = point.x, y = point.y, text = %text, "move_to_text");
+                        if let Some(ref tx) = self.progress_tx {
+                            let _ = tx.send(ProgressEvent::Log {
+                                level: "info".into(),
+                                message: format!(
+                                    "move_to_text: \"{text}\" → ({}, {})", point.x, point.y
+                                ),
+                            });
+                        }
+                        if !self.dry_run {
+                            self.backend.move_mouse(point)?;
+                        } else {
+                            info!(dry_run = true, "move_to_text skipped");
+                        }
+                        return Ok(());
+                    }
+                    None => {
+                        if Instant::now() >= deadline {
+                            return Err(EngineError::Timeout(format!("move_to_text: {text:?}")));
+                        }
+                        self.check_cancelled()?;
+                        sleep(Duration::from_millis(step.retry_interval_ms)).await;
+                    }
+                }
             }
         }
     }
@@ -5865,6 +6058,50 @@ steps:
                 assert!(s.save_as.is_none());
             }
             _ => panic!("expected OcrMatch"),
+        }
+    }
+
+    #[test]
+    fn click_text_step_yaml_roundtrip() {
+        let yaml = r#"
+name: test
+steps:
+  - click_text:
+      text: "送信"
+      lang: jpn
+      action: left
+"#;
+        let scenario = crate::Scenario::from_yaml(yaml).expect("parse failed");
+        assert_eq!(scenario.steps.len(), 1);
+        match &scenario.steps[0] {
+            ScenarioStep::ClickText(s) => {
+                assert_eq!(s.text, "送信");
+                assert_eq!(s.lang, "jpn");
+                assert_eq!(s.action, ClickAction::Left);
+            }
+            _ => panic!("expected ClickText"),
+        }
+    }
+
+    #[test]
+    fn click_text_step_defaults() {
+        let yaml = r#"
+name: test
+steps:
+  - click_text:
+      text: "OK"
+"#;
+        let scenario = crate::Scenario::from_yaml(yaml).expect("parse failed");
+        match &scenario.steps[0] {
+            ScenarioStep::ClickText(s) => {
+                assert_eq!(s.text, "OK");
+                assert_eq!(s.lang, "jpn+eng");
+                assert_eq!(s.action, ClickAction::Left);
+                assert_eq!(s.timeout_ms, 5000);
+                assert_eq!(s.retry_interval_ms, 200);
+                assert!(s.window.is_none());
+            }
+            _ => panic!("expected ClickText"),
         }
     }
 

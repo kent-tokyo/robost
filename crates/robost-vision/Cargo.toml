@@ -16,7 +16,8 @@ default = ["template-match"]
 template-match = []
 async = ["dep:tokio"]
 ocr = ["dep:leptess"]
-ml  = ["dep:ort"]
+ml         = ["dep:ort", "dep:ndarray"]
+ml-vision  = ["dep:objc2", "dep:objc2-foundation", "dep:objc2-core-graphics", "dep:objc2-core-foundation"]
 
 [dependencies]
 serde.workspace = true
@@ -28,6 +29,13 @@ tokio = { workspace = true, optional = true }
 
 leptess = { version = "0.14", optional = true }
 ort     = { version = "2.0.0-rc.12", optional = true }
+ndarray = { version = "0.17", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2                 = { version = "0.6", optional = true }
+objc2-foundation      = { version = "0.3", optional = true, features = ["NSArray", "NSDictionary", "NSError", "NSString", "NSObject"] }
+objc2-core-graphics   = { version = "0.3", optional = true, features = ["CGColorSpace", "CGDataProvider", "CGImage"] }
+objc2-core-foundation = { version = "0.3", optional = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }

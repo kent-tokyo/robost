@@ -1,0 +1,9 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', sans-serif;
+  background: #12121f;
+  color: #d0d0e8;
+  overflow: hidden;
+}

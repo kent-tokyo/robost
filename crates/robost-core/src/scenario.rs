@@ -96,6 +96,8 @@ pub enum ScenarioStep {
 
     // --- OCR ---
     OcrMatch(OcrMatchStep),
+    ClickText(ClickTextStep),
+    MoveToText(MoveToTextStep),
 
     // --- ML detection ---
     MlDetect(MlDetectStep),
@@ -800,6 +802,60 @@ pub struct OcrMatchStep {
     /// OCR engine to use. Absent = Tesseract (backward compatible).
     #[serde(default)]
     pub engine: Option<OcrEngineKind>,
+}
+
+// ── Click text via OCR ────────────────────────────────────────────────────
+
+/// Find the specified text on screen using OCR and click its center.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClickTextStep {
+    /// The text string to locate on screen.
+    pub text: String,
+    /// Tesseract language code(s): `"jpn"`, `"eng"`, `"jpn+eng"`, etc.
+    #[serde(default = "default_ocr_lang")]
+    pub lang: String,
+    /// Which mouse button/gesture to use.
+    #[serde(default)]
+    pub action: ClickAction,
+    /// Horizontal offset in logical pixels from the text center (positive = right).
+    #[serde(default)]
+    pub offset_x: i32,
+    /// Vertical offset in logical pixels from the text center (positive = down).
+    #[serde(default)]
+    pub offset_y: i32,
+    /// Restrict capture to the window whose title contains this string.
+    #[serde(default)]
+    pub window: Option<String>,
+    /// Keep retrying until the text appears or this many milliseconds elapse.
+    #[serde(default = "default_timeout_ms")]
+    pub timeout_ms: u64,
+    #[serde(default = "default_retry_interval_ms")]
+    pub retry_interval_ms: u64,
+}
+
+// ── Move mouse to text via OCR ────────────────────────────────────────────
+
+/// Find the specified text on screen using OCR and move the mouse to its center (no click).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoveToTextStep {
+    /// The text string to locate on screen.
+    pub text: String,
+    /// Tesseract language code(s): `"jpn"`, `"eng"`, `"jpn+eng"`, etc.
+    #[serde(default = "default_ocr_lang")]
+    pub lang: String,
+    /// Horizontal offset in logical pixels from the text center (positive = right).
+    #[serde(default)]
+    pub offset_x: i32,
+    /// Vertical offset in logical pixels from the text center (positive = down).
+    #[serde(default)]
+    pub offset_y: i32,
+    /// Restrict capture to the window whose title contains this string.
+    #[serde(default)]
+    pub window: Option<String>,
+    #[serde(default = "default_timeout_ms")]
+    pub timeout_ms: u64,
+    #[serde(default = "default_retry_interval_ms")]
+    pub retry_interval_ms: u64,
 }
 
 // ── ML detection step type ────────────────────────────────────────────────
@@ -2498,6 +2554,8 @@ const KNOWN_VARIANTS: &[&str] = &[
     "wait_change",
     "window_control",
     "ocr_match",
+    "click_text",
+    "move_to_text",
     "ml_detect",
     "import_vars",
     "save_vars",
@@ -2714,6 +2772,8 @@ impl<'de> serde::de::Visitor<'de> for ScenarioStepVisitor {
             "wait_change" => ScenarioStep::WaitChange(map.next_value()?),
             "window_control" => ScenarioStep::WindowControl(map.next_value()?),
             "ocr_match" => ScenarioStep::OcrMatch(map.next_value()?),
+            "click_text" => ScenarioStep::ClickText(map.next_value()?),
+            "move_to_text" => ScenarioStep::MoveToText(map.next_value()?),
             // --- ML detection ---
             "ml_detect" => ScenarioStep::MlDetect(map.next_value()?),
             // --- variable persistence ---
@@ -3019,6 +3079,8 @@ impl ScenarioStep {
             Self::WaitChange(_) => "wait_change",
             Self::WindowControl(_) => "window_control",
             Self::OcrMatch(_) => "ocr_match",
+            Self::ClickText(_) => "click_text",
+            Self::MoveToText(_) => "move_to_text",
             Self::MlDetect(_) => "ml_detect",
             Self::ImportVars(_) => "import_vars",
             Self::SaveVars(_) => "save_vars",

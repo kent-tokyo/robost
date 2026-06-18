@@ -85,6 +85,18 @@ enum Commands {
     },
     /// Run the scheduler daemon (blocks until Ctrl+C)
     Daemon,
+    /// Start the local RPA agent with a built-in HTTP server and web UI
+    Agent {
+        /// Port to listen on
+        #[arg(long, short = 'p', default_value = "9921")]
+        port: u16,
+        /// Scenarios directory (default: ~/robost/scenarios)
+        #[arg(long)]
+        scenarios_dir: Option<std::path::PathBuf>,
+        /// Do not open browser automatically
+        #[arg(long)]
+        no_browser: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -287,6 +299,31 @@ fn main() -> Result<()> {
         Commands::Daemon => {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(scheduler::run_daemon())
+        }
+        Commands::Agent { port, scenarios_dir, no_browser } => {
+            let dir = scenarios_dir.unwrap_or_else(|| {
+                dirs::document_dir()
+                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+                    .join("robost")
+                    .join("scenarios")
+            });
+            std::fs::create_dir_all(&dir)
+                .with_context(|| format!("failed to create scenarios dir: {}", dir.display()))?;
+
+            let bind_addr = format!("127.0.0.1:{port}");
+            if !no_browser {
+                let url = format!("http://localhost:{port}");
+                // Open browser after a short delay so the server can start
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    let _ = open::that(&url);
+                });
+            }
+
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?;
+            rt.block_on(server::run_agent_server(&bind_addr, dir))
         }
         Commands::Plugin { action } => match action {
             PluginCommands::Install { source, yes } => {
