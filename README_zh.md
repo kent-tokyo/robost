@@ -20,14 +20,6 @@
 
 > **最新版本**: [GitHub Releases](https://github.com/kent-tokyo/robost/releases/latest)
 
-### robost-editor — 可视化场景编辑器
-
-| 平台 | 下载 |
-|---|---|
-| macOS (Apple Silicon) | [robost-editor-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-aarch64-apple-darwin.tar.gz) |
-| macOS (Intel) | [robost-editor-x86_64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-x86_64-apple-darwin.tar.gz) |
-| Windows | [robost-editor-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-x86_64-windows.zip) |
-
 ### rpa — CLI 运行器
 
 | 平台 | 下载 |

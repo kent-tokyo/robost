@@ -20,14 +20,6 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 
 > **最新リリース**: [GitHub Releases](https://github.com/kent-tokyo/robost/releases/latest)
 
-### robost-editor — ビジュアルシナリオエディタ
-
-| プラットフォーム | ダウンロード |
-|---|---|
-| macOS (Apple Silicon) | [robost-editor-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-aarch64-apple-darwin.tar.gz) |
-| macOS (Intel) | [robost-editor-x86_64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-x86_64-apple-darwin.tar.gz) |
-| Windows | [robost-editor-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/robost-editor-x86_64-windows.zip) |
-
 ### rpa — CLI ランナー
 
 | プラットフォーム | ダウンロード |
