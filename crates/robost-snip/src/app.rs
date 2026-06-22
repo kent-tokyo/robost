@@ -900,12 +900,15 @@ fn do_save(
         .as_millis();
     let stem = format!("template_{ts}");
     #[cfg(target_os = "windows")]
-    let docs = std::env::var("USERPROFILE").ok()
+    let docs = std::env::var("USERPROFILE")
+        .ok()
         .map(|h| std::path::PathBuf::from(h).join("Documents"));
     #[cfg(not(target_os = "windows"))]
-    let docs = std::env::var("HOME").ok()
+    let docs = std::env::var("HOME")
+        .ok()
         .map(|h| std::path::PathBuf::from(h).join("Documents"));
-    let dir = docs.unwrap_or_else(|| std::path::PathBuf::from("."))
+    let dir = docs
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("robost")
         .join("templates");
 

@@ -300,13 +300,19 @@ fn main() -> Result<()> {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(scheduler::run_daemon())
         }
-        Commands::Agent { port, scenarios_dir, no_browser } => {
+        Commands::Agent {
+            port,
+            scenarios_dir,
+            no_browser,
+        } => {
             let dir = scenarios_dir.unwrap_or_else(|| {
                 #[cfg(target_os = "windows")]
-                let docs = std::env::var("USERPROFILE").ok()
+                let docs = std::env::var("USERPROFILE")
+                    .ok()
                     .map(|h| std::path::PathBuf::from(h).join("Documents"));
                 #[cfg(not(target_os = "windows"))]
-                let docs = std::env::var("HOME").ok()
+                let docs = std::env::var("HOME")
+                    .ok()
                     .map(|h| std::path::PathBuf::from(h).join("Documents"));
                 docs.unwrap_or_else(|| std::path::PathBuf::from("."))
                     .join("robost")

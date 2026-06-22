@@ -103,7 +103,12 @@ impl TextDetector {
             .commit_from_file(path)
             .map_err(|e| DetectionError::ModelLoad(e.to_string()))?;
         let input_size = fixed_input_size(&session);
-        Ok(Self { session, input_size, threshold: 0.3, min_area: 10 })
+        Ok(Self {
+            session,
+            input_size,
+            threshold: 0.3,
+            min_area: 10,
+        })
     }
 
     pub fn with_threshold(mut self, threshold: f32) -> Self {
@@ -150,7 +155,14 @@ impl TextDetector {
         let scale_x = orig_w as f32 / map_w as f32;
         let scale_y = orig_h as f32 / map_h as f32;
 
-        tracing::debug!(map_w, map_h, scale_x, scale_y, threshold = self.threshold, "text detection map");
+        tracing::debug!(
+            map_w,
+            map_h,
+            scale_x,
+            scale_y,
+            threshold = self.threshold,
+            "text detection map"
+        );
 
         let n = (map_h * map_w) as usize;
         let mut mask = vec![false; n];
@@ -160,7 +172,16 @@ impl TextDetector {
             mask[i] = data[i] >= self.threshold;
         }
 
-        Ok(extract_boxes(&mask, &conf, map_w, map_h, scale_x, scale_y, origin, self.min_area))
+        Ok(extract_boxes(
+            &mask,
+            &conf,
+            map_w,
+            map_h,
+            scale_x,
+            scale_y,
+            origin,
+            self.min_area,
+        ))
     }
 
     pub fn detect_in_region(
@@ -176,7 +197,10 @@ impl TextDetector {
         let w = x1.saturating_sub(x0);
         let h = y1.saturating_sub(y0);
         let roi = image::imageops::crop_imm(image, x0, y0, w, h).to_image();
-        let roi_origin = ScreenPoint { x: origin.x + x0 as i32, y: origin.y + y0 as i32 };
+        let roi_origin = ScreenPoint {
+            x: origin.x + x0 as i32,
+            y: origin.y + y0 as i32,
+        };
         self.detect(&roi, roi_origin)
     }
 }
@@ -269,7 +293,12 @@ fn extract_boxes(
             let bh = (box_h as f32 * scale_y).round() as u32;
 
             boxes.push(TextBox {
-                bounds: crate::types::Rect { x: bx, y: by, width: bw, height: bh },
+                bounds: crate::types::Rect {
+                    x: bx,
+                    y: by,
+                    width: bw,
+                    height: bh,
+                },
                 confidence: sum_conf / count as f32,
             });
         }
@@ -281,10 +310,18 @@ fn extract_boxes(
 #[cfg(feature = "ml")]
 fn four_neighbors(x: u32, y: u32, w: u32, h: u32) -> impl Iterator<Item = (u32, u32)> {
     let mut v = [None; 4];
-    if x > 0 { v[0] = Some((x - 1, y)); }
-    if x + 1 < w { v[1] = Some((x + 1, y)); }
-    if y > 0 { v[2] = Some((x, y - 1)); }
-    if y + 1 < h { v[3] = Some((x, y + 1)); }
+    if x > 0 {
+        v[0] = Some((x - 1, y));
+    }
+    if x + 1 < w {
+        v[1] = Some((x + 1, y));
+    }
+    if y > 0 {
+        v[2] = Some((x, y - 1));
+    }
+    if y + 1 < h {
+        v[3] = Some((x, y + 1));
+    }
     v.into_iter().flatten()
 }
 
@@ -293,8 +330,8 @@ fn four_neighbors(x: u32, y: u32, w: u32, h: u32) -> impl Iterator<Item = (u32, 
 #[cfg(all(test, feature = "ml"))]
 mod tests {
     use super::*;
-    use image::{Rgba, RgbaImage};
     use crate::types::ScreenPoint;
+    use image::{Rgba, RgbaImage};
 
     fn white_image(w: u32, h: u32) -> RgbaImage {
         RgbaImage::from_pixel(w, h, Rgba([255, 255, 255, 255]))
@@ -329,7 +366,11 @@ mod tests {
         let h = 10u32;
         let mut mask = vec![false; (w * h) as usize];
         let conf = vec![0.9f32; (w * h) as usize];
-        for y in 2..6u32 { for x in 2..6u32 { mask[(y * w + x) as usize] = true; } }
+        for y in 2..6u32 {
+            for x in 2..6u32 {
+                mask[(y * w + x) as usize] = true;
+            }
+        }
         let origin = ScreenPoint { x: 0, y: 0 };
         let boxes = extract_boxes(&mask, &conf, w, h, 1.0, 1.0, origin, 1);
         assert_eq!(boxes.len(), 1);
@@ -343,7 +384,9 @@ mod tests {
         let h = 10u32;
         let mut mask = vec![false; (w * h) as usize];
         let conf = vec![0.9f32; (w * h) as usize];
-        for x in 0..10u32 { mask[x as usize] = true; }
+        for x in 0..10u32 {
+            mask[x as usize] = true;
+        }
         let origin = ScreenPoint { x: 0, y: 0 };
         assert!(extract_boxes(&mask, &conf, w, h, 1.0, 1.0, origin, 1).is_empty());
     }
@@ -354,7 +397,11 @@ mod tests {
         let h = 10u32;
         let mut mask = vec![false; (w * h) as usize];
         let conf = vec![0.9f32; (w * h) as usize];
-        for y in 0..5u32 { for x in 0..5u32 { mask[(y * w + x) as usize] = true; } }
+        for y in 0..5u32 {
+            for x in 0..5u32 {
+                mask[(y * w + x) as usize] = true;
+            }
+        }
         let origin = ScreenPoint { x: 100, y: 200 };
         let boxes = extract_boxes(&mask, &conf, w, h, 1.0, 1.0, origin, 1);
         assert_eq!(boxes.len(), 1);
@@ -367,10 +414,21 @@ mod tests {
         let h = 10u32;
         let mut mask = vec![false; (w * h) as usize];
         let conf = vec![0.8f32; (w * h) as usize];
-        for y in 0..5u32 { for x in 0..4u32 { mask[(y * w + x) as usize] = true; } }
-        for y in 0..5u32 { for x in 15..19u32 { mask[(y * w + x) as usize] = true; } }
+        for y in 0..5u32 {
+            for x in 0..4u32 {
+                mask[(y * w + x) as usize] = true;
+            }
+        }
+        for y in 0..5u32 {
+            for x in 15..19u32 {
+                mask[(y * w + x) as usize] = true;
+            }
+        }
         let origin = ScreenPoint { x: 0, y: 0 };
-        assert_eq!(extract_boxes(&mask, &conf, w, h, 1.0, 1.0, origin, 1).len(), 2);
+        assert_eq!(
+            extract_boxes(&mask, &conf, w, h, 1.0, 1.0, origin, 1).len(),
+            2
+        );
     }
 
     #[test]
@@ -379,7 +437,11 @@ mod tests {
         let h = 8u32;
         let mut mask = vec![false; (w * h) as usize];
         let conf = vec![0.9f32; (w * h) as usize];
-        for y in 1..4u32 { for x in 1..4u32 { mask[(y * w + x) as usize] = true; } }
+        for y in 1..4u32 {
+            for x in 1..4u32 {
+                mask[(y * w + x) as usize] = true;
+            }
+        }
         let origin = ScreenPoint { x: 0, y: 0 };
         let boxes = extract_boxes(&mask, &conf, w, h, 2.0, 2.0, origin, 1);
         assert_eq!(boxes.len(), 1);
@@ -393,7 +455,11 @@ mod tests {
         let h = 8u32;
         let mut mask = vec![false; (w * h) as usize];
         let mut conf = vec![0.0f32; (w * h) as usize];
-        for y in 1..4u32 { for x in 1..4u32 { mask[(y * w + x) as usize] = true; } }
+        for y in 1..4u32 {
+            for x in 1..4u32 {
+                mask[(y * w + x) as usize] = true;
+            }
+        }
         let corners = [(1u32, 1u32), (3, 1), (1, 3), (3, 3)];
         let corner_values = [0.4f32, 0.6, 0.8, 1.0];
         for (i, &(x, y)) in corners.iter().enumerate() {
@@ -422,9 +488,9 @@ pub mod vision {
     use super::DetectionError;
     use crate::types::{Rect, ScreenPoint};
     use image::RgbaImage;
-    use objc2::{AnyThread, extern_class, msg_send};
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, NSObject};
+    use objc2::{extern_class, msg_send, AnyThread};
     use objc2_core_foundation::CGRect;
     use objc2_core_graphics::{
         CGBitmapInfo, CGColorRenderingIntent, CGColorSpace, CGDataProvider, CGImage,
@@ -490,7 +556,10 @@ pub mod vision {
     impl VisionTextBox {
         /// Drop the text field and return a plain [`TextBox`](super::TextBox).
         pub fn into_text_box(self) -> super::TextBox {
-            super::TextBox { bounds: self.bounds, confidence: self.confidence }
+            super::TextBox {
+                bounds: self.bounds,
+                confidence: self.confidence,
+            }
         }
     }
 
@@ -535,7 +604,10 @@ pub mod vision {
         }
 
         /// Set the recognition languages (BCP 47 tags, e.g. `"ja-JP"`, `"zh-Hans"`).
-        pub fn with_languages(mut self, langs: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        pub fn with_languages(
+            mut self,
+            langs: impl IntoIterator<Item = impl Into<String>>,
+        ) -> Self {
             self.languages = langs.into_iter().map(Into::into).collect();
             self
         }
@@ -568,8 +640,10 @@ pub mod vision {
             let w = x1.saturating_sub(x0);
             let h = y1.saturating_sub(y0);
             let roi = image::imageops::crop_imm(image, x0, y0, w, h).to_image();
-            let roi_origin =
-                ScreenPoint { x: origin.x + x0 as i32, y: origin.y + y0 as i32 };
+            let roi_origin = ScreenPoint {
+                x: origin.x + x0 as i32,
+                y: origin.y + y0 as i32,
+            };
             self.detect(&roi, roi_origin)
         }
 
@@ -580,7 +654,10 @@ pub mod vision {
             origin: ScreenPoint,
             query: &str,
         ) -> Result<Option<VisionTextBox>> {
-            Ok(self.detect(image, origin)?.into_iter().find(|b| b.text.contains(query)))
+            Ok(self
+                .detect(image, origin)?
+                .into_iter()
+                .find(|b| b.text.contains(query)))
         }
 
         unsafe fn run_vision(
@@ -645,8 +722,11 @@ pub mod vision {
             let _: () = msg_send![&*request, setRecognitionLevel: level_raw];
             let _: () = msg_send![&*request, setUsesLanguageCorrection: false];
 
-            let lang_strs: Vec<Retained<NSString>> =
-                self.languages.iter().map(|s| NSString::from_str(s)).collect();
+            let lang_strs: Vec<Retained<NSString>> = self
+                .languages
+                .iter()
+                .map(|s| NSString::from_str(s))
+                .collect();
             let lang_refs: Vec<&NSString> = lang_strs.iter().map(|s| s.as_ref()).collect();
             let langs: Retained<NSArray<NSString>> = NSArray::from_slice(&lang_refs);
             let _: () = msg_send![&*request, setRecognitionLanguages: &*langs];
@@ -688,7 +768,9 @@ pub mod vision {
                 let candidates: Retained<NSArray<AnyObject>> =
                     msg_send![&*obs, topCandidates: 1usize];
                 // iter() yields Retained<AnyObject>
-                let Some(candidate) = candidates.iter().next() else { continue };
+                let Some(candidate) = candidates.iter().next() else {
+                    continue;
+                };
 
                 let text_ns: Retained<NSString> = msg_send![&*candidate, string];
                 let text = text_ns.to_string();
@@ -696,15 +778,20 @@ pub mod vision {
 
                 // Convert Vision normalized coords (bottom-left origin) → image pixels (top-left)
                 let bx = (bbox.origin.x * img_w).round() as i32 + origin.x;
-                let by = ((1.0 - bbox.origin.y - bbox.size.height) * img_h).round() as i32
-                    + origin.y;
+                let by =
+                    ((1.0 - bbox.origin.y - bbox.size.height) * img_h).round() as i32 + origin.y;
                 let bw = (bbox.size.width * img_w).round() as u32;
                 let bh = (bbox.size.height * img_h).round() as u32;
 
                 tracing::debug!(bx, by, bw, bh, confidence, text = %text, "vision text box");
 
                 boxes.push(VisionTextBox {
-                    bounds: Rect { x: bx, y: by, width: bw, height: bh },
+                    bounds: Rect {
+                        x: bx,
+                        y: by,
+                        width: bw,
+                        height: bh,
+                    },
                     confidence,
                     text,
                 });

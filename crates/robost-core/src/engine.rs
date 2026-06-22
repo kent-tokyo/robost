@@ -25,31 +25,31 @@ use crate::scenario::{
 };
 use crate::scenario::{
     Base64DecodeStep, Base64EncodeStep, CalcStep, CallScenarioStep, ClickAction, ClickImageStep,
-    ClickInWindowStep, ClipboardGetStep, ClipboardSetStep, CopyVarStep, CsvReadStep, CsvWriteMode,
-    CsvWriteStep, DateAddStep, DateDiffStep, DateFormatStep, DialogInputStep, DialogSelectStep,
-    DialogWaitStep, DiffUnit, DirCreateStep, DirDeleteStep, DirExistsStep, DoWhileStep, EnvGetStep,
-    ExcelAddSheetStep, ExcelDeleteSheetStep, ExcelFindRowStep, ExcelGetDimsStep, ExcelReadCellStep,
-    ExcelReadRangeStep, ExcelReadSheetStep, ExcelRenameSheetStep, ExcelWriteCellStep,
-    ExcelWriteRangeStep, FileAppendStep, FileCopyStep, FileDeleteStep, FileExistsStep,
-    FileListStep, FileModifiedAtStep, FileMoveStep, FileReadStep, FileRenameStep, FileSizeStep,
-    FileWriteMode, FileWriteStep, FindImageStep, ForeachStep, GetDatetimeStep, GetPixelColorStep,
-    GetUsernameStep, GroupStep, IfStep, ImportVarsStep, IncrementStep, JsonParseStep,
-    JsonStringifyStep, KeyComboStep, LibraryStep, ListContainsStep, ListGetStep, ListLengthStep,
-    ListPushStep, ListRemoveStep, LoadVarsStep, LogLevel, LogWriteStep, MailReceiveStep,
-    MailSendStep, MatchRectStep, MlDetectStep, MouseClickXyStep, MouseDragStep, MouseHoverStep,
-    ClickTextStep, MouseMoveStep, MouseScrollStep, MoveToTextStep, NotifyStep, NumberRandomStep,
-    OcrMatchStep, PathBasenameStep,
-    PathDirnameStep, PathJoinStep, PdfExtractTextStep, PdfPageCountStep, ProcessExistsStep,
-    ProcessKillStep, ProcessStartStep, ProcessWaitState, RepeatStep, SaveVarsStep, ScenarioStep,
-    ScreenshotSaveStep, ScriptStep, ShellStep, StringContainsStep, StringCountStep,
-    StringEndsWithStep, StringFormatStep, StringIndexOfStep, StringJoinStep, StringRegexStep,
-    StringReplaceStep, StringSplitStep, StringStartsWithStep, StringSubstringStep, StringTrimStep,
-    SubScenarioStep, SwitchStep, ToNumberStep, ToStringStep, TrimSide, TryCatchStep, TypeStep,
-    UiaBy, UiaCheckStep, UiaClickStep, UiaFindStep, UiaGetChildrenStep, UiaGetStep, UiaSelectStep,
-    UiaSetStep, UiaWaitStep, UrlOpenStep, VarTypeStep, WaitChangeStep, WaitColorStep,
-    WaitImageStep, WaitNoImageStep, WaitProcessStep, WaitUntilStep, WaitWindowStep, WhileStep,
-    WidthStep, WindowControlAction, WindowControlStep, WindowState, ZipCompressStep,
-    ZipExtractStep, ZipListStep,
+    ClickInWindowStep, ClickTextStep, ClipboardGetStep, ClipboardSetStep, CopyVarStep, CsvReadStep,
+    CsvWriteMode, CsvWriteStep, DateAddStep, DateDiffStep, DateFormatStep, DialogInputStep,
+    DialogSelectStep, DialogWaitStep, DiffUnit, DirCreateStep, DirDeleteStep, DirExistsStep,
+    DoWhileStep, EnvGetStep, ExcelAddSheetStep, ExcelDeleteSheetStep, ExcelFindRowStep,
+    ExcelGetDimsStep, ExcelReadCellStep, ExcelReadRangeStep, ExcelReadSheetStep,
+    ExcelRenameSheetStep, ExcelWriteCellStep, ExcelWriteRangeStep, FileAppendStep, FileCopyStep,
+    FileDeleteStep, FileExistsStep, FileListStep, FileModifiedAtStep, FileMoveStep, FileReadStep,
+    FileRenameStep, FileSizeStep, FileWriteMode, FileWriteStep, FindImageStep, ForeachStep,
+    GetDatetimeStep, GetPixelColorStep, GetUsernameStep, GroupStep, IfStep, ImportVarsStep,
+    IncrementStep, JsonParseStep, JsonStringifyStep, KeyComboStep, LibraryStep, ListContainsStep,
+    ListGetStep, ListLengthStep, ListPushStep, ListRemoveStep, LoadVarsStep, LogLevel,
+    LogWriteStep, MailReceiveStep, MailSendStep, MatchRectStep, MlDetectStep, MouseClickXyStep,
+    MouseDragStep, MouseHoverStep, MouseMoveStep, MouseScrollStep, MoveToTextStep, NotifyStep,
+    NumberRandomStep, OcrMatchStep, PathBasenameStep, PathDirnameStep, PathJoinStep,
+    PdfExtractTextStep, PdfPageCountStep, ProcessExistsStep, ProcessKillStep, ProcessStartStep,
+    ProcessWaitState, RepeatStep, SaveVarsStep, ScenarioStep, ScreenshotSaveStep, ScriptStep,
+    ShellStep, StringContainsStep, StringCountStep, StringEndsWithStep, StringFormatStep,
+    StringIndexOfStep, StringJoinStep, StringRegexStep, StringReplaceStep, StringSplitStep,
+    StringStartsWithStep, StringSubstringStep, StringTrimStep, SubScenarioStep, SwitchStep,
+    ToNumberStep, ToStringStep, TrimSide, TryCatchStep, TypeStep, UiaBy, UiaCheckStep,
+    UiaClickStep, UiaFindStep, UiaGetChildrenStep, UiaGetStep, UiaSelectStep, UiaSetStep,
+    UiaWaitStep, UrlOpenStep, VarTypeStep, WaitChangeStep, WaitColorStep, WaitImageStep,
+    WaitNoImageStep, WaitProcessStep, WaitUntilStep, WaitWindowStep, WhileStep, WidthStep,
+    WindowControlAction, WindowControlStep, WindowState, ZipCompressStep, ZipExtractStep,
+    ZipListStep,
 };
 #[cfg(feature = "http")]
 use crate::scenario::{
@@ -496,8 +496,7 @@ impl ScenarioEngine {
             .ok_or_else(|| EngineError::XlsxExport("default sheet not found".to_owned()))?;
 
         for (col, h) in headers.iter().enumerate() {
-            ws.get_cell_mut(((col as u32) + 1, 1))
-                .set_value_string(h);
+            ws.get_cell_mut(((col as u32) + 1, 1)).set_value_string(h);
         }
         for (row_idx, row) in rows.iter().enumerate() {
             if let serde_json::Value::Object(map) = row {
@@ -2901,7 +2900,8 @@ impl ScenarioEngine {
                             let _ = tx.send(ProgressEvent::Log {
                                 level: "info".into(),
                                 message: format!(
-                                    "click_text: \"{text}\" → ({}, {})", point.x, point.y
+                                    "click_text: \"{text}\" → ({}, {})",
+                                    point.x, point.y
                                 ),
                             });
                         }
@@ -2993,7 +2993,8 @@ impl ScenarioEngine {
                             let _ = tx.send(ProgressEvent::Log {
                                 level: "info".into(),
                                 message: format!(
-                                    "move_to_text: \"{text}\" → ({}, {})", point.x, point.y
+                                    "move_to_text: \"{text}\" → ({}, {})",
+                                    point.x, point.y
                                 ),
                             });
                         }
@@ -5676,12 +5677,11 @@ impl ScenarioEngine {
             if s == 0 {
                 s = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| {
-                        d.subsec_nanos() as u64
-                            ^ d.as_secs().wrapping_mul(0x9e3779b97f4a7c15)
-                    })
+                    .map(|d| d.subsec_nanos() as u64 ^ d.as_secs().wrapping_mul(0x9e3779b97f4a7c15))
                     .unwrap_or(0xcafe_babe_dead_beef);
-                if s == 0 { s = 1; }
+                if s == 0 {
+                    s = 1;
+                }
             }
             s ^= s << 13;
             s ^= s >> 7;

@@ -1,11 +1,10 @@
 use anyhow::{Context, Result};
 use axum::{
-    Json,
     extract::{Multipart, Path, State},
-    http::{StatusCode, header},
-    response::{IntoResponse, sse::Event, Sse},
+    http::{header, StatusCode},
+    response::{sse::Event, IntoResponse, Sse},
     routing::{delete, get, post},
-    Router,
+    Json, Router,
 };
 use futures::stream::StreamExt;
 use robost_core::ProgressEvent;
@@ -13,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path as FsPath, PathBuf};
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::{broadcast, Mutex};
 use tokio_stream::wrappers::BroadcastStream;
 
 // ── Shared state for the run-only server ────────────────────────────────────
@@ -182,8 +181,7 @@ async fn agent_events(
 // Fix: capture_screen is blocking — run on a dedicated thread pool thread.
 async fn agent_screenshot() -> impl IntoResponse {
     let result: Result<Result<Vec<u8>, String>, _> = tokio::task::spawn_blocking(|| {
-        let img = robost_capture::capture_screen()
-            .map_err(|e| e.to_string())?;
+        let img = robost_capture::capture_screen().map_err(|e| e.to_string())?;
         let mut buf = Vec::new();
         image::DynamicImage::ImageRgba8(img)
             .write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)
@@ -230,7 +228,10 @@ async fn agent_list_scenarios(State(state): State<AgentState>) -> impl IntoRespo
                     })
                     .unwrap_or_default();
                 sub.sort();
-                folders.push(FolderEntry { name: file_name, scenarios: sub });
+                folders.push(FolderEntry {
+                    name: file_name,
+                    scenarios: sub,
+                });
             } else if file_name.ends_with(".yaml") || file_name.ends_with(".yml") {
                 top_scenarios.push(file_name);
             }
@@ -238,7 +239,10 @@ async fn agent_list_scenarios(State(state): State<AgentState>) -> impl IntoRespo
 
         top_scenarios.sort();
         folders.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(ScenarioList { scenarios: top_scenarios, folders })
+        Ok(ScenarioList {
+            scenarios: top_scenarios,
+            folders,
+        })
     })
     .await;
 
@@ -246,12 +250,18 @@ async fn agent_list_scenarios(State(state): State<AgentState>) -> impl IntoRespo
         Ok(Ok(list)) => Json(list).into_response(),
         Ok(Err(e)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(OkResponse { ok: false, message: Some(e.to_string()) }),
+            Json(OkResponse {
+                ok: false,
+                message: Some(e.to_string()),
+            }),
         )
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(OkResponse { ok: false, message: Some(e.to_string()) }),
+            Json(OkResponse {
+                ok: false,
+                message: Some(e.to_string()),
+            }),
         )
             .into_response(),
     }
@@ -264,16 +274,26 @@ async fn agent_create_folder(
     if !safe_folder_name(&body.name) {
         return (
             StatusCode::BAD_REQUEST,
-            Json(OkResponse { ok: false, message: Some("invalid folder name".into()) }),
+            Json(OkResponse {
+                ok: false,
+                message: Some("invalid folder name".into()),
+            }),
         )
             .into_response();
     }
     let path = state.scenarios_dir.join(&body.name);
     match tokio::fs::create_dir(&path).await {
-        Ok(()) => Json(OkResponse { ok: true, message: None }).into_response(),
+        Ok(()) => Json(OkResponse {
+            ok: true,
+            message: None,
+        })
+        .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(OkResponse { ok: false, message: Some(e.to_string()) }),
+            Json(OkResponse {
+                ok: false,
+                message: Some(e.to_string()),
+            }),
         )
             .into_response(),
     }
@@ -286,16 +306,26 @@ async fn agent_delete_folder(
     if !safe_folder_name(&name) {
         return (
             StatusCode::BAD_REQUEST,
-            Json(OkResponse { ok: false, message: Some("invalid folder name".into()) }),
+            Json(OkResponse {
+                ok: false,
+                message: Some("invalid folder name".into()),
+            }),
         )
             .into_response();
     }
     let path = state.scenarios_dir.join(&name);
     match tokio::fs::remove_dir(&path).await {
-        Ok(()) => Json(OkResponse { ok: true, message: None }).into_response(),
+        Ok(()) => Json(OkResponse {
+            ok: true,
+            message: None,
+        })
+        .into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
-            Json(OkResponse { ok: false, message: Some(e.to_string()) }),
+            Json(OkResponse {
+                ok: false,
+                message: Some(e.to_string()),
+            }),
         )
             .into_response(),
     }
@@ -311,7 +341,10 @@ async fn agent_get_scenario(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(OkResponse { ok: false, message: Some("invalid scenario name".into()) }),
+                Json(OkResponse {
+                    ok: false,
+                    message: Some("invalid scenario name".into()),
+                }),
             )
                 .into_response()
         }
@@ -320,7 +353,10 @@ async fn agent_get_scenario(
         Ok(content) => (StatusCode::OK, Json(ScenarioContent { name, content })).into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
-            Json(OkResponse { ok: false, message: Some(e.to_string()) }),
+            Json(OkResponse {
+                ok: false,
+                message: Some(e.to_string()),
+            }),
         )
             .into_response(),
     }
@@ -337,16 +373,26 @@ async fn agent_save_scenario(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(OkResponse { ok: false, message: Some("invalid scenario name".into()) }),
+                Json(OkResponse {
+                    ok: false,
+                    message: Some("invalid scenario name".into()),
+                }),
             )
                 .into_response()
         }
     };
     match tokio::fs::write(&path, &body.content).await {
-        Ok(()) => Json(OkResponse { ok: true, message: None }).into_response(),
+        Ok(()) => Json(OkResponse {
+            ok: true,
+            message: None,
+        })
+        .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(OkResponse { ok: false, message: Some(e.to_string()) }),
+            Json(OkResponse {
+                ok: false,
+                message: Some(e.to_string()),
+            }),
         )
             .into_response(),
     }
@@ -362,16 +408,26 @@ async fn agent_delete_scenario(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(OkResponse { ok: false, message: Some("invalid scenario name".into()) }),
+                Json(OkResponse {
+                    ok: false,
+                    message: Some("invalid scenario name".into()),
+                }),
             )
                 .into_response()
         }
     };
     match tokio::fs::remove_file(&path).await {
-        Ok(()) => Json(OkResponse { ok: true, message: None }).into_response(),
+        Ok(()) => Json(OkResponse {
+            ok: true,
+            message: None,
+        })
+        .into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
-            Json(OkResponse { ok: false, message: Some(e.to_string()) }),
+            Json(OkResponse {
+                ok: false,
+                message: Some(e.to_string()),
+            }),
         )
             .into_response(),
     }
@@ -399,7 +455,10 @@ async fn agent_run(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(OkResponse { ok: false, message: Some("invalid scenario name".into()) }),
+                Json(OkResponse {
+                    ok: false,
+                    message: Some("invalid scenario name".into()),
+                }),
             )
                 .into_response()
         }
@@ -443,8 +502,7 @@ async fn agent_run(
 
             let engine_fut = async {
                 let backend = Arc::new(
-                    robost_backend::LocalBackend::new()
-                        .map_err(|e| anyhow::anyhow!("{e}"))?,
+                    robost_backend::LocalBackend::new().map_err(|e| anyhow::anyhow!("{e}"))?,
                 );
                 let base_dir = scenario_path
                     .parent()
@@ -492,7 +550,11 @@ async fn agent_run(
 
     *is_running = true;
 
-    Json(OkResponse { ok: true, message: None }).into_response()
+    Json(OkResponse {
+        ok: true,
+        message: None,
+    })
+    .into_response()
 }
 
 async fn agent_stop(State(state): State<AgentState>) -> impl IntoResponse {
@@ -508,7 +570,10 @@ async fn agent_stop(State(state): State<AgentState>) -> impl IntoResponse {
         *state.is_running.lock().await = false;
         *state.current_scenario.lock().await = None;
     }
-    Json(OkResponse { ok: true, message: None })
+    Json(OkResponse {
+        ok: true,
+        message: None,
+    })
 }
 
 async fn agent_status(State(state): State<AgentState>) -> impl IntoResponse {
@@ -552,7 +617,10 @@ async fn agent_upload_file(
                 if let Err(e) = tokio::fs::write(&dest, &data).await {
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(OkResponse { ok: false, message: Some(e.to_string()) }),
+                        Json(OkResponse {
+                            ok: false,
+                            message: Some(e.to_string()),
+                        }),
                     )
                         .into_response();
                 }
@@ -561,7 +629,10 @@ async fn agent_upload_file(
             Err(e) => {
                 return (
                     StatusCode::BAD_REQUEST,
-                    Json(OkResponse { ok: false, message: Some(e.to_string()) }),
+                    Json(OkResponse {
+                        ok: false,
+                        message: Some(e.to_string()),
+                    }),
                 )
                     .into_response();
             }
@@ -570,28 +641,37 @@ async fn agent_upload_file(
 
     (
         StatusCode::BAD_REQUEST,
-        Json(OkResponse { ok: false, message: Some("ファイルが見つかりません".into()) }),
+        Json(OkResponse {
+            ok: false,
+            message: Some("ファイルが見つかりません".into()),
+        }),
     )
         .into_response()
 }
 
 async fn agent_chat(Json(body): Json<ChatBody>) -> impl IntoResponse {
-    let api_key = match std::env::var("ANTHROPIC_API_KEY").ok().filter(|k| !k.is_empty()) {
+    let api_key = match std::env::var("ANTHROPIC_API_KEY")
+        .ok()
+        .filter(|k| !k.is_empty())
+    {
         Some(k) => k,
         None => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(OkResponse {
                     ok: false,
-                    message: Some("ANTHROPIC_API_KEY is not set. Add it to .env and restart the agent.".into()),
+                    message: Some(
+                        "ANTHROPIC_API_KEY is not set. Add it to .env and restart the agent."
+                            .into(),
+                    ),
                 }),
             )
                 .into_response()
         }
     };
 
-    let model = std::env::var("ROBOST_AI_MODEL")
-        .unwrap_or_else(|_| "claude-sonnet-4-6".to_string());
+    let model =
+        std::env::var("ROBOST_AI_MODEL").unwrap_or_else(|_| "claude-sonnet-4-6".to_string());
 
     let system = if let Some(ref yaml) = body.scenario_yaml {
         format!(
@@ -641,12 +721,18 @@ async fn agent_chat(Json(body): Json<ChatBody>) -> impl IntoResponse {
         }
         Ok(Err(e)) => (
             StatusCode::BAD_GATEWAY,
-            Json(OkResponse { ok: false, message: Some(e.to_string()) }),
+            Json(OkResponse {
+                ok: false,
+                message: Some(e.to_string()),
+            }),
         )
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(OkResponse { ok: false, message: Some(e.to_string()) }),
+            Json(OkResponse {
+                ok: false,
+                message: Some(e.to_string()),
+            }),
         )
             .into_response(),
     }
@@ -691,7 +777,9 @@ pub async fn run_server(bind_addr: &str) -> Result<(Arc<broadcast::Sender<Progre
         .await
         .context(format!("failed to bind to {bind_addr}"))?;
 
-    let bound_addr = listener.local_addr().context("failed to get bound address")?;
+    let bound_addr = listener
+        .local_addr()
+        .context("failed to get bound address")?;
     let bound_port = bound_addr.port();
 
     eprintln!("[server] bound to {bound_addr}, listening on port {bound_port}");
@@ -752,7 +840,9 @@ pub async fn run_agent_server(bind_addr: &str, scenarios_dir: PathBuf) -> Result
     println!("robost agent listening on http://{bound}");
     println!("Open http://localhost:{} in your browser", bound.port());
 
-    axum::serve(listener, app).await.context("agent server error")
+    axum::serve(listener, app)
+        .await
+        .context("agent server error")
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -772,6 +862,9 @@ mod tests {
     #[tokio::test]
     async fn test_broadcast_event() {
         let (tx, _port) = run_server("127.0.0.1:0").await.unwrap();
-        let _ = tx.send(ProgressEvent::Finished { success: true, error: None });
+        let _ = tx.send(ProgressEvent::Finished {
+            success: true,
+            error: None,
+        });
     }
 }

@@ -131,8 +131,8 @@ impl OcrEngine {
     }
 
     fn hocr_search(&self, image: &RgbaImage, text: &str) -> Result<Option<Rect>> {
-        let mut tess = leptess::LepTess::new(None, &self.lang)
-            .map_err(|e| OcrError::Init(e.to_string()))?;
+        let mut tess =
+            leptess::LepTess::new(None, &self.lang).map_err(|e| OcrError::Init(e.to_string()))?;
         let png = encode_png(image)?;
         tess.set_image_from_mem(&png)
             .map_err(|e| OcrError::Recognition(e.to_string()))?;
