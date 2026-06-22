@@ -24,5 +24,4 @@ tracing-subscriber.workspace = true
 serde.workspace = true
 serde_yml.workspace = true
 tokio.workspace = true
-dirs.workspace = true
 xcap.workspace = true

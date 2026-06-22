@@ -2,17 +2,21 @@
 // Called via `library: <name>` in scenario YAML.
 // All functions share: inputs map → outputs map.
 
+#[cfg(feature = "archive")]
 mod archive;
 #[cfg(feature = "db")]
 mod db;
 mod excel;
 #[cfg(feature = "ftp")]
 mod ftp;
+#[cfg(feature = "keychain")]
 mod keychain;
 mod list;
+#[cfg(feature = "mail")]
 mod mail;
 mod notify;
 mod number;
+#[cfg(feature = "pdf")]
 mod pdf;
 
 use serde_json::Value;
@@ -46,7 +50,9 @@ pub(crate) fn opt_str(inputs: &HashMap<String, Value>, key: &str) -> Option<Stri
 pub fn dispatch(name: &str, inputs: HashMap<String, Value>) -> NodeResult {
     match name {
         // --- mail ---
+        #[cfg(feature = "mail")]
         "mail.smtp_send" => mail::smtp_send(inputs),
+        #[cfg(feature = "mail")]
         "mail.imap_receive" => mail::imap_receive(inputs),
 
         // --- excel ---
@@ -81,12 +87,15 @@ pub fn dispatch(name: &str, inputs: HashMap<String, Value>) -> NodeResult {
         #[cfg(feature = "db")]
         "db.execute" => db::execute(inputs),
 
-        // --- archive ---
+        // --- archive (optional feature) ---
+        #[cfg(feature = "archive")]
         "archive.compress" => archive::compress(inputs),
+        #[cfg(feature = "archive")]
         "archive.extract" => archive::extract(inputs),
+        #[cfg(feature = "archive")]
         "archive.list" => archive::list(inputs),
 
-        // --- ftp ---
+        // --- ftp (optional feature) ---
         #[cfg(feature = "ftp")]
         "ftp.upload" => ftp::upload(inputs),
         #[cfg(feature = "ftp")]
@@ -98,17 +107,22 @@ pub fn dispatch(name: &str, inputs: HashMap<String, Value>) -> NodeResult {
         #[cfg(feature = "ftp")]
         "ftp.mkdir" => ftp::mkdir(inputs),
 
-        // --- pdf ---
+        // --- pdf (optional feature) ---
+        #[cfg(feature = "pdf")]
         "pdf.extract_text" => pdf::extract_text(inputs),
+        #[cfg(feature = "pdf")]
         "pdf.page_count" => pdf::page_count(inputs),
 
         // --- notify (Slack / Teams webhook) ---
         "notify.slack_send" => notify::slack_send(inputs),
         "notify.teams_send" => notify::teams_send(inputs),
 
-        // --- keychain ---
+        // --- keychain (optional feature) ---
+        #[cfg(feature = "keychain")]
         "keychain.get" => keychain::keychain_get(inputs),
+        #[cfg(feature = "keychain")]
         "keychain.set" => keychain::keychain_set(inputs),
+        #[cfg(feature = "keychain")]
         "keychain.delete" => keychain::keychain_delete(inputs),
 
         other => Err(NodeError::Other(format!("unknown built-in node: {other}"))),

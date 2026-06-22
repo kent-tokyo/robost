@@ -41,7 +41,13 @@ pub mod async_util;
 #[cfg(feature = "async")]
 pub use async_util::wait_for_diff;
 
-#[cfg(feature = "ocr")]
+// WinRT OCR takes priority on Windows when the `windows-ocr` feature is enabled.
+#[cfg(all(feature = "windows-ocr", target_os = "windows"))]
+#[path = "ocr_winrt.rs"]
+pub mod ocr;
+
+// Tesseract OCR for all other cases.
+#[cfg(all(feature = "ocr", not(all(feature = "windows-ocr", target_os = "windows"))))]
 pub mod ocr;
 
 #[cfg(any(feature = "ml", feature = "ml-vision"))]

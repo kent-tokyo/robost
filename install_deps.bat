@@ -3,44 +3,44 @@ setlocal enabledelayedexpansion
 chcp 65001 > nul
 
 echo ================================================================
-echo  robost 依存ライブラリ インストーラー
-echo  (Tesseract OCR + Visual C++ 再配布パッケージ)
+echo  robost Dependency Installer
+echo  (Tesseract OCR + Visual C++ Redistributable)
 echo ================================================================
 echo.
 
-:: 管理者権限チェック
+:: Check for administrator privileges
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [エラー] 管理者として実行してください。
-    echo このファイルを右クリック → "管理者として実行" を選んでください。
+    echo [ERROR] Please run as administrator.
+    echo Right-click this file and select "Run as administrator".
     pause
     exit /b 1
 )
 
-:: ---- 1. Visual C++ 再配布パッケージ (2015-2022) ----
-echo [1/2] Visual C++ 再配布パッケージを確認中...
+:: ---- 1. Visual C++ Redistributable (2015-2022) ----
+echo [1/2] Checking Visual C++ Redistributable...
 reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" >nul 2>&1
 if %errorlevel% == 0 (
-    echo       → すでにインストール済みです。
+    echo       -> Already installed.
 ) else (
-    echo       → ダウンロード中...
+    echo       -> Downloading...
     curl -L -o "%TEMP%\vc_redist.x64.exe" ^
         "https://aka.ms/vs/17/release/vc_redist.x64.exe"
     if %errorlevel% neq 0 (
-        echo [エラー] ダウンロードに失敗しました。インターネット接続を確認してください。
+        echo [ERROR] Download failed. Please check your internet connection.
         pause
         exit /b 1
     )
-    echo       → インストール中 (サイレント)...
+    echo       -> Installing (silent)...
     "%TEMP%\vc_redist.x64.exe" /install /quiet /norestart
-    echo       → 完了
+    echo       -> Done
 )
 
 :: ---- 2. Tesseract OCR ----
 echo.
-echo [2/2] Tesseract OCR を確認中...
+echo [2/2] Checking Tesseract OCR...
 
-:: インストール済みか確認 (レジストリ)
+:: Check if already installed
 set "TESS_EXE="
 for %%D in (
     "C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -50,44 +50,42 @@ for %%D in (
 )
 
 if defined TESS_EXE (
-    echo       → すでにインストール済みです: %TESS_EXE%
+    echo       -> Already installed: %TESS_EXE%
 ) else (
-    echo       → ダウンロード中 (Tesseract 5.x + 日本語モデル)...
-    :: UB-Mannheim の公式インストーラー (日本語含む全言語パック)
+    echo       -> Downloading Tesseract 5.x with Japanese language model...
     set "TESS_INSTALLER=%TEMP%\tesseract-ocr-setup.exe"
     curl -L -o "!TESS_INSTALLER!" ^
         "https://github.com/UB-Mannheim/tesseract/releases/download/v5.5.0.20241111/tesseract-ocr-w64-setup-5.5.0.20241111.exe"
     if %errorlevel% neq 0 (
-        echo [エラー] Tesseract のダウンロードに失敗しました。
-        echo 手動でインストールしてください:
+        echo [ERROR] Tesseract download failed.
+        echo Please install manually from:
         echo   https://github.com/UB-Mannheim/tesseract/wiki
         pause
         exit /b 1
     )
-    echo       → インストール中 (日本語・英語モデル選択あり)...
-    echo         ※ インストール画面で "Japanese" にチェックを入れてください
+    echo       -> Installing (check "Japanese" language during setup if prompted)...
     "!TESS_INSTALLER!" /S /D="C:\Program Files\Tesseract-OCR"
-    echo       → 完了
+    echo       -> Done
 )
 
-:: Tesseract を PATH に追加 (ユーザー環境変数)
+:: Add Tesseract to PATH (user environment variable)
 echo.
-echo PATH に Tesseract を追加中...
+echo Adding Tesseract to PATH...
 for %%D in (
     "C:\Program Files\Tesseract-OCR"
     "C:\Program Files (x86)\Tesseract-OCR"
 ) do (
     if exist "%%~D\tesseract.exe" (
         setx PATH "%%~D;%PATH%" >nul 2>&1
-        echo       → %%~D を PATH に追加しました。
+        echo       -> Added %%~D to PATH.
     )
 )
 
 echo.
 echo ================================================================
-echo  インストール完了！
-echo  robost を使うには run.bat をダブルクリックしてください。
-echo  (新しいコマンドプロンプトを開いてから有効になります)
+echo  Installation complete!
+echo  Double-click run.bat to start robost.
+echo  (Open a new command prompt for PATH changes to take effect)
 echo ================================================================
 echo.
 pause

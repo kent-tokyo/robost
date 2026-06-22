@@ -6,25 +6,15 @@
 
 [English](README.md) | [日本語](README_ja.md) | [详细文档](https://kent-tokyo.github.io/robost/)
 
-## 截图
-
-| 场景 YAML | 运行输出 |
-|:---:|:---:|
-| ![Scenario YAML](assets/screenshots/scenario_yaml.png) | ![Run Output](assets/screenshots/scenario_run.png) |
-
 ## 可视化场景编辑器
 
-| 列表视图 — 步骤列表与节点面板 | Canvas 视图 — 自由布局流程图 |
+| Canvas 视图 — 步骤流程图 | YAML 编辑器 — 直接编辑与实时画布 |
 |:---:|:---:|
-| ![List View](assets/screenshots/editor_canvas_list.png) | ![Canvas View](assets/screenshots/editor_canvas_nodes.png) |
+| ![Canvas View](assets/screenshots/editor_canvas_new.png) | ![YAML Editor](assets/screenshots/editor_yaml_new.png) |
 
-| 节点配置 | 模板选择器 |
+| AI 助手 — 用自然语言描述自动化 | CLI 帮助 |
 |:---:|:---:|
-| ![Node Config](assets/screenshots/editor_node_config.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
-
-| AI 面板 | CLI 帮助 |
-|:---:|:---:|
-| ![AI Panel](assets/screenshots/editor_ai_panel.png) | ![CLI Help](assets/screenshots/cli_help.png) |
+| ![AI Assistant](assets/screenshots/editor_ai_new.png) | ![CLI Help](assets/screenshots/cli_help.png) |
 
 ## 下载
 
@@ -48,7 +38,7 @@
 
 ## 特性
 
-- **图像识别** — 多尺度 NCC 模板匹配、Tesseract OCR、ONNX ML 检测
+- **图像识别** — 多尺度 NCC 模板匹配、Tesseract OCR 或 Windows 内置 WinRT OCR（无需安装）、ONNX ML 检测
 - **远程桌面支持** — 在本地捕获 RDP/Citrix/VNC 窗口，目标机器无需安装代理
 - **瞬态 UI 采集** — 热键冻结屏幕，可以选取平时会消失的下拉菜单和悬浮提示
 - **WASM 插件** — 沙箱内运行，插件崩溃不影响主进程
@@ -76,7 +66,7 @@
 | 内联脚本 | 是 — Rhai（沙箱） | 部分 | VB.NET / C# | Python 本身 | Jython | Python |
 | 场景版本控制 | 是 — 纯 YAML | 否 | 部分 | 是 — Python | 部分 | 是 — 纯文本 |
 | 启动开销 | 约 10 ms（原生二进制） | 数秒 | 数秒 | Python 启动 | JVM 启动（约 2 秒） | Python 启动 |
-| OCR 支持 | 是（Tesseract，可选） | 是 | 是 | 否 | 部分 | 否（通过插件） |
+| OCR 支持 | 是（Tesseract 或 Windows 内置 WinRT，可选） | 是 | 是 | 否 | 部分 | 否（通过插件） |
 
 ## 为什么选 robost？
 
@@ -477,7 +467,19 @@ rpa schedule run           # 启动调度器守护进程
 
 ## OCR 功能
 
-OCR 需要在宿主机上安装 Tesseract：
+### Windows 内置 OCR（无需安装 Tesseract）
+
+Windows 10/11 内置 `Windows.Media.Ocr` OCR 引擎，无需额外安装：
+
+```bash
+cargo build --features windows-ocr
+```
+
+需要安装语言包：**设置 → 时间和语言 → 语言和区域 → 添加语言**，然后为该语言安装**光学字符识别**可选功能。
+
+### Tesseract OCR（macOS / Linux / Windows）
+
+使用 Tesseract 的 OCR 需要在宿主机上安装：
 
 ```bash
 # macOS
@@ -492,7 +494,38 @@ sudo apt install tesseract-ocr tesseract-ocr-jpn tesseract-ocr-eng
 启用 `ocr` feature 进行构建：
 
 ```bash
-cargo build --features robost-core/ocr
+cargo build --features ocr
+```
+
+## 可选功能
+
+robost-core 和 robost-stdlib 提供 Cargo 特性标志。CLI 二进制文件（`rpa`）默认启用所有常用功能。
+
+| 特性 | Crate | 启用的功能 |
+|---|---|---|
+| `mail` | robost-core | SMTP 发送（`mail_send`）和 IMAP 接收（`mail_receive`） |
+| `pdf` | robost-core | PDF 文本提取（`pdf.extract_text`、`pdf.page_count`） |
+| `archive` | robost-core | ZIP 压缩/解压（`archive.compress`、`archive.extract`） |
+| `keychain` | robost-core | 系统密钥链访问（`keychain_set`、`keychain_get`、`keychain_delete`） |
+| `notify` | robost-core | 桌面通知（`notify`） |
+| `clipboard` | robost-core | 剪贴板读写（`clipboard_get`、`clipboard_set`） |
+| `glob-pattern` | robost-core | 文件列表 glob 模式（`file_list`） |
+| `http` | robost-core | HTTP 客户端（`http_get`、`http_post` 等） |
+| `excel-write` | robost-core | Excel 单元格/范围写入（`excel_write_cell`、`excel_write_range` 等） |
+| `ocr` | robost-core | Tesseract OCR（`ocr_match`、`click_text`） |
+| `windows-ocr` | robost-core | Windows 内置 WinRT OCR（无需 Tesseract） |
+| `web` | robost-core | WebDriver 浏览器自动化（`web_open`、`web_click` 等） |
+| `db` | robost-core | SQLite 数据库（`db.query`、`db.execute`） |
+| `ftp` | robost-core | FTP/FTPS 客户端（`ftp.upload`、`ftp.download` 等） |
+
+最小构建（仅核心图像/输入/YAML）:
+```bash
+cargo build -p robost-cli --no-default-features
+```
+
+完整构建（与默认相同）:
+```bash
+cargo build -p robost-cli
 ```
 
 ## 开发命令

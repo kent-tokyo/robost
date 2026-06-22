@@ -5,15 +5,15 @@ set "PORT=9921"
 set "URL=http://localhost:%PORT%"
 set "SCRIPT_DIR=%~dp0"
 
-:: すでにエージェントが起動中ならブラウザを開くだけ
+:: If agent is already running, just open browser
 netstat -an | findstr /C:":%PORT% " | findstr /C:"LISTENING" >nul 2>&1
 if %errorlevel% == 0 (
-    echo robost agent はすでに起動しています ^(%URL%^)
+    echo robost agent is already running ^(%URL%^)
     start "" "%URL%"
     exit /b 0
 )
 
-:: rpa.exe を探す
+:: Look for rpa.exe
 if exist "%SCRIPT_DIR%rpa.exe" (
     set "RPA=%SCRIPT_DIR%rpa.exe"
     goto :run
@@ -32,13 +32,13 @@ if %errorlevel% == 0 (
     goto :run
 )
 
-echo ERROR: rpa.exe が見つかりません。
-echo 先に "cargo build --release -p robost-cli" でビルドしてください。
+echo ERROR: rpa.exe not found.
+echo Please build first with: cargo build --release -p robost-cli
 pause
 exit /b 1
 
 :run
-echo robost agent を起動しています... ^(%URL%^)
-echo 終了するには Ctrl+C を押してください
+echo Starting robost agent... ^(%URL%^)
+echo Press Ctrl+C to stop
 echo.
 "%RPA%" agent --port %PORT%

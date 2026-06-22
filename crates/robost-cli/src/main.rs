@@ -302,8 +302,13 @@ fn main() -> Result<()> {
         }
         Commands::Agent { port, scenarios_dir, no_browser } => {
             let dir = scenarios_dir.unwrap_or_else(|| {
-                dirs::document_dir()
-                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+                #[cfg(target_os = "windows")]
+                let docs = std::env::var("USERPROFILE").ok()
+                    .map(|h| std::path::PathBuf::from(h).join("Documents"));
+                #[cfg(not(target_os = "windows"))]
+                let docs = std::env::var("HOME").ok()
+                    .map(|h| std::path::PathBuf::from(h).join("Documents"));
+                docs.unwrap_or_else(|| std::path::PathBuf::from("."))
                     .join("robost")
                     .join("scenarios")
             });
@@ -316,7 +321,12 @@ fn main() -> Result<()> {
                 // Open browser after a short delay so the server can start
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(500));
-                    let _ = open::that(&url);
+                    #[cfg(target_os = "windows")]
+                    let _ = std::process::Command::new("explorer.exe").arg(&url).spawn();
+                    #[cfg(target_os = "macos")]
+                    let _ = std::process::Command::new("open").arg(&url).spawn();
+                    #[cfg(target_os = "linux")]
+                    let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
                 });
             }
 

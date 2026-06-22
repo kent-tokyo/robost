@@ -13,8 +13,17 @@ name = "rpa"
 path = "src/main.rs"
 
 [features]
-ocr  = ["robost-core/ocr"]
-http = ["robost-core/http"]
+default = ["mail", "pdf", "archive", "keychain", "notify", "clipboard", "glob-pattern"]
+ocr         = ["robost-core/ocr"]
+windows-ocr = ["robost-core/windows-ocr"]
+http        = ["robost-core/http"]
+mail        = ["robost-core/mail"]
+pdf         = ["robost-core/pdf"]
+archive     = ["robost-core/archive"]
+keychain    = ["robost-core/keychain"]
+notify       = ["robost-core/notify"]
+clipboard    = ["robost-core/clipboard"]
+glob-pattern = ["robost-core/glob-pattern"]
 
 [dependencies]
 robost-template.workspace = true
@@ -40,9 +49,6 @@ rfd.workspace = true
 chrono.workspace = true
 croner.workspace = true
 axum = { version = "0.7", features = ["multipart"] }
-tokio-util = { version = "0.7", features = ["codec"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 futures = "0.3"
-dirs.workspace = true
 image.workspace = true
-open.workspace = true

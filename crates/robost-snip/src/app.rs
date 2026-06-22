@@ -899,8 +899,13 @@ fn do_save(
         .unwrap_or_default()
         .as_millis();
     let stem = format!("template_{ts}");
-    let dir = dirs::document_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
+    #[cfg(target_os = "windows")]
+    let docs = std::env::var("USERPROFILE").ok()
+        .map(|h| std::path::PathBuf::from(h).join("Documents"));
+    #[cfg(not(target_os = "windows"))]
+    let docs = std::env::var("HOME").ok()
+        .map(|h| std::path::PathBuf::from(h).join("Documents"));
+    let dir = docs.unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("robost")
         .join("templates");
 

@@ -9,8 +9,12 @@ keywords   = ["rpa", "automation", "stdlib", "workflow", "nodes"]
 categories = ["development-tools"]
 
 [features]
-db = ["dep:rusqlite"]
-ftp = ["dep:suppaftp"]
+db      = ["dep:rusqlite"]
+ftp     = ["dep:suppaftp"]
+mail    = ["dep:lettre", "dep:imap", "dep:native-tls"]
+pdf     = ["dep:pdf-extract"]
+archive = ["dep:zip"]
+keychain = ["dep:keyring"]
 
 [dependencies]
 robost-template.workspace = true
@@ -21,14 +25,14 @@ tracing.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-lettre.workspace = true
-imap.workspace       = true
-native-tls.workspace = true
 umya-spreadsheet.workspace = true
-rusqlite = { workspace = true, optional = true }
-suppaftp = { workspace = true, optional = true }
-zip.workspace = true
-pdf-extract.workspace = true
-keyring.workspace = true
 ureq.workspace = true
 base64.workspace = true
+lettre      = { workspace = true, optional = true }
+imap        = { workspace = true, optional = true }
+native-tls  = { workspace = true, optional = true }
+rusqlite    = { workspace = true, optional = true }
+suppaftp    = { workspace = true, optional = true }
+zip         = { workspace = true, optional = true }
+pdf-extract = { workspace = true, optional = true }
+keyring     = { workspace = true, optional = true }

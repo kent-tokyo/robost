@@ -56,34 +56,18 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install pkgconf tesseract tesseract-lang
 
-      # ── Windows: Tesseract + Leptonica via vcpkg ──────────────────────────
-      - name: Cache vcpkg packages
-        if: runner.os == 'Windows'
-        uses: actions/cache@v4
-        with:
-          path: C:\vcpkg\installed
-          key: vcpkg-tesseract-x64-windows-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: vcpkg-tesseract-x64-windows-
-
-      - name: Install OCR deps (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          choco install pkgconfiglite --no-progress -y
-          & "C:\vcpkg\vcpkg.exe" install leptonica:x64-windows tesseract:x64-windows
-
       # ── Build ──────────────────────────────────────────────────────────────
       - name: Build rpa (macOS)
         if: runner.os == 'macOS'
         run: cargo build -p robost-cli --release --features ocr --target ${{ matrix.target }}
 
+      # Windows uses built-in WinRT OCR (Windows.Media.Ocr) — no Tesseract/vcpkg needed.
+      # Language packs: Settings > Time & Language > Language & Region > Add a language
+      #   then install the "Optical character recognition" optional feature.
       - name: Build rpa.exe (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        env:
-          PKG_CONFIG_PATH: C:\vcpkg\installed\x64-windows\lib\pkgconfig
-          VCPKGRS_DYNAMIC: "1"
-        run: cargo build -p robost-cli --release --features ocr --target ${{ matrix.target }}
+        run: cargo build -p robost-cli --release --features windows-ocr --target ${{ matrix.target }}
 
       # ── Package macOS ──────────────────────────────────────────────────────
       - name: Package (macOS)
@@ -92,32 +76,19 @@ jobs:
           tar czf "${{ matrix.archive }}" \
             -C "target/${{ matrix.target }}/release" "${{ matrix.bin }}"
 
-      # ── Package Windows (bundle DLLs so OCR works without extra install) ──
-      - name: Collect DLLs (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $out = "target\${{ matrix.target }}\release"
-          $vcpkgBin = "C:\vcpkg\installed\x64-windows\bin"
-          $patterns = @(
-            "tesseract*.dll", "leptonica*.dll",
-            "libpng*.dll", "zlib1.dll", "jpeg*.dll",
-            "tiff*.dll", "giflib*.dll", "lzma.dll",
-            "openjp2.dll", "webp*.dll"
-          )
-          foreach ($pat in $patterns) {
-            Get-ChildItem "$vcpkgBin\$pat" -ErrorAction SilentlyContinue |
-              Copy-Item -Destination $out -Force
-          }
-
+      # ── Package Windows ────────────────────────────────────────────────────
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $rel = "target\${{ matrix.target }}\release"
-          $files = @("$rel\${{ matrix.bin }}") +
-                   (Get-ChildItem "$rel\*.dll" | Select-Object -ExpandProperty FullName) +
-                   @("run.bat", "stop.bat", "install_deps.bat")
+          $files = @(
+            "$rel\${{ matrix.bin }}",
+            "run.bat",
+            "stop.bat",
+            "install_deps.bat",
+            "setup_build_env.bat"
+          )
           Compress-Archive -Path $files -DestinationPath "${{ matrix.archive }}" -Force
 
       - name: Upload artifact

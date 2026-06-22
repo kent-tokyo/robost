@@ -6,25 +6,15 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 
 [English](README.md) | [中文](README_zh.md) | [詳細マニュアル](https://kent-tokyo.github.io/robost/)
 
-## スクリーンショット
-
-| シナリオ YAML | 実行出力 |
-|:---:|:---:|
-| ![Scenario YAML](assets/screenshots/scenario_yaml.png) | ![Run Output](assets/screenshots/scenario_run.png) |
-
 ## ビジュアルシナリオエディタ
 
-| リストビュー — ステップ一覧とノードパレット | Canvas ビュー — 自由配置フローチャート |
+| Canvas ビュー — ステップのフローチャート | YAML エディタ — 直接編集とライブキャンバス |
 |:---:|:---:|
-| ![List View](assets/screenshots/editor_canvas_list.png) | ![Canvas View](assets/screenshots/editor_canvas_nodes.png) |
+| ![Canvas View](assets/screenshots/editor_canvas_new.png) | ![YAML Editor](assets/screenshots/editor_yaml_new.png) |
 
-| ノード設定 | テンプレートピッカー |
+| AI アシスタント — 自動化を自然言語で説明 | CLI ヘルプ |
 |:---:|:---:|
-| ![Node Config](assets/screenshots/editor_node_config.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
-
-| AI パネル | CLI ヘルプ |
-|:---:|:---:|
-| ![AI Panel](assets/screenshots/editor_ai_panel.png) | ![CLI Help](assets/screenshots/cli_help.png) |
+| ![AI Assistant](assets/screenshots/editor_ai_new.png) | ![CLI Help](assets/screenshots/cli_help.png) |
 
 ## ダウンロード
 
@@ -48,7 +38,7 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 
 ## 特徴
 
-- **画像認識** — マルチスケール NCC テンプレマッチ、Tesseract OCR、ONNX ML 検出
+- **画像認識** — マルチスケール NCC テンプレマッチ、Tesseract OCR または Windows 組み込み WinRT OCR (インストール不要)、ONNX ML 検出
 - **リモートデスクトップ対応** — RDP/Citrix/VNC のウィンドウをローカルでキャプチャ。対象マシンへのエージェント不要
 - **transient UI のキャプチャ** — ホットキーで画面をフリーズするため、消えてしまうドロップダウンやツールチップも採取できる
 - **WASM プラグイン** — サンドボックス内で実行。プラグインがクラッシュしてもランナーには影響しない
@@ -76,7 +66,7 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 | インラインスクリプト | Yes — Rhai (サンドボックス) | 部分的 | VB.NET / C# | Python 本体 | Jython | Python |
 | シナリオのバージョン管理 | Yes — プレーン YAML | No | 部分的 | Yes — Python | 部分的 | Yes — プレーンテキスト |
 | 起動オーバーヘッド | 約 10 ms (ネイティブバイナリ) | 数秒 | 数秒 | Python 起動 | JVM 起動 (約 2 秒) | Python 起動 |
-| OCR サポート | Yes (Tesseract、オプション) | Yes | Yes | No | 部分的 | No (プラグイン経由) |
+| OCR サポート | Yes (Tesseract または Windows 組み込み WinRT、オプション) | Yes | Yes | No | 部分的 | No (プラグイン経由) |
 
 ## robost を選ぶ理由
 
@@ -104,6 +94,21 @@ crates/
 ├── robost-stdlib/       # ビルトインシナリオノード群
 └── robost-cli/          # CLI バイナリ
 ```
+
+## ソースからビルド（Windows）
+
+Windows で `cargo build` を実行する前に、Rust ツールチェーンと MSVC ビルドツールが必要です。
+`setup_build_env.bat` を管理者として実行すると自動でインストールできます：
+
+```
+setup_build_env.bat
+```
+
+winget を使って **Rust (rustup)** と **Visual Studio Build Tools（C++ ワークロード + Windows 11 SDK）** をインストールします。
+インストール後は新しいターミナルを開いて通常通りビルドしてください。
+
+> **`LNK1104: ファイル 'msvcrt.lib' を開くことができません` が出る場合**：Windows SDK が不足しています。
+> `setup_build_env.bat` を実行するか、Visual Studio Installer → 変更 →「Desktop development with C++」を追加してください。
 
 ## クイックスタート
 
@@ -477,7 +482,19 @@ rpa schedule run           # スケジューラーデーモンを起動
 
 ## OCR 機能
 
-OCR は実行ホストに Tesseract のインストールが必要:
+### Windows 組み込み OCR（Tesseract 不要）
+
+Windows 10/11 には `Windows.Media.Ocr` が内蔵されています。外部インストール不要:
+
+```bash
+cargo build --features windows-ocr
+```
+
+言語パックのインストールが必要: **設定 → 時刻と言語 → 言語と地域 → 言語を追加**し、その言語の **光学式文字認識 (OCR)** オプション機能をインストールしてください。
+
+### Tesseract OCR（macOS / Linux / Windows）
+
+Tesseract を使った OCR は実行ホストへのインストールが必要:
 
 ```bash
 # macOS
@@ -492,7 +509,38 @@ sudo apt install tesseract-ocr tesseract-ocr-jpn tesseract-ocr-eng
 `ocr` feature を有効にしてビルド:
 
 ```bash
-cargo build --features robost-core/ocr
+cargo build --features ocr
+```
+
+## オプションフィーチャー
+
+robost-core と robost-stdlib は Cargo フィーチャーフラグを提供します。CLI バイナリ (`rpa`) はデフォルトで主要機能を全て有効にしています。
+
+| フィーチャー | クレート | 有効化される機能 |
+|---|---|---|
+| `mail` | robost-core | SMTP 送信 (`mail_send`) と IMAP 受信 (`mail_receive`) |
+| `pdf` | robost-core | PDF テキスト抽出 (`pdf.extract_text`, `pdf.page_count`) |
+| `archive` | robost-core | ZIP 圧縮/展開 (`archive.compress`, `archive.extract`) |
+| `keychain` | robost-core | OS キーチェーンアクセス (`keychain_set`, `keychain_get`, `keychain_delete`) |
+| `notify` | robost-core | デスクトップ通知 (`notify`) |
+| `clipboard` | robost-core | クリップボード操作 (`clipboard_get`, `clipboard_set`) |
+| `glob-pattern` | robost-core | ファイル一覧 glob パターン (`file_list`) |
+| `http` | robost-core | HTTP クライアント (`http_get`, `http_post`, …) |
+| `excel-write` | robost-core | Excel セル/範囲書き込み (`excel_write_cell`, `excel_write_range`, …) |
+| `ocr` | robost-core | Tesseract OCR (`ocr_match`, `click_text`) |
+| `windows-ocr` | robost-core | Windows 組み込み WinRT OCR (Tesseract 不要) |
+| `web` | robost-core | WebDriver ブラウザ自動化 (`web_open`, `web_click`, …) |
+| `db` | robost-core | SQLite データベース (`db.query`, `db.execute`) |
+| `ftp` | robost-core | FTP/FTPS クライアント (`ftp.upload`, `ftp.download`, …) |
+
+最小ビルド（画像/入力/YAML コアのみ）:
+```bash
+cargo build -p robost-cli --no-default-features
+```
+
+フルビルド（デフォルトと同等）:
+```bash
+cargo build -p robost-cli
 ```
 
 ## 開発コマンド

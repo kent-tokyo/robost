@@ -450,7 +450,7 @@ async fn agent_run(
                     .parent()
                     .unwrap_or(std::path::Path::new("."))
                     .to_path_buf();
-                let mut engine = robost_core::ScenarioEngine::new(backend, base_dir)
+                let engine = robost_core::ScenarioEngine::new(backend, base_dir)
                     .with_dry_run(dry_run)
                     .with_progress_channel(Some(tx.clone()));
                 let mut scenario = robost_core::Scenario::from_file(&scenario_path)?;
@@ -626,6 +626,7 @@ async fn agent_chat(Json(body): Json<ChatBody>) -> impl IntoResponse {
             .set("anthropic-version", "2023-06-01")
             .set("content-type", "application/json")
             .send_json(&request_body)
+            .map_err(Box::new)
     })
     .await;
 

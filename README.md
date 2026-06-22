@@ -6,25 +6,15 @@ A Rust-based OSS desktop automation (RPA) tool.
 
 [日本語](README_ja.md) | [中文](README_zh.md) | [Documentation](https://kent-tokyo.github.io/robost/)
 
-## Screenshots
-
-| Scenario YAML | Run Output |
-|:---:|:---:|
-| ![Scenario YAML](assets/screenshots/scenario_yaml.png) | ![Run Output](assets/screenshots/scenario_run.png) |
-
 ## Visual Scenario Editor
 
-| List View — step list with node palette | Canvas View — free-placement flowchart |
+| Canvas View — step flowchart | YAML Editor — direct edit with live canvas |
 |:---:|:---:|
-| ![List View](assets/screenshots/editor_canvas_list.png) | ![Canvas View](assets/screenshots/editor_canvas_nodes.png) |
+| ![Canvas View](assets/screenshots/editor_canvas_new.png) | ![YAML Editor](assets/screenshots/editor_yaml_new.png) |
 
-| Node Configuration | Template Picker |
+| AI Assistant — describe automation in natural language | CLI Help |
 |:---:|:---:|
-| ![Node Config](assets/screenshots/editor_node_config.png) | ![Template Picker](assets/screenshots/editor_template_picker.png) |
-
-| AI Panel | CLI Help |
-|:---:|:---:|
-| ![AI Panel](assets/screenshots/editor_ai_panel.png) | ![CLI Help](assets/screenshots/cli_help.png) |
+| ![AI Assistant](assets/screenshots/editor_ai_new.png) | ![CLI Help](assets/screenshots/cli_help.png) |
 
 ## Download
 
@@ -48,7 +38,7 @@ A Rust-based OSS desktop automation (RPA) tool.
 
 ## Key Features
 
-- **Image recognition** — NCC template matching (multi-scale), OCR via Tesseract, ONNX ML detection
+- **Image recognition** — NCC template matching (multi-scale), OCR via Tesseract or Windows built-in WinRT (no install needed), ONNX ML detection
 - **Remote desktop** — captures the RDP/Citrix/VNC window locally; no agent needed on the target machine
 - **Transient UI capture** — hotkey freezes the screen so you can select dropdowns and tooltips that would otherwise disappear
 - **WASM plugins** — sandboxed extensions; a crashing plugin can't bring down the runner
@@ -76,7 +66,7 @@ A Rust-based OSS desktop automation (RPA) tool.
 | Inline scripting | Yes — Rhai (sandboxed) | Partial | VB.NET / C# | Python itself | Jython | Python |
 | Scenario version control | Yes — plain YAML | No | Partial | Yes — Python | Partial — `.sikuli` dirs | Yes — plain text |
 | Startup overhead | ~10 ms (native binary) | Several seconds | Several seconds | Python startup | JVM startup (~2 s) | Python startup |
-| OCR support | Yes (Tesseract, optional) | Yes | Yes | No | Partial | No (via plugins) |
+| OCR support | Yes (Tesseract or Windows built-in WinRT, optional) | Yes | Yes | No | Partial | No (via plugins) |
 
 ## Why robost?
 
@@ -104,6 +94,21 @@ crates/
 ├── robost-stdlib/       # Built-in scenario node library
 └── robost-cli/          # CLI binary
 ```
+
+## Building from Source (Windows)
+
+Before running `cargo build` on Windows, you need the Rust toolchain and MSVC Build Tools.
+Run `setup_build_env.bat` (as administrator) to install them automatically:
+
+```
+setup_build_env.bat
+```
+
+This installs **Rust (rustup)** and **Visual Studio Build Tools with C++ workload + Windows 11 SDK** via winget.
+After installation, open a new terminal and build normally.
+
+> **If you see `LNK1104: cannot open file 'msvcrt.lib'`**: the Windows SDK is missing.
+> Run `setup_build_env.bat` or open Visual Studio Installer → Modify → add "Desktop development with C++".
 
 ## Quick Start
 
@@ -477,7 +482,19 @@ rpa schedule run           # start the scheduler daemon
 
 ## OCR Feature
 
-OCR requires Tesseract to be installed on the host:
+### Windows built-in OCR (no Tesseract required)
+
+Windows 10/11 include a built-in OCR engine (`Windows.Media.Ocr`). No external installation needed:
+
+```bash
+cargo build --features windows-ocr
+```
+
+Language packs must be installed in Windows: **Settings → Time & Language → Language & Region → Add a language**, then install the **Optical character recognition** optional feature for that language.
+
+### Tesseract OCR (macOS / Linux / Windows)
+
+OCR via Tesseract requires installation on the host:
 
 ```bash
 # macOS
@@ -492,7 +509,38 @@ sudo apt install tesseract-ocr tesseract-ocr-jpn tesseract-ocr-eng
 Build with the `ocr` feature:
 
 ```bash
-cargo build --features robost-core/ocr
+cargo build --features ocr
+```
+
+## Optional Features
+
+robost-core and robost-stdlib expose Cargo feature flags. The CLI binary (`rpa`) enables all commonly used features by default.
+
+| Feature | Crate | Enables |
+|---|---|---|
+| `mail` | robost-core | SMTP send (`mail_send`) and IMAP receive (`mail_receive`) |
+| `pdf` | robost-core | PDF text extraction (`pdf.extract_text`, `pdf.page_count`) |
+| `archive` | robost-core | ZIP compress/extract (`archive.compress`, `archive.extract`) |
+| `keychain` | robost-core | OS keychain access (`keychain_set`, `keychain_get`, `keychain_delete`) |
+| `notify` | robost-core | Desktop OS notifications (`notify`) |
+| `clipboard` | robost-core | Clipboard read/write (`clipboard_get`, `clipboard_set`) |
+| `glob-pattern` | robost-core | File glob listing (`file_list`) |
+| `http` | robost-core | HTTP client (`http_get`, `http_post`, …) |
+| `excel-write` | robost-core | Excel cell/range writing (`excel_write_cell`, `excel_write_range`, …) |
+| `ocr` | robost-core | Tesseract OCR (`ocr_match`, `click_text`) |
+| `windows-ocr` | robost-core | Windows built-in WinRT OCR (no Tesseract required) |
+| `web` | robost-core | WebDriver browser automation (`web_open`, `web_click`, …) |
+| `db` | robost-core | SQLite database (`db.query`, `db.execute`) |
+| `ftp` | robost-core | FTP/FTPS client (`ftp.upload`, `ftp.download`, …) |
+
+Minimal build (core image/input/YAML only):
+```bash
+cargo build -p robost-cli --no-default-features
+```
+
+Full build (same as default):
+```bash
+cargo build -p robost-cli
 ```
 
 ## Development Commands

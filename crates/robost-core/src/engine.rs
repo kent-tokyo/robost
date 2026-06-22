@@ -486,19 +486,18 @@ impl ScenarioEngine {
 
     /// Export `__rows__` from vars to an XLSX file.
     pub fn export_rows_xlsx(vars: &Variables, path: &std::path::Path) -> Result<()> {
-        use rust_xlsxwriter::Workbook;
-
         let Some((headers, rows)) = Self::extract_rows_headers(vars) else {
             return Ok(());
         };
 
-        let mut workbook = Workbook::new();
-        let sheet = workbook.add_worksheet();
+        let mut book = umya_spreadsheet::new_file();
+        let ws = book
+            .get_sheet_by_name_mut("Sheet1")
+            .ok_or_else(|| EngineError::XlsxExport("default sheet not found".to_owned()))?;
 
         for (col, h) in headers.iter().enumerate() {
-            sheet
-                .write_string(0, col as u16, h)
-                .map_err(|e| EngineError::XlsxExport(e.to_string()))?;
+            ws.get_cell_mut(((col as u32) + 1, 1))
+                .set_value_string(h);
         }
         for (row_idx, row) in rows.iter().enumerate() {
             if let serde_json::Value::Object(map) = row {
@@ -508,14 +507,12 @@ impl ScenarioEngine {
                         Some(v) => v.to_string(),
                         None => String::new(),
                     };
-                    sheet
-                        .write_string((row_idx + 1) as u32, col as u16, &val)
-                        .map_err(|e| EngineError::XlsxExport(e.to_string()))?;
+                    ws.get_cell_mut(((col as u32) + 1, (row_idx as u32) + 2))
+                        .set_value_string(&val);
                 }
             }
         }
-        workbook
-            .save(path)
+        umya_spreadsheet::writer::xlsx::write(&book, path)
             .map_err(|e| EngineError::XlsxExport(e.to_string()))?;
         Ok(())
     }
@@ -2222,21 +2219,45 @@ impl ScenarioEngine {
     // ── Clipboard ───────────────────────────────────────────────────────────
 
     fn clipboard_set(&self, step: &ClipboardSetStep, vars: &Variables) -> Result<()> {
-        let text = vars.expand(&step.value);
-        arboard::Clipboard::new()
-            .and_then(|mut cb| cb.set_text(&text))
-            .map_err(|e| EngineError::Other(format!("clipboard_set: {e}")))?;
-        info!(len = text.len(), "clipboard_set");
-        Ok(())
+        #[cfg(not(feature = "clipboard"))]
+        {
+            let _ = step;
+            let _ = vars;
+            Err(EngineError::Other(
+                "clipboard_set requires the 'clipboard' feature; rebuild with: cargo build --features clipboard"
+                    .to_owned(),
+            ))
+        }
+        #[cfg(feature = "clipboard")]
+        {
+            let text = vars.expand(&step.value);
+            arboard::Clipboard::new()
+                .and_then(|mut cb| cb.set_text(&text))
+                .map_err(|e| EngineError::Other(format!("clipboard_set: {e}")))?;
+            info!(len = text.len(), "clipboard_set");
+            Ok(())
+        }
     }
 
     fn clipboard_get(&self, step: &ClipboardGetStep, vars: &mut Variables) -> Result<()> {
-        let text = arboard::Clipboard::new()
-            .and_then(|mut cb| cb.get_text())
-            .map_err(|e| EngineError::Other(format!("clipboard_get: {e}")))?;
-        info!(save_as = %step.save_as, len = text.len(), "clipboard_get");
-        vars.set(step.save_as.clone(), serde_json::Value::String(text));
-        Ok(())
+        #[cfg(not(feature = "clipboard"))]
+        {
+            let _ = step;
+            let _ = vars;
+            Err(EngineError::Other(
+                "clipboard_get requires the 'clipboard' feature; rebuild with: cargo build --features clipboard"
+                    .to_owned(),
+            ))
+        }
+        #[cfg(feature = "clipboard")]
+        {
+            let text = arboard::Clipboard::new()
+                .and_then(|mut cb| cb.get_text())
+                .map_err(|e| EngineError::Other(format!("clipboard_get: {e}")))?;
+            info!(save_as = %step.save_as, len = text.len(), "clipboard_get");
+            vars.set(step.save_as.clone(), serde_json::Value::String(text));
+            Ok(())
+        }
     }
 
     // ── Variable nodes ──────────────────────────────────────────────────────
@@ -2649,17 +2670,18 @@ impl ScenarioEngine {
             return self.ocr_match_llm(step, cfg, vars).await;
         }
 
-        #[cfg(not(feature = "ocr"))]
+        #[cfg(not(feature = "_ocr"))]
         {
             let _ = step;
             let _ = vars;
             Err(EngineError::Other(
-                "ocr_match requires the 'ocr' feature; rebuild with: cargo build --features ocr"
+                "ocr_match requires the 'ocr' or 'windows-ocr' feature; \
+                 rebuild with: cargo build --features ocr"
                     .to_owned(),
             ))
         }
 
-        #[cfg(feature = "ocr")]
+        #[cfg(feature = "_ocr")]
         {
             let target = Self::capture_target(&step.window);
             let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
@@ -2813,16 +2835,17 @@ impl ScenarioEngine {
     // ── Click text via OCR ──────────────────────────────────────────────────
 
     async fn click_text(&self, step: &ClickTextStep, vars: &Variables) -> Result<()> {
-        #[cfg(not(feature = "ocr"))]
+        #[cfg(not(feature = "_ocr"))]
         {
             let _ = (step, vars);
-            return Err(EngineError::Other(
-                "click_text requires the 'ocr' feature; rebuild with: cargo build --features ocr"
+            Err(EngineError::Other(
+                "click_text requires the 'ocr' or 'windows-ocr' feature; \
+                 rebuild with: cargo build --features ocr"
                     .to_owned(),
-            ));
+            ))
         }
 
-        #[cfg(feature = "ocr")]
+        #[cfg(feature = "_ocr")]
         {
             let target = Self::capture_target(&step.window);
             let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
@@ -2908,16 +2931,17 @@ impl ScenarioEngine {
     // ── Move mouse to text via OCR ──────────────────────────────────────────
 
     async fn move_to_text(&self, step: &MoveToTextStep, vars: &Variables) -> Result<()> {
-        #[cfg(not(feature = "ocr"))]
+        #[cfg(not(feature = "_ocr"))]
         {
             let _ = (step, vars);
-            return Err(EngineError::Other(
-                "move_to_text requires the 'ocr' feature; rebuild with: cargo build --features ocr"
+            Err(EngineError::Other(
+                "move_to_text requires the 'ocr' or 'windows-ocr' feature; \
+                 rebuild with: cargo build --features ocr"
                     .to_owned(),
-            ));
+            ))
         }
 
-        #[cfg(feature = "ocr")]
+        #[cfg(feature = "_ocr")]
         {
             let target = Self::capture_target(&step.window);
             let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
@@ -4575,43 +4599,55 @@ impl ScenarioEngine {
     }
 
     fn file_list(&self, step: &FileListStep, vars: &mut Variables) -> Result<()> {
-        let dir = self.safe_join(&vars.expand(&step.dir))?;
-        let pattern = vars.expand(&step.pattern);
-        // Prevent glob patterns that escape the base directory.
-        if std::path::Path::new(&pattern).is_absolute()
-            || std::path::Path::new(&pattern)
-                .components()
-                .any(|c| c == std::path::Component::ParentDir)
+        #[cfg(not(feature = "glob-pattern"))]
         {
-            return Err(EngineError::Other(format!(
-                "file_list: pattern must not be absolute or contain '..': {pattern:?}"
-            )));
+            let _ = step;
+            let _ = vars;
+            Err(EngineError::Other(
+                "file_list requires the 'glob-pattern' feature; rebuild with: cargo build --features glob-pattern"
+                    .to_owned(),
+            ))
         }
-        let glob_pat = dir.join(&pattern);
-        let glob_str = glob_pat.to_string_lossy();
+        #[cfg(feature = "glob-pattern")]
+        {
+            let dir = self.safe_join(&vars.expand(&step.dir))?;
+            let pattern = vars.expand(&step.pattern);
+            // Prevent glob patterns that escape the base directory.
+            if std::path::Path::new(&pattern).is_absolute()
+                || std::path::Path::new(&pattern)
+                    .components()
+                    .any(|c| c == std::path::Component::ParentDir)
+            {
+                return Err(EngineError::Other(format!(
+                    "file_list: pattern must not be absolute or contain '..': {pattern:?}"
+                )));
+            }
+            let glob_pat = dir.join(&pattern);
+            let glob_str = glob_pat.to_string_lossy();
 
-        let mut entries: Vec<serde_json::Value> = Vec::new();
-        for path in glob::glob(&glob_str)
-            .map_err(|e| EngineError::Other(format!("file_list: invalid glob: {e}")))?
-            .flatten()
-        {
-            let meta = std::fs::metadata(&path).ok();
-            let name = path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
-            let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
-            entries.push(serde_json::json!({
-                "name": name,
-                "path": path.to_string_lossy().as_ref(),
-                "is_dir": is_dir,
-                "size_bytes": size,
-            }));
+            let mut entries: Vec<serde_json::Value> = Vec::new();
+            for path in glob::glob(&glob_str)
+                .map_err(|e| EngineError::Other(format!("file_list: invalid glob: {e}")))?
+                .flatten()
+            {
+                let meta = std::fs::metadata(&path).ok();
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
+                let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+                entries.push(serde_json::json!({
+                    "name": name,
+                    "path": path.to_string_lossy().as_ref(),
+                    "is_dir": is_dir,
+                    "size_bytes": size,
+                }));
+            }
+            info!(dir = %dir.display(), count = entries.len(), "file_list");
+            vars.set(&step.save_as, serde_json::Value::Array(entries));
+            Ok(())
         }
-        info!(dir = %dir.display(), count = entries.len(), "file_list");
-        vars.set(&step.save_as, serde_json::Value::Array(entries));
-        Ok(())
     }
 
     // ── Utilities ───────────────────────────────────────────────────────────
@@ -4890,7 +4926,25 @@ impl ScenarioEngine {
                 "url_open: rejected non-http/mailto URL: {url}"
             )));
         }
-        open::that(&url)?;
+        // Use explorer.exe on Windows (not cmd) — cmd.exe interprets metacharacters
+        // in its command line even when arguments are quoted, enabling shell injection.
+        // explorer.exe passes the URL directly to ShellExecute without shell parsing.
+        #[cfg(target_os = "windows")]
+        std::process::Command::new("explorer.exe")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| EngineError::Other(format!("url_open: {e}")))?;
+        #[cfg(target_os = "macos")]
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| EngineError::Other(format!("url_open: {e}")))?;
+        #[cfg(target_os = "linux")]
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| EngineError::Other(format!("url_open: {e}")))?;
+        #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
         info!(url = %url, "url opened");
         Ok(())
     }
@@ -4898,15 +4952,27 @@ impl ScenarioEngine {
     // ── Notify ──────────────────────────────────────────────────────────────
 
     fn notify_step(&self, step: &NotifyStep, vars: &Variables) -> Result<()> {
-        let title = vars.expand(&step.title);
-        let message = vars.expand(&step.message);
-        notify_rust::Notification::new()
-            .summary(&title)
-            .body(&message)
-            .show()
-            .map_err(|e| EngineError::Other(format!("notify: {e}")))?;
-        info!(title = %title, "notification sent");
-        Ok(())
+        #[cfg(not(feature = "notify"))]
+        {
+            let _ = step;
+            let _ = vars;
+            Err(EngineError::Other(
+                "notify requires the 'notify' feature; rebuild with: cargo build --features notify"
+                    .to_owned(),
+            ))
+        }
+        #[cfg(feature = "notify")]
+        {
+            let title = vars.expand(&step.title);
+            let message = vars.expand(&step.message);
+            notify_rust::Notification::new()
+                .summary(&title)
+                .body(&message)
+                .show()
+                .map_err(|e| EngineError::Other(format!("notify: {e}")))?;
+            info!(title = %title, "notification sent");
+            Ok(())
+        }
     }
 
     // ── UI Automation methods ───────────────────────────────────────────────
@@ -5593,14 +5659,37 @@ impl ScenarioEngine {
     // ── Number handler ──────────────────────────────────────────────────────
 
     fn number_random(&self, step: &NumberRandomStep, vars: &mut Variables) -> Result<()> {
-        use rand::Rng;
         if step.min > step.max {
             return Err(EngineError::Other(format!(
                 "number_random: min ({}) must not be greater than max ({})",
                 step.min, step.max
             )));
         }
-        let mut rng = rand::thread_rng();
+        // Persistent thread-local xorshift64 — seeded once, advanced on every call.
+        // Using thread-local state avoids identical output when called in rapid succession.
+        use std::cell::Cell;
+        thread_local! {
+            static XS64: Cell<u64> = const { Cell::new(0) };
+        }
+        let x = XS64.with(|state| {
+            let mut s = state.get();
+            if s == 0 {
+                s = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| {
+                        d.subsec_nanos() as u64
+                            ^ d.as_secs().wrapping_mul(0x9e3779b97f4a7c15)
+                    })
+                    .unwrap_or(0xcafe_babe_dead_beef);
+                if s == 0 { s = 1; }
+            }
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            state.set(s);
+            s
+        });
+
         let result = if step.integer {
             // Sample as integer so max is always reachable.
             let lo = step.min.ceil() as i64;
@@ -5611,9 +5700,11 @@ impl ScenarioEngine {
                     step.min, step.max
                 )));
             }
-            rng.gen_range(lo..=hi) as f64
+            // Use u128 arithmetic to handle the full i64 range without overflow.
+            let range = (hi as i128 - lo as i128 + 1) as u128;
+            (lo as i128 + (x as u128 % range) as i128) as i64 as f64
         } else {
-            rng.gen_range(step.min..=step.max)
+            step.min + (x as f64 / u64::MAX as f64) * (step.max - step.min)
         };
         let json_num = serde_json::Number::from_f64(result)
             .map(serde_json::Value::Number)

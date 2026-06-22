@@ -9,15 +9,24 @@ keywords   = ["rpa", "automation", "scenario", "workflow", "yaml"]
 categories = ["development-tools"]
 
 [features]
-ocr = ["robost-vision/ocr"]
+ocr = ["robost-vision/ocr", "_ocr"]
+windows-ocr = ["robost-vision/windows-ocr", "_ocr"]
+_ocr = []
 ml  = ["robost-vision/ml"]
-excel-write = ["dep:umya-spreadsheet"]
+excel-write = []
 http = ["dep:ureq"]
 llm-ocr = ["dep:ureq"]
 uia = []
 web = ["dep:robost-web"]
-db  = ["robost-stdlib/db"]
-ftp = ["robost-stdlib/ftp"]
+db       = ["robost-stdlib/db"]
+ftp      = ["robost-stdlib/ftp"]
+mail     = ["robost-stdlib/mail"]
+pdf      = ["robost-stdlib/pdf"]
+archive  = ["robost-stdlib/archive"]
+keychain = ["robost-stdlib/keychain"]
+notify       = ["dep:notify-rust"]
+clipboard    = ["dep:arboard"]
+glob-pattern = ["dep:glob"]
 
 [dependencies]
 robost-template.workspace = true
@@ -42,16 +51,13 @@ rhai.workspace = true
 chrono.workspace = true
 csv.workspace = true
 calamine.workspace = true
-rust_xlsxwriter.workspace = true
-umya-spreadsheet = { workspace = true, optional = true }
-arboard.workspace = true
+umya-spreadsheet.workspace = true
 regex.workspace = true
-glob.workspace = true
-ureq         = { workspace = true, optional = true }
+ureq        = { workspace = true, optional = true }
+notify-rust = { workspace = true, optional = true }
+arboard     = { workspace = true, optional = true }
+glob        = { workspace = true, optional = true }
 base64.workspace = true
-rand.workspace = true
-open.workspace = true
-notify-rust.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61", features = [
