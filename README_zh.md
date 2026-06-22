@@ -68,6 +68,211 @@
 
 插件在 WASM 沙箱里运行：权限在 `plugin.toml` 里声明并在运行时强制检查。插件只能访问它声明过的资源，崩溃了主进程也继续运行。用 Rust、AssemblyScript、Go 或 C 写的插件编译成 `.wasm` 就能集成，不需要 fork 核心。
 
+## 步骤参考
+
+### 图像与视觉
+| 步骤 | 说明 |
+|---|---|
+| `wait_image` | 等待模板图像出现在屏幕上 |
+| `click_image` | 找到并点击模板图像 |
+| `find_image` | 定位图像并将位置保存到变量 |
+| `wait_no_image` | 等待模板图像消失 |
+| `match_rect` | 在指定屏幕区域内匹配模板 |
+| `screenshot_save` | 将截图保存到文件 |
+| `ocr_match` | 通过 OCR 等待文本，保存结果 †ocr/windows-ocr |
+| `click_text` | 通过 OCR 找到文本并点击 †ocr/windows-ocr |
+| `move_to_text` | 通过 OCR 找到文本并移动光标 †ocr/windows-ocr |
+| `ml_detect` | 使用 ONNX ML 模型检测对象 †ml |
+| `get_pixel_color` | 读取屏幕像素的 RGB 颜色 |
+| `wait_color` | 等待像素变为指定颜色 |
+| `wait_change` | 等待指定区域的屏幕像素发生变化 |
+
+### 鼠标与键盘输入
+| 步骤 | 说明 |
+|---|---|
+| `type` | 在活动字段中输入文本 |
+| `press` | 按下单个键（Tab、Enter、Escape、F1 等） |
+| `key_combo` | 按下组合键（Ctrl+C、Alt+F4 等） |
+| `mouse_move` | 将鼠标移动到绝对屏幕坐标 |
+| `mouse_click_xy` | 在绝对屏幕坐标处点击 |
+| `mouse_drag` | 从一个位置拖动到另一个位置 |
+| `mouse_scroll` | 滚动鼠标滚轮 |
+| `mouse_hover` | 移动到指定位置并悬停 |
+| `click_in_window` | 相对于窗口左上角点击 |
+
+### 剪贴板
+| 步骤 | 说明 |
+|---|---|
+| `clipboard_set` | 将文本写入剪贴板 †clipboard |
+| `clipboard_get` | 将剪贴板读取到变量 †clipboard |
+
+### 窗口控制
+| 步骤 | 说明 |
+|---|---|
+| `wait_window` | 等待窗口出现、关闭或变为可操作状态 |
+| `window_control` | 聚焦、最大化、最小化或关闭窗口 |
+
+### 流程控制
+| 步骤 | 说明 |
+|---|---|
+| `if` | 条件分支（`then:` / `else:`） |
+| `switch` | 按变量值的多路分支 |
+| `repeat` | 重复 N 次 |
+| `while` | 当 Rhai 条件为真时循环 |
+| `do_while` | 直到 Rhai 条件为真时循环（后置判断） |
+| `foreach` | 遍历列表变量 |
+| `try_catch` | 异常处理（`try:` / `catch:` / `finally:`） |
+| `break` | 跳出当前循环 |
+| `continue` | 跳到下一次循环迭代 |
+| `exit` | 正常结束场景 |
+| `group` | 命名步骤组 |
+| `wait_until` | 轮询直到 Rhai 条件变为真 |
+| `wait_ms` | 休眠 N 毫秒 |
+
+### 子场景与脚本
+| 步骤 | 说明 |
+|---|---|
+| `sub_scenario` | 加载并运行带输入的 YAML 场景文件 |
+| `call_scenario` | 通过动态路径变量调用场景 |
+| `script` | 执行内联 Rhai 脚本 |
+| `library` | 调用内置或插件库函数 |
+
+### 变量操作
+| 步骤 | 说明 |
+|---|---|
+| `set` | 设置变量 |
+| `copy_var` | 将一个变量复制到另一个变量 |
+| `increment` | 递增数值变量 |
+| `calc` | 求值 Rhai 算术表达式 |
+| `get_datetime` | 以格式化字符串获取当前日期时间 |
+| `get_username` | 获取当前 OS 用户名 |
+| `to_fullwidth` | ASCII → 全角字符转换 |
+| `to_halfwidth` | 全角 → ASCII 字符转换 |
+| `number_random` | 生成随机整数或浮点数 |
+| `import_vars` | 从 CSV/XLSX 行导入变量 |
+| `save_vars` | 将变量持久化到 JSON 文件 |
+| `load_vars` | 从 JSON 文件加载变量 |
+
+### 字符串操作
+| 步骤 | 说明 |
+|---|---|
+| `string_replace` | 替换子字符串 |
+| `string_trim` | 去除空白 |
+| `string_upper` / `string_lower` | 大小写转换 |
+| `string_substring` | 提取子字符串 |
+| `string_length` | 获取字符串长度 |
+| `string_split` / `string_join` | 分割为数组 / 连接为字符串 |
+| `string_regex` | 带捕获组的正则表达式匹配 |
+| `string_contains` | 检查是否包含子字符串 |
+| `string_starts_with` / `string_ends_with` | 前缀 / 后缀检查 |
+| `string_index_of` / `string_count` | 查找索引 / 计数出现次数 |
+| `string_format` | 使用 `{0}`、`{1}` 占位符格式化 |
+| `base64_encode` / `base64_decode` | Base64 编码 / 解码 |
+
+### 类型转换与列表操作
+| 步骤 | 说明 |
+|---|---|
+| `to_number` / `to_string` / `var_type` | 类型转换或获取类型名 |
+| `list_length` / `list_get` | 数组长度 / 按索引获取 |
+| `list_push` / `list_remove` / `list_contains` | 数组增删改查 |
+
+### 日期与时间
+| 步骤 | 说明 |
+|---|---|
+| `date_format` | 重新格式化日期字符串 |
+| `date_add` | 对日期加减天数、月数、年数 |
+| `date_diff` | 计算两个日期之间的差值 |
+
+### 文件与目录
+| 步骤 | 说明 |
+|---|---|
+| `file_exists` / `dir_exists` | 检查是否存在 |
+| `file_read` / `file_write` / `file_append` | 读写文本文件 |
+| `file_copy` / `file_move` / `file_rename` / `file_delete` | 文件管理 |
+| `file_size` / `file_modified_at` | 文件元数据 |
+| `file_list` | 按 glob 模式列出文件 †glob-pattern |
+| `dir_create` / `dir_delete` | 目录管理 |
+
+### 数据与 JSON
+| 步骤 | 说明 |
+|---|---|
+| `json_parse` / `json_stringify` | 解析 / 序列化 JSON |
+| `path_join` / `path_basename` / `path_dirname` | 路径工具 |
+| `env_get` | 读取环境变量 |
+
+### 进程与 Shell
+| 步骤 | 说明 |
+|---|---|
+| `shell` | 执行 Shell 命令 |
+| `process_start` / `process_kill` / `process_exists` | 进程管理 |
+| `wait_process` | 等待进程启动或退出 |
+
+### 系统
+| 步骤 | 说明 |
+|---|---|
+| `log_write` | 在日志文件中追加带时间戳的行 |
+| `url_open` | 用默认浏览器打开 URL |
+| `notify` | 显示桌面通知 †notify |
+| `dialog_wait` / `dialog_input` / `dialog_select` | 用户交互对话框 |
+
+### Excel / CSV / PDF / ZIP
+| 步骤 | 说明 |
+|---|---|
+| `excel_read_cell` / `excel_read_range` / `excel_read_sheet` | 读取 Excel 数据 |
+| `excel_write_cell` / `excel_write_range` | 写入 Excel 单元格 / 范围 †excel-write |
+| `excel_add_sheet` / `excel_delete_sheet` / `excel_rename_sheet` | 工作表管理 †excel-write |
+| `excel_get_dims` / `excel_find_row` | 工作表元数据 / 行搜索 |
+| `csv_read` / `csv_write` | 读写 CSV 文件 |
+| `pdf_extract_text` / `pdf_page_count` | PDF 文本提取 †pdf |
+| `zip_compress` / `zip_extract` / `zip_list` | ZIP 归档操作 †archive |
+
+### HTTP 与邮件
+| 步骤 | 说明 |
+|---|---|
+| `http_get` / `http_post` / `http_put` / `http_patch` / `http_delete` | HTTP 客户端 †http |
+| `mail_send` | 通过 SMTP 发送邮件 †mail |
+| `mail_receive` | 通过 IMAP 接收邮件 †mail |
+| `ftp_upload` / `ftp_download` / `ftp_list` / `ftp_delete` / `ftp_mkdir` | FTP/FTPS 操作 †ftp |
+
+### Web 浏览器（WebDriver）
+需要 `feature = "web"` 以及运行中的 chromedriver / geckodriver。
+
+| 步骤 | 说明 |
+|---|---|
+| `web_open` / `web_close` | 打开 / 关闭浏览器会话 |
+| `web_click` / `web_type` / `web_select` | 与元素交互 |
+| `web_get` / `web_get_all` | 读取元素文本或属性 |
+| `web_wait` / `web_wait_text` | 等待元素 |
+| `web_screenshot` | 保存浏览器截图 |
+| `web_execute_js` | 执行 JavaScript |
+| `web_switch_frame` | 切换到 iframe 或返回顶层 |
+| `web_scroll` | 滚动元素或窗口 |
+| `web_alert` | 处理 JS 弹窗 / 确认框 |
+| `web_get_url` / `web_get_title` | 当前 URL / 页面标题 |
+| `web_navigate_back` / `web_navigate_forward` | 浏览器历史导航 |
+
+### Windows UI 自动化
+仅限 Windows。
+
+| 步骤 | 说明 |
+|---|---|
+| `uia_get` / `uia_set` | 按名称、ID 或类获取 / 设置元素属性 |
+| `uia_click` | 调用（点击）UIA 元素 |
+| `uia_find` | 查找元素并保存其矩形区域 |
+| `uia_wait` | 等待元素状态（exists / enabled / visible） |
+| `uia_select` | 在 ComboBox / ListBox 中选择项目 |
+| `uia_get_children` | 列出子元素 |
+| `uia_check` | 选中 / 取消选中复选框 |
+
+### 数据库（SQLite）
+| 步骤 | 说明 |
+|---|---|
+| `db_query` | 查询多行 †db |
+| `db_query_one` | 查询单行 †db |
+| `db_execute` | 执行 INSERT / UPDATE / DELETE †db |
+
+> **†** 表示需要对应的 Cargo 特性标志。默认 `rpa` 二进制包含除 `ocr`（Tesseract）、`web`、`db`、`ftp` 外的所有特性。
+
 ## 架构
 
 ```

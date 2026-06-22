@@ -68,6 +68,211 @@ The scenario format is close to WinActor's node vocabulary (click_image, wait_im
 
 Plugins run in a WASM sandbox: permissions are declared in `plugin.toml` and enforced at runtime. A plugin can only access what it declared, and if it panics, the runner keeps going. Plugins can be written in Rust, AssemblyScript, Go, or C — anything that compiles to `.wasm`.
 
+## Step Reference
+
+### Image & Vision
+| Step | Description |
+|---|---|
+| `wait_image` | Wait until a template image appears on screen |
+| `click_image` | Find and click a template image |
+| `find_image` | Locate image, save position to variable |
+| `wait_no_image` | Wait until a template image disappears |
+| `match_rect` | Match template within a specific screen region |
+| `screenshot_save` | Save a screenshot to file |
+| `ocr_match` | Wait for text via OCR, save result †ocr/windows-ocr |
+| `click_text` | Find text via OCR and click it †ocr/windows-ocr |
+| `move_to_text` | Find text via OCR and move cursor to it †ocr/windows-ocr |
+| `ml_detect` | Detect objects using an ONNX ML model †ml |
+| `get_pixel_color` | Read RGB color of a screen pixel |
+| `wait_color` | Wait for a pixel to match expected color |
+| `wait_change` | Wait until screen pixels change in a region |
+
+### Mouse & Keyboard Input
+| Step | Description |
+|---|---|
+| `type` | Type text into the active field |
+| `press` | Press a single key (Tab, Enter, Escape, F1, …) |
+| `key_combo` | Press a key combination (Ctrl+C, Alt+F4, …) |
+| `mouse_move` | Move mouse to absolute screen coordinates |
+| `mouse_click_xy` | Click at absolute screen coordinates |
+| `mouse_drag` | Drag from one point to another |
+| `mouse_scroll` | Scroll mouse wheel |
+| `mouse_hover` | Move to position and hover |
+| `click_in_window` | Click relative to a window's top-left corner |
+
+### Clipboard
+| Step | Description |
+|---|---|
+| `clipboard_set` | Write text to clipboard †clipboard |
+| `clipboard_get` | Read clipboard to a variable †clipboard |
+
+### Window Control
+| Step | Description |
+|---|---|
+| `wait_window` | Wait for window to appear, close, or become operable |
+| `window_control` | Focus, maximize, minimize, or close a window |
+
+### Flow Control
+| Step | Description |
+|---|---|
+| `if` | Conditional branch (`then:` / `else:`) |
+| `switch` | Multi-way branch by variable value |
+| `repeat` | Repeat steps N times |
+| `while` | Loop while a Rhai condition is true |
+| `do_while` | Loop until a Rhai condition is true (check after) |
+| `foreach` | Iterate over a list variable |
+| `try_catch` | Exception handling (`try:` / `catch:` / `finally:`) |
+| `break` | Break out of the current loop |
+| `continue` | Skip to the next loop iteration |
+| `exit` | End the scenario normally |
+| `group` | Named group of steps |
+| `wait_until` | Poll until a Rhai condition becomes true |
+| `wait_ms` | Sleep for N milliseconds |
+
+### Sub-scenarios & Scripting
+| Step | Description |
+|---|---|
+| `sub_scenario` | Load and run a YAML scenario file with inputs |
+| `call_scenario` | Call a scenario via a dynamic path variable |
+| `script` | Execute inline Rhai script |
+| `library` | Call a built-in or plugin library function |
+
+### Variables
+| Step | Description |
+|---|---|
+| `set` | Set a variable |
+| `copy_var` | Copy one variable to another |
+| `increment` | Increment a numeric variable |
+| `calc` | Evaluate a Rhai arithmetic expression |
+| `get_datetime` | Get current datetime as a formatted string |
+| `get_username` | Get the current OS username |
+| `to_fullwidth` | Convert ASCII → fullwidth characters |
+| `to_halfwidth` | Convert fullwidth → ASCII characters |
+| `number_random` | Generate a random integer or float |
+| `import_vars` | Import variables from a CSV/XLSX row |
+| `save_vars` | Persist variables to a JSON file |
+| `load_vars` | Load variables from a JSON file |
+
+### String Operations
+| Step | Description |
+|---|---|
+| `string_replace` | Replace substring |
+| `string_trim` | Trim whitespace |
+| `string_upper` / `string_lower` | Change case |
+| `string_substring` | Extract substring |
+| `string_length` | Get string length |
+| `string_split` / `string_join` | Split to array / join to string |
+| `string_regex` | Regex match with capture groups |
+| `string_contains` | Check for substring |
+| `string_starts_with` / `string_ends_with` | Prefix / suffix check |
+| `string_index_of` / `string_count` | Find index / count occurrences |
+| `string_format` | Format with `{0}`, `{1}` placeholders |
+| `base64_encode` / `base64_decode` | Base64 encode / decode |
+
+### Type Conversion & Lists
+| Step | Description |
+|---|---|
+| `to_number` / `to_string` / `var_type` | Convert type or get type name |
+| `list_length` / `list_get` | Array length / get by index |
+| `list_push` / `list_remove` / `list_contains` | Array mutations / search |
+
+### Date & Time
+| Step | Description |
+|---|---|
+| `date_format` | Reformat a date string |
+| `date_add` | Add days / months / years to a date |
+| `date_diff` | Calculate difference between two dates |
+
+### Files & Directories
+| Step | Description |
+|---|---|
+| `file_exists` / `dir_exists` | Check existence |
+| `file_read` / `file_write` / `file_append` | Read / write text files |
+| `file_copy` / `file_move` / `file_rename` / `file_delete` | File management |
+| `file_size` / `file_modified_at` | File metadata |
+| `file_list` | List files matching a glob pattern †glob-pattern |
+| `dir_create` / `dir_delete` | Directory management |
+
+### Data & JSON
+| Step | Description |
+|---|---|
+| `json_parse` / `json_stringify` | Parse / serialize JSON |
+| `path_join` / `path_basename` / `path_dirname` | Path utilities |
+| `env_get` | Read an environment variable |
+
+### Process & Shell
+| Step | Description |
+|---|---|
+| `shell` | Execute a shell command |
+| `process_start` / `process_kill` / `process_exists` | Process management |
+| `wait_process` | Wait for a process to start or exit |
+
+### System
+| Step | Description |
+|---|---|
+| `log_write` | Append a timestamped line to a log file |
+| `url_open` | Open a URL in the default browser |
+| `notify` | Show a desktop notification †notify |
+| `dialog_wait` / `dialog_input` / `dialog_select` | User interaction dialogs |
+
+### Excel / CSV / PDF / ZIP
+| Step | Description |
+|---|---|
+| `excel_read_cell` / `excel_read_range` / `excel_read_sheet` | Read Excel data |
+| `excel_write_cell` / `excel_write_range` | Write Excel cells / ranges †excel-write |
+| `excel_add_sheet` / `excel_delete_sheet` / `excel_rename_sheet` | Sheet management †excel-write |
+| `excel_get_dims` / `excel_find_row` | Sheet metadata / row search |
+| `csv_read` / `csv_write` | Read / write CSV files |
+| `pdf_extract_text` / `pdf_page_count` | PDF text extraction †pdf |
+| `zip_compress` / `zip_extract` / `zip_list` | ZIP archive operations †archive |
+
+### HTTP & Mail
+| Step | Description |
+|---|---|
+| `http_get` / `http_post` / `http_put` / `http_patch` / `http_delete` | HTTP client †http |
+| `mail_send` | Send email via SMTP †mail |
+| `mail_receive` | Receive email via IMAP †mail |
+| `ftp_upload` / `ftp_download` / `ftp_list` / `ftp_delete` / `ftp_mkdir` | FTP/FTPS operations †ftp |
+
+### Web Browser (WebDriver)
+Requires `feature = "web"` and a running chromedriver / geckodriver.
+
+| Step | Description |
+|---|---|
+| `web_open` / `web_close` | Open / close browser session |
+| `web_click` / `web_type` / `web_select` | Interact with elements |
+| `web_get` / `web_get_all` | Read element text or attributes |
+| `web_wait` / `web_wait_text` | Wait for elements |
+| `web_screenshot` | Take browser screenshot |
+| `web_execute_js` | Run JavaScript |
+| `web_switch_frame` | Switch to iframe or back to top |
+| `web_scroll` | Scroll element or window |
+| `web_alert` | Handle JS alerts / confirms |
+| `web_get_url` / `web_get_title` | Current URL / page title |
+| `web_navigate_back` / `web_navigate_forward` | Browser history |
+
+### Windows UI Automation
+Windows only.
+
+| Step | Description |
+|---|---|
+| `uia_get` / `uia_set` | Get / set element property by name, ID, or class |
+| `uia_click` | Invoke (click) a UIA element |
+| `uia_find` | Find element and store its rect |
+| `uia_wait` | Wait for element state (exists / enabled / visible) |
+| `uia_select` | Select item in ComboBox / ListBox |
+| `uia_get_children` | List child elements |
+| `uia_check` | Set / clear a checkbox |
+
+### Database (SQLite)
+| Step | Description |
+|---|---|
+| `db_query` | Query multiple rows †db |
+| `db_query_one` | Query a single row †db |
+| `db_execute` | Execute INSERT / UPDATE / DELETE †db |
+
+> **†** marks require a Cargo feature flag. The default `rpa` binary includes all features except `ocr` (Tesseract), `web`, `db`, and `ftp`.
+
 ## Architecture
 
 ```
