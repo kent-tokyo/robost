@@ -6485,11 +6485,11 @@ dependencies = [
 
 [[package]]
 name = "robost"
-version = "0.1.1"
+version = "0.1.2"
 
 [[package]]
 name = "robost-backend"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "enigo",
  "image",
@@ -6502,7 +6502,7 @@ dependencies = [
 
 [[package]]
 name = "robost-capture"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "image",
  "robost-template",
@@ -6514,7 +6514,7 @@ dependencies = [
 
 [[package]]
 name = "robost-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -6548,7 +6548,7 @@ dependencies = [
 
 [[package]]
 name = "robost-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "arboard",
@@ -6585,7 +6585,7 @@ dependencies = [
 
 [[package]]
 name = "robost-input"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "enigo",
  "robost-template",
@@ -6596,7 +6596,7 @@ dependencies = [
 
 [[package]]
 name = "robost-plugin-api"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
  "thiserror 2.0.18",
@@ -6604,7 +6604,7 @@ dependencies = [
 
 [[package]]
 name = "robost-plugin-host"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "robost-plugin-api",
  "serde",
@@ -6619,7 +6619,7 @@ dependencies = [
 
 [[package]]
 name = "robost-script"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "rhai",
@@ -6631,7 +6631,7 @@ dependencies = [
 
 [[package]]
 name = "robost-snip"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "eframe",
@@ -6653,7 +6653,7 @@ dependencies = [
 
 [[package]]
 name = "robost-stdlib"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64 0.22.1",
  "imap",
@@ -6678,7 +6678,7 @@ dependencies = [
 
 [[package]]
 name = "robost-template"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "image",
  "robost-vision",
@@ -6689,7 +6689,7 @@ dependencies = [
 
 [[package]]
 name = "robost-uia"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "thiserror 2.0.18",
  "tracing",
@@ -6698,7 +6698,7 @@ dependencies = [
 
 [[package]]
 name = "robost-vision"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "image",
  "imageproc",
@@ -6719,7 +6719,7 @@ dependencies = [
 
 [[package]]
 name = "robost-web"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64 0.22.1",
  "fantoccini",
