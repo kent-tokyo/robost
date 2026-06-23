@@ -738,7 +738,47 @@ async fn agent_chat(Json(body): Json<ChatBody>) -> impl IntoResponse {
     }
 }
 
+#[cfg(feature = "embed-editor")]
+#[derive(rust_embed::RustEmbed)]
+#[folder = "../../apps/web-editor/dist/"]
+struct EditorAssets;
+
+#[cfg(feature = "embed-editor")]
+async fn agent_index(uri: axum::http::Uri) -> impl IntoResponse {
+    use axum::body::Body;
+    use axum::response::Response;
+    let path = uri.path().trim_start_matches('/');
+    // SPA fallback only for extension-less paths (e.g. /scenarios/123).
+    // Paths with extensions that are absent from the bundle get a plain 404
+    // so the browser's module loader sees a real error instead of HTML.
+    let file = if path.is_empty() {
+        EditorAssets::get("index.html")
+    } else {
+        EditorAssets::get(path).or_else(|| {
+            if !path.contains('.') {
+                EditorAssets::get("index.html")
+            } else {
+                None
+            }
+        })
+    };
+    match file {
+        Some(f) => {
+            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            Response::builder()
+                .header(header::CONTENT_TYPE, mime.as_ref())
+                .body(Body::from(f.data.into_owned()))
+                .expect("infallible: valid MIME string and owned bytes")
+        }
+        None => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::empty())
+            .expect("infallible: known-valid status and empty body"),
+    }
+}
+
 // Fallback HTML for when the built web UI is not embedded
+#[cfg(not(feature = "embed-editor"))]
 async fn agent_index() -> impl IntoResponse {
     let html = r#"<!DOCTYPE html>
 <html lang="ja">

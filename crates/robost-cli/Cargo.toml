@@ -14,13 +14,14 @@ path = "src/main.rs"
 
 [features]
 default = ["mail", "pdf", "archive", "keychain", "notify", "clipboard", "glob-pattern"]
-ocr         = ["robost-core/ocr"]
-windows-ocr = ["robost-core/windows-ocr"]
-http        = ["robost-core/http"]
-mail        = ["robost-core/mail"]
-pdf         = ["robost-core/pdf"]
-archive     = ["robost-core/archive"]
-keychain    = ["robost-core/keychain"]
+ocr          = ["robost-core/ocr"]
+windows-ocr  = ["robost-core/windows-ocr"]
+embed-editor = ["dep:rust-embed", "dep:mime_guess"]
+http         = ["robost-core/http"]
+mail         = ["robost-core/mail"]
+pdf          = ["robost-core/pdf"]
+archive      = ["robost-core/archive"]
+keychain     = ["robost-core/keychain"]
 notify       = ["robost-core/notify"]
 clipboard    = ["robost-core/clipboard"]
 glob-pattern = ["robost-core/glob-pattern"]
@@ -52,3 +53,5 @@ axum = { version = "0.7", features = ["multipart"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 futures = "0.3"
 image.workspace = true
+rust-embed = { version = "8", optional = true }
+mime_guess = { version = "2", optional = true }

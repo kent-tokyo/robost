@@ -61,13 +61,30 @@ jobs:
         if: runner.os == 'macOS'
         run: cargo build -p robost-cli --release --features ocr --target ${{ matrix.target }}
 
+      # ── Windows: build web editor then embed into rpa.exe ─────────────────
+      - name: Setup Node.js (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/web-editor/package-lock.json
+
+      - name: Build web editor (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-Location apps/web-editor
+          npm ci
+          npm run build
+
       # Windows uses built-in WinRT OCR (Windows.Media.Ocr) — no Tesseract/vcpkg needed.
       # Language packs: Settings > Time & Language > Language & Region > Add a language
       #   then install the "Optical character recognition" optional feature.
       - name: Build rpa.exe (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: cargo build -p robost-cli --release --features windows-ocr --target ${{ matrix.target }}
+        run: cargo build -p robost-cli --release --features windows-ocr,embed-editor --target ${{ matrix.target }}
 
       # ── Package macOS ──────────────────────────────────────────────────────
       - name: Package (macOS)
@@ -91,11 +108,29 @@ jobs:
           )
           Compress-Archive -Path $files -DestinationPath "${{ matrix.archive }}" -Force
 
+      - name: Build installer (Windows)
+        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          BUILD_TARGET: ${{ matrix.target }}
+        run: |
+          $env:APP_VERSION = $env:REF_NAME -replace '^v', ''
+          $rpaExe = "target\$env:BUILD_TARGET\release\rpa.exe"
+          iscc "/DAppVersion=$env:APP_VERSION" "/DRpaExe=$rpaExe" installer\robost-setup.iss
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.archive }}
           path: ${{ matrix.archive }}
+
+      - name: Upload installer artifact (Windows)
+        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: robost-setup
+          path: installer/output/robost-setup-*.exe
 
   release:
     name: Create GitHub Release
