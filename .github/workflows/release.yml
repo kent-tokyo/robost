@@ -52,9 +52,25 @@ jobs:
         run: brew install pkgconf tesseract tesseract-lang
 
       # ── Build ──────────────────────────────────────────────────────────────
+      # ── macOS: build web editor then embed into rpa ───────────────────────
+      - name: Setup Node.js (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/web-editor/package-lock.json
+
+      - name: Build web editor (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd apps/web-editor
+          npm ci
+          npm run build
+
       - name: Build rpa (macOS)
         if: runner.os == 'macOS'
-        run: cargo build -p robost-cli --release --features ocr --target ${{ matrix.target }}
+        run: cargo build -p robost-cli --release --features ocr,embed-editor --target ${{ matrix.target }}
 
       # ── Windows: build web editor then embed into rpa.exe ─────────────────
       - name: Setup Node.js (Windows)

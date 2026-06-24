@@ -18,6 +18,7 @@ AllowNoIcons=yes
 SourceDir={#SourcePath}\..
 OutputDir={#SourcePath}\output
 OutputBaseFilename=robost-setup
+SetupIconFile=assets\icon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -37,13 +38,14 @@ Source: "{#RpaExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "run.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "stop.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "installer\launch-agent.vbs"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "examples\*"; DestDir: "{app}\examples"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 ; Use wscript to launch without showing a console window
-Name: "{group}\robost エディタを起動"; Filename: "wscript.exe"; Parameters: "//nologo ""{app}\launch-agent.vbs"""; WorkingDir: "{app}"
+Name: "{group}\robost エディタを起動"; Filename: "wscript.exe"; Parameters: "//nologo ""{app}\launch-agent.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\robost エディタを起動"; Filename: "wscript.exe"; Parameters: "//nologo ""{app}\launch-agent.vbs"""; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{commondesktop}\robost エディタを起動"; Filename: "wscript.exe"; Parameters: "//nologo ""{app}\launch-agent.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
 
 [Registry]
 Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: NeedsAddPath(ExpandConstant('{app}')); Tasks: modifypath
