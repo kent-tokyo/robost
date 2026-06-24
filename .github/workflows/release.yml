@@ -23,11 +23,6 @@ jobs:
             bin: rpa
             archive: rpa-aarch64-apple-darwin.tar.gz
 
-          - os: macos-13
-            target: x86_64-apple-darwin
-            bin: rpa
-            archive: rpa-x86_64-apple-darwin.tar.gz
-
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             bin: rpa.exe
