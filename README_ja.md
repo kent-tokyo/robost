@@ -20,12 +20,27 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 
 > **最新リリース**: [GitHub Releases](https://github.com/kent-tokyo/robost/releases/latest)
 
-### rpa — CLI ランナー
+### Windows — インストーラー（推奨）
+
+**[⬇ robost-setup.exe](https://github.com/kent-tokyo/robost/releases/latest/download/robost-setup.exe)** — ダブルクリックでインストール。追加の依存関係は不要です。
+
+- `Program Files\robost` にインストール。スタートメニューとデスクトップにショートカットを作成
+- ショートカットから起動するとブラウザが自動的に開き、ビジュアルエディタが使えます
+- Windows の「設定 → アプリ」から綺麗にアンインストール可能
+
+> **SmartScreen 警告について**: インストーラーはコード署名されていないため、「Windows によって PC が保護されました」と表示される場合があります。
+> **「詳細情報」→「実行」** をクリックしてください。これはコード署名証明書を持たないオープンソースソフトウェアでは一般的な表示です。
+
+### macOS
 
 | プラットフォーム | ダウンロード |
 |---|---|
 | macOS (Apple Silicon) | [rpa-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-aarch64-apple-darwin.tar.gz) |
-| macOS (Intel) | [rpa-x86_64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-apple-darwin.tar.gz) |
+
+### Windows — ZIP（上級者・開発者向け）
+
+| プラットフォーム | ダウンロード |
+|---|---|
 | Windows | [rpa-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip) |
 
 ## 特徴

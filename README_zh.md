@@ -20,12 +20,27 @@
 
 > **最新版本**: [GitHub Releases](https://github.com/kent-tokyo/robost/releases/latest)
 
-### rpa — CLI 运行器
+### Windows — 安装程序（推荐）
+
+**[⬇ robost-setup.exe](https://github.com/kent-tokyo/robost/releases/latest/download/robost-setup.exe)** — 双击安装，无需额外依赖。
+
+- 安装到 `Program Files\robost`，自动创建开始菜单和桌面快捷方式
+- 点击快捷方式后浏览器自动打开可视化编辑器
+- 可通过 Windows「设置 → 应用」完整卸载
+
+> **SmartScreen 警告**：由于安装程序未进行代码签名，Windows 可能显示「Windows 已保护你的电脑」。
+> 请点击**「更多信息」→「仍要运行」**继续安装。这对于没有付费签名证书的开源软件来说是正常现象。
+
+### macOS
 
 | 平台 | 下载 |
 |---|---|
 | macOS (Apple Silicon) | [rpa-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-aarch64-apple-darwin.tar.gz) |
-| macOS (Intel) | [rpa-x86_64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-apple-darwin.tar.gz) |
+
+### Windows — ZIP（高级用户 / 开发者）
+
+| 平台 | 下载 |
+|---|---|
 | Windows | [rpa-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip) |
 
 ## 特性

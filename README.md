@@ -20,12 +20,27 @@ A Rust-based OSS desktop automation (RPA) tool.
 
 > **Latest release**: [GitHub Releases](https://github.com/kent-tokyo/robost/releases/latest)
 
-### rpa — CLI Runner
+### Windows — Installer (recommended)
+
+**[⬇ robost-setup.exe](https://github.com/kent-tokyo/robost/releases/latest/download/robost-setup.exe)** — double-click to install. No extra dependencies required.
+
+- Installs to `Program Files\robost`, creates Start Menu and Desktop shortcuts
+- Launch from the shortcut → browser opens automatically to the visual editor
+- Uninstall cleanly via Windows Settings → Apps
+
+> **SmartScreen warning**: Windows may show "Windows protected your PC" because the installer is not code-signed.
+> Click **More info → Run anyway** to proceed. This is standard for open-source software without a paid signing certificate.
+
+### macOS
 
 | Platform | Download |
 |---|---|
 | macOS (Apple Silicon) | [rpa-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-aarch64-apple-darwin.tar.gz) |
-| macOS (Intel) | [rpa-x86_64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-apple-darwin.tar.gz) |
+
+### Windows — ZIP (advanced / developer)
+
+| Platform | Download |
+|---|---|
 | Windows | [rpa-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip) |
 
 ## Key Features
