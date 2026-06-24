@@ -87,7 +87,7 @@ begin
     end;
     P := Q + 1;
   end;
-  RegWriteExpandStrValue(HKEY_LOCAL_MACHINE,
+  RegWriteExpandStringValue(HKEY_LOCAL_MACHINE,
     'SYSTEM\CurrentControlSet\Control\Session Manager\Environment',
     'Path', NewPath);
 end;
