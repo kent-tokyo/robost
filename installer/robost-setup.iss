@@ -37,15 +37,16 @@ Name: "modifypath"; Description: "PATH 環境変数に robost を追加"; GroupD
 Source: "{#RpaExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "run.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "stop.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "installer\launch-agent.vbs"; DestDir: "{app}"; Flags: ignoreversion
+Source: "installer\launch-agent.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "examples\*"; DestDir: "{app}\examples"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-; Use wscript to launch without showing a console window
-Name: "{group}\robost エディタを起動"; Filename: "wscript.exe"; Parameters: "//nologo ""{app}\launch-agent.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
+; Use PowerShell to launch without showing a console window.
+; Get-NetTCPConnection guard prevents duplicate processes on double-click.
+Name: "{group}\robost エディタを起動"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\launch-agent.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\robost エディタを起動"; Filename: "wscript.exe"; Parameters: "//nologo ""{app}\launch-agent.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
+Name: "{commondesktop}\robost エディタを起動"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\launch-agent.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
 
 [Registry]
 Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: NeedsAddPath(ExpandConstant('{app}')); Tasks: modifypath

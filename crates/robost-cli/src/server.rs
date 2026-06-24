@@ -751,20 +751,21 @@ async fn agent_index(uri: axum::http::Uri) -> impl IntoResponse {
     // SPA fallback only for extension-less paths (e.g. /scenarios/123).
     // Paths with extensions that are absent from the bundle get a plain 404
     // so the browser's module loader sees a real error instead of HTML.
-    let file = if path.is_empty() {
-        EditorAssets::get("index.html")
+    // Track the actual filename being served so MIME is derived from the real
+    // extension, not the request path (e.g. "/" and "/scenarios/123" both serve
+    // index.html and must get text/html, not application/octet-stream).
+    let (file, served_name) = if path.is_empty() {
+        (EditorAssets::get("index.html"), "index.html")
+    } else if let Some(f) = EditorAssets::get(path) {
+        (Some(f), path)
+    } else if !path.contains('.') {
+        (EditorAssets::get("index.html"), "index.html")
     } else {
-        EditorAssets::get(path).or_else(|| {
-            if !path.contains('.') {
-                EditorAssets::get("index.html")
-            } else {
-                None
-            }
-        })
+        (None, path)
     };
     match file {
         Some(f) => {
-            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            let mime = mime_guess::from_path(served_name).first_or_octet_stream();
             Response::builder()
                 .header(header::CONTENT_TYPE, mime.as_ref())
                 .body(Body::from(f.data.into_owned()))

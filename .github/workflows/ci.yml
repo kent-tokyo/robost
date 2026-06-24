@@ -78,3 +78,45 @@ jobs:
       - name: Fmt check
         if: runner.os == 'Linux'
         run: cargo fmt --all --check
+
+  validate-embed-editor:
+    name: Validate embed-editor feature
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ubuntu-embed-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ubuntu-embed-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y \
+            pkg-config libglib2.0-dev libgtk-3-dev libssl-dev clang \
+            libxdo-dev libdbus-1-dev libsecret-1-dev libxkbcommon-dev \
+            libasound2-dev libfontconfig1-dev libpipewire-0.3-dev \
+            libspa-0.2-dev libgbm-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/web-editor/package-lock.json
+
+      - name: Build web editor
+        working-directory: apps/web-editor
+        run: npm ci && npm run build
+
+      - name: Build robost-cli with embed-editor
+        run: cargo build -p robost-cli --features embed-editor

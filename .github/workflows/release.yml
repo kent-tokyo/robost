@@ -11,8 +11,33 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # ── Build web editor once on ubuntu (cheapest runner, LF-clean checkout) ──
+  build-editor:
+    name: Build web editor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/web-editor/package-lock.json
+
+      - name: Build web editor
+        working-directory: apps/web-editor
+        run: npm ci && npm run build
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-editor-dist
+          path: apps/web-editor/dist/
+
   build:
     name: build (${{ matrix.target }})
+    needs: build-editor
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -46,48 +71,21 @@ jobs:
           key: release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: release-${{ matrix.target }}-
 
+      - name: Download web editor dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-editor-dist
+          path: apps/web-editor/dist/
+
       # ── macOS: Tesseract via Homebrew ──────────────────────────────────────
       - name: Install OCR deps (macOS)
         if: runner.os == 'macOS'
         run: brew install pkgconf tesseract tesseract-lang
 
       # ── Build ──────────────────────────────────────────────────────────────
-      # ── macOS: build web editor then embed into rpa ───────────────────────
-      - name: Setup Node.js (macOS)
-        if: runner.os == 'macOS'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: apps/web-editor/package-lock.json
-
-      - name: Build web editor (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          cd apps/web-editor
-          npm ci
-          npm run build
-
       - name: Build rpa (macOS)
         if: runner.os == 'macOS'
         run: cargo build -p robost-cli --release --features ocr,embed-editor --target ${{ matrix.target }}
-
-      # ── Windows: build web editor then embed into rpa.exe ─────────────────
-      - name: Setup Node.js (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: apps/web-editor/package-lock.json
-
-      - name: Build web editor (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Set-Location apps/web-editor
-          npm ci
-          npm run build
 
       # Windows uses built-in WinRT OCR (Windows.Media.Ocr) — no Tesseract/vcpkg needed.
       # Language packs: Settings > Time & Language > Language & Region > Add a language
@@ -145,7 +143,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: build
+    needs: [build-editor, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
