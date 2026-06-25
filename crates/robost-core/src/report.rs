@@ -55,6 +55,10 @@ pub struct StepRecord {
     pub elapsed_ms: u64,
     pub outcome: StepOutcome,
     pub screenshot_path: Option<PathBuf>,
+    /// NCC match score for image-matching steps (None for other step types).
+    pub confidence: Option<f32>,
+    /// JSON snapshot of all variables at the time of failure (None on success).
+    pub vars_json: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +76,7 @@ impl ExecutionReport {
         let mut f = std::fs::File::create(path)?;
         writeln!(
             f,
-            "index,name,outcome,started_at,elapsed_ms,message,screenshot"
+            "index,name,outcome,started_at,elapsed_ms,confidence,message,screenshot"
         )?;
         for s in &self.steps {
             let screenshot = s
@@ -81,14 +85,19 @@ impl ExecutionReport {
                 .map(|p| p.display().to_string())
                 .unwrap_or_default();
             let msg = s.outcome.message().replace('"', "\"\"");
+            let conf = s
+                .confidence
+                .map(|c| format!("{c:.3}"))
+                .unwrap_or_default();
             writeln!(
                 f,
-                "{},{},{},{},{},\"{}\",{}",
+                "{},{},{},{},{},{},\"{}\",{}",
                 s.index,
                 s.name,
                 s.outcome.label(),
                 s.started_at.format("%Y-%m-%d %H:%M:%S"),
                 s.elapsed_ms,
+                conf,
                 msg,
                 screenshot,
             )?;
@@ -130,23 +139,33 @@ impl ExecutionReport {
             let cls = s.outcome.css_class();
             let icon = s.outcome.icon();
             let msg = html_escape(s.outcome.message());
-            let screenshot_cell = match &s.screenshot_path {
-                Some(p) => format!(
-                    "<a href=\"{}\">screenshot</a>",
-                    html_escape(&p.display().to_string())
-                ),
-                None => String::new(),
-            };
+            let conf_cell = s
+                .confidence
+                .map(|c| format!("{c:.3}"))
+                .unwrap_or_default();
+            let mut detail = String::new();
+            if !msg.is_empty() {
+                detail.push_str(&msg);
+            }
+            if let Some(p) = &s.screenshot_path {
+                let href = html_escape(&p.display().to_string());
+                detail.push_str(&format!(" <a href=\"{href}\">screenshot</a>"));
+            }
+            if let Some(vars) = &s.vars_json {
+                detail.push_str(&format!(
+                    "<details><summary>variables</summary><pre>{}</pre></details>",
+                    html_escape(vars)
+                ));
+            }
             rows.push_str(&format!(
                 "<tr class=\"{cls}\"><td>{}</td><td>{}</td>\
                  <td class=\"outcome\">{icon} {}</td>\
-                 <td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                 <td>{}</td><td>{}</td><td>{conf_cell}</td><td>{detail}</td></tr>\n",
                 s.index,
                 html_escape(&s.name),
                 s.outcome.label(),
                 s.started_at.format("%H:%M:%S"),
                 s.elapsed_ms,
-                if msg.is_empty() { screenshot_cell } else { msg },
             ));
         }
 
@@ -177,7 +196,7 @@ tr.skip td {{ color: #888; }}
 <p>開始: {started} &nbsp; 終了: {finished} &nbsp; 所要時間: {total_ms} ms</p>
 <div class="summary {summary_class}">{summary_text}</div>
 <table>
-<tr><th>#</th><th>ステップ</th><th>結果</th><th>開始時刻</th><th>経過(ms)</th><th>詳細</th></tr>
+<tr><th>#</th><th>ステップ</th><th>結果</th><th>開始時刻</th><th>経過(ms)</th><th>confidence</th><th>詳細</th></tr>
 {rows}
 </table>
 </body>

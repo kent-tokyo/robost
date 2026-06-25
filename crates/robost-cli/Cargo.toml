@@ -29,11 +29,14 @@ glob-pattern = ["robost-core/glob-pattern"]
 [dependencies]
 robost-template.workspace = true
 robost-capture.workspace = true
+robost-input.workspace = true
+robost-vision.workspace = true
 robost-backend.workspace = true
 robost-core.workspace = true
 robost-plugin-api.workspace = true
 robost-plugin-host.workspace = true
 robost-stdlib.workspace = true
+keyring.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

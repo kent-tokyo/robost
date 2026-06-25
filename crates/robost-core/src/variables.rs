@@ -23,6 +23,11 @@ impl Variables {
         &self.0
     }
 
+    /// Serialize the variable map to a compact JSON string.
+    pub fn snapshot_json(&self) -> String {
+        serde_json::to_string(&self.0).unwrap_or_else(|_| "{}".to_owned())
+    }
+
     /// Compact key=value string for debug display.
     pub fn debug_dump(&self) -> String {
         let mut parts: Vec<String> = self

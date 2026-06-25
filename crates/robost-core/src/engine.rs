@@ -155,6 +155,8 @@ pub struct ScenarioEngine {
     progress_path: Option<PathBuf>,
     /// If set, send progress events (e.g., for HTTP/SSE streaming).
     progress_tx: Option<Arc<broadcast::Sender<ProgressEvent>>>,
+    /// Score of the last successful image-match step; read and cleared by run_steps.
+    last_match_score: std::sync::Mutex<Option<f32>>,
 }
 
 impl ScenarioEngine {
@@ -179,6 +181,7 @@ impl ScenarioEngine {
             report_records: tokio::sync::Mutex::new(Vec::new()),
             progress_path: None,
             progress_tx: None,
+            last_match_score: std::sync::Mutex::new(None),
         }
     }
 
@@ -525,6 +528,8 @@ impl ScenarioEngine {
         elapsed_ms: u64,
         outcome: StepOutcome,
         screenshot_path: Option<PathBuf>,
+        confidence: Option<f32>,
+        vars_json: Option<String>,
     ) -> StepRecord {
         StepRecord {
             index,
@@ -533,6 +538,8 @@ impl ScenarioEngine {
             elapsed_ms,
             outcome,
             screenshot_path,
+            confidence,
+            vars_json,
         }
     }
 
@@ -615,6 +622,8 @@ impl ScenarioEngine {
                                 error!(error = %e, step = i, "step failed (reconnect timeout)");
                                 let screenshot = self.save_failure_screenshot(i).await;
                                 if self.report_path.is_some() {
+                                    let vars_json = Some(vars.snapshot_json());
+                                    self.last_match_score.lock().unwrap().take();
                                     self.report_records
                                         .lock()
                                         .await
@@ -625,6 +634,8 @@ impl ScenarioEngine {
                                             step_timer.elapsed().as_millis() as u64,
                                             StepOutcome::Failed(e.to_string()),
                                             screenshot,
+                                            None,
+                                            vars_json,
                                         ));
                                 }
                                 return Err(e);
@@ -636,6 +647,8 @@ impl ScenarioEngine {
                             error!(error = %e, step = i, "step failed");
                             let screenshot = self.save_failure_screenshot(i).await;
                             if self.report_path.is_some() {
+                                let vars_json = Some(vars.snapshot_json());
+                                self.last_match_score.lock().unwrap().take();
                                 self.report_records
                                     .lock()
                                     .await
@@ -646,6 +659,8 @@ impl ScenarioEngine {
                                         step_timer.elapsed().as_millis() as u64,
                                         StepOutcome::Failed(e.to_string()),
                                         screenshot,
+                                        None,
+                                        vars_json,
                                     ));
                             }
                             return Err(e);
@@ -665,6 +680,7 @@ impl ScenarioEngine {
                                 eprintln!("[VARS] step {i}: {}", vars.debug_dump());
                             }
                             if self.report_path.is_some() {
+                                let confidence = self.last_match_score.lock().unwrap().take();
                                 self.report_records
                                     .lock()
                                     .await
@@ -674,6 +690,8 @@ impl ScenarioEngine {
                                         step_started,
                                         elapsed_ms,
                                         StepOutcome::Ok,
+                                        None,
+                                        confidence,
                                         None,
                                     ));
                             }
@@ -1736,6 +1754,7 @@ impl ScenarioEngine {
         {
             Some(m) => {
                 info!(score = m.score, "template found");
+                *self.last_match_score.lock().unwrap() = Some(m.score);
                 Ok(())
             }
             None => Err(EngineError::Timeout(step.template.clone())),
@@ -1814,6 +1833,7 @@ impl ScenarioEngine {
                 }
             } else {
                 info!(score = m.score, "template clicked");
+                *self.last_match_score.lock().unwrap() = Some(m.score);
                 return Ok(());
             }
         }
@@ -1845,6 +1865,7 @@ impl ScenarioEngine {
                     y = m.center.y,
                     "template found"
                 );
+                *self.last_match_score.lock().unwrap() = Some(m.score);
                 if let Some(save_as) = &step.save_as {
                     vars.set(
                         save_as.clone(),

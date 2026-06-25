@@ -85,6 +85,15 @@ enum Commands {
     },
     /// Run the scheduler daemon (blocks until Ctrl+C)
     Daemon,
+    /// Check that all robost subsystems are working correctly
+    Doctor,
+    /// Benchmark a template image against a directory of screenshots
+    VisionBench {
+        /// Path to the template PNG
+        template: PathBuf,
+        /// Directory containing screenshot images to test against
+        screenshots: PathBuf,
+    },
     /// Start the local RPA agent with a built-in HTTP server and web UI
     Agent {
         /// Port to listen on
@@ -300,6 +309,11 @@ fn main() -> Result<()> {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(scheduler::run_daemon())
         }
+        Commands::Doctor => run_doctor(),
+        Commands::VisionBench {
+            template,
+            screenshots,
+        } => run_vision_bench(&template, &screenshots),
         Commands::Agent {
             port,
             scenarios_dir,
@@ -485,4 +499,156 @@ fn fetch_to_file(url: &str, dest: &std::path::Path) -> Result<()> {
     let mut buf = Vec::new();
     resp.into_reader().read_to_end(&mut buf)?;
     std::fs::write(dest, buf).with_context(|| format!("write to {} failed", dest.display()))
+}
+
+// ── rpa doctor ───────────────────────────────────────────────────────────────
+
+fn run_doctor() -> Result<()> {
+    let mut ok = true;
+
+    // 1. Screen capture
+    match robost_capture::capture_screen() {
+        Ok(img) => println!(
+            "[OK]   screen capture     ({}x{})",
+            img.width(),
+            img.height()
+        ),
+        Err(e) => {
+            println!("[FAIL] screen capture     ({e})");
+            ok = false;
+        }
+    }
+
+    // 2. Input emulation
+    match robost_input::InputController::new() {
+        Ok(_) => println!("[OK]   input emulation    (enigo initialized)"),
+        Err(e) => {
+            println!("[FAIL] input emulation    ({e})");
+            ok = false;
+        }
+    }
+
+    // 3. OCR backend (compile-time feature detection)
+    #[cfg(feature = "windows-ocr")]
+    println!("[OK]   OCR backend        (windows-ocr built-in)");
+    #[cfg(all(feature = "ocr", not(feature = "windows-ocr")))]
+    println!("[OK]   OCR backend        (Tesseract / leptess)");
+    #[cfg(not(any(feature = "ocr", feature = "windows-ocr")))]
+    println!("[WARN] OCR backend        (no OCR feature enabled; rebuild with --features ocr)");
+
+    // 4. Keychain access
+    #[cfg(feature = "keychain")]
+    {
+        let entry = keyring::Entry::new("robost-doctor", "test")
+            .context("keychain: failed to create entry")?;
+        match entry.set_password("robost-doctor-probe") {
+            Ok(_) => {
+                let _ = entry.delete_credential();
+                println!("[OK]   keychain access    (read/write successful)");
+            }
+            Err(e) => {
+                println!("[WARN] keychain access    ({e})");
+            }
+        }
+    }
+    #[cfg(not(feature = "keychain"))]
+    println!("[SKIP] keychain access    (keychain feature not enabled)");
+
+    if ok {
+        println!("\nAll checks passed.");
+    } else {
+        println!("\nOne or more checks failed.");
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+// ── rpa vision-bench ─────────────────────────────────────────────────────────
+
+fn run_vision_bench(template_path: &std::path::Path, screenshots_dir: &std::path::Path) -> Result<()> {
+    use robost_vision::TemplateMatcher;
+    use robost_template::ScreenPoint;
+
+    let template_img = image::open(template_path)
+        .with_context(|| format!("failed to load template: {}", template_path.display()))?
+        .to_rgba8();
+
+    let entries: Vec<_> = std::fs::read_dir(screenshots_dir)
+        .with_context(|| format!("cannot read directory: {}", screenshots_dir.display()))?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|x| x.to_str())
+                .map(|x| matches!(x.to_lowercase().as_str(), "png" | "jpg" | "jpeg"))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    if entries.is_empty() {
+        println!("No PNG/JPG files found in {}", screenshots_dir.display());
+        return Ok(());
+    }
+
+    // Check for too many matches (template too generic)
+    let matcher = TemplateMatcher::default();
+    let origin = ScreenPoint { x: 0, y: 0 };
+
+    println!(
+        "{:<40} {:>10}  {}",
+        "FILE", "CONFIDENCE", "FOUND"
+    );
+    println!("{}", "-".repeat(60));
+
+    let mut scores: Vec<f32> = Vec::new();
+    let mut generic_warn = false;
+
+    for entry in &entries {
+        let path = entry.path();
+        let hay = match image::open(&path) {
+            Ok(i) => i.to_rgba8(),
+            Err(e) => {
+                println!("{:<40}  load error: {e}", path.display().to_string());
+                continue;
+            }
+        };
+
+        let display = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        match matcher.find(&hay, &template_img, origin) {
+            Ok(m) => {
+                scores.push(m.score);
+                // Check for too-generic template using find_all
+                let all = matcher.find_all(&hay, &template_img, origin);
+                if all.len() > 3 {
+                    generic_warn = true;
+                }
+                println!("{:<40} {:>10.3}  yes", display, m.score);
+            }
+            Err(robost_vision::MatchError::BelowThreshold { score, .. }) => {
+                scores.push(score);
+                println!("{:<40} {:>10.3}  no   ← LOW", display, score);
+            }
+            Err(e) => {
+                println!("{:<40}  error: {e}", display);
+            }
+        }
+    }
+
+    if !scores.is_empty() {
+        let avg = scores.iter().sum::<f32>() / scores.len() as f32;
+        println!("\nAverage confidence: {avg:.3}");
+        if avg < 0.80 {
+            println!("[WARN] Low average confidence — consider capturing a cleaner template.");
+        }
+    }
+    if generic_warn {
+        println!("[WARN] Template matched >3 regions in at least one screenshot — may be too generic.");
+    }
+
+    Ok(())
 }
