@@ -37,11 +37,14 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 |---|---|
 | macOS (Apple Silicon) | [rpa-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-aarch64-apple-darwin.tar.gz) |
 
-### Windows — ZIP（上級者・開発者向け）
+### Windows — ポータブル ZIP
 
 | プラットフォーム | ダウンロード |
 |---|---|
 | Windows | [rpa-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip) |
+
+- 展開して **`rpa.exe` をダブルクリック** — ブラウザが自動で開きビジュアルエディタが使えます
+- インストール不要。どのフォルダからでも実行できます
 
 ## 特徴
 

@@ -37,11 +37,14 @@
 |---|---|
 | macOS (Apple Silicon) | [rpa-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-aarch64-apple-darwin.tar.gz) |
 
-### Windows — ZIP（高级用户 / 开发者）
+### Windows — 便携 ZIP
 
 | 平台 | 下载 |
 |---|---|
 | Windows | [rpa-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip) |
+
+- 解压后**双击 `rpa.exe`** — 浏览器自动打开可视化编辑器
+- 无需安装，可在任意目录运行
 
 ## 特性
 
