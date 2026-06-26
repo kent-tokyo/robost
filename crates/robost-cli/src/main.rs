@@ -13,7 +13,7 @@ use std::sync::Arc;
 #[command(name = "rpa", about = "RPA automation tool")]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -176,7 +176,7 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    match cli.command {
+    match cli.command.unwrap_or(Commands::Agent { port: 9921, scenarios_dir: None, no_browser: false }) {
         Commands::Run {
             scenario,
             wait_ms,
