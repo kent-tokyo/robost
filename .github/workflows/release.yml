@@ -128,6 +128,15 @@ jobs:
           $rpaExe = "target\$env:BUILD_TARGET\release\rpa.exe"
           iscc "/DAppVersion=$env:APP_VERSION" "/DRpaExe=$rpaExe" installer\robost-setup.iss
 
+      - name: Verify installer exists
+        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          if (!(Test-Path "installer/output/robost-setup.exe")) {
+            Get-ChildItem -Recurse installer
+            throw "robost-setup.exe was not generated — check Inno Setup OutputBaseFilename"
+          }
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
