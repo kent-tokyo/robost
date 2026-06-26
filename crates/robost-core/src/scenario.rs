@@ -457,6 +457,9 @@ pub struct ScriptStep {
 pub struct ForeachStep {
     /// Name of the list variable to iterate over.
     pub var: String,
+    /// Variable name to receive the current item (default: "item").
+    #[serde(default)]
+    pub item_var: Option<String>,
     /// Optional variable name to receive the 0-based loop index.
     #[serde(default)]
     pub index_var: Option<String>,
@@ -578,6 +581,10 @@ pub struct ShellStep {
     #[serde(default)]
     pub args: Vec<String>,
     pub save_as: Option<String>,
+    #[serde(default)]
+    pub save_exit_code: Option<String>,
+    #[serde(default)]
+    pub fail_on_error: bool,
     #[serde(default = "default_shell_timeout_ms")]
     pub timeout_ms: u64,
 }

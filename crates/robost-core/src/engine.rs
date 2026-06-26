@@ -1681,6 +1681,9 @@ impl ScenarioEngine {
                     if consecutive >= needed {
                         return Ok(last_match);
                     }
+                    if std::time::Instant::now() >= deadline {
+                        return Ok(None);
+                    }
                     // Need more frames; sleep briefly and re-check.
                     self.check_cancelled()?;
                     sleep(Duration::from_millis(retry_interval_ms)).await;
@@ -2127,8 +2130,9 @@ impl ScenarioEngine {
             }
         };
 
+        let item_key = step.item_var.as_deref().unwrap_or("item").to_owned();
         for (i, item) in list.into_iter().enumerate() {
-            vars.set("item".to_owned(), item);
+            vars.set(item_key.clone(), item);
             if let Some(ref iv) = step.index_var {
                 vars.set(
                     iv.clone(),
@@ -2232,6 +2236,15 @@ impl ScenarioEngine {
                 .trim_end()
                 .to_owned();
             vars.set(save_as.clone(), serde_json::Value::String(stdout));
+        }
+        if let Some(key) = &step.save_exit_code {
+            vars.set(key.clone(), serde_json::Value::Number(code.into()));
+        }
+        if step.fail_on_error && !output.status.success() {
+            return Err(EngineError::Other(format!(
+                "shell command '{}' exited with code {code}",
+                step.cmd
+            )));
         }
         Ok(())
     }
@@ -3360,8 +3373,8 @@ impl ScenarioEngine {
     // ── Mouse coordinate methods ────────────────────────────────────────────
 
     fn mouse_move(&self, step: &MouseMoveStep, vars: &Variables) -> Result<()> {
-        let x = self.resolve_coord(&step.x, vars);
-        let y = self.resolve_coord(&step.y, vars);
+        let x = self.resolve_coord(&step.x, vars)?;
+        let y = self.resolve_coord(&step.y, vars)?;
         if self.dry_run {
             info!(dry_run = true, x, y, "mouse_move skipped");
             return Ok(());
@@ -3372,8 +3385,8 @@ impl ScenarioEngine {
     }
 
     fn mouse_click_xy(&self, step: &MouseClickXyStep, vars: &Variables) -> Result<()> {
-        let x = self.resolve_coord(&step.x, vars);
-        let y = self.resolve_coord(&step.y, vars);
+        let x = self.resolve_coord(&step.x, vars)?;
+        let y = self.resolve_coord(&step.y, vars)?;
         if self.dry_run {
             info!(dry_run = true, x, y, "mouse_click_xy skipped");
             return Ok(());
@@ -3389,12 +3402,12 @@ impl ScenarioEngine {
 
     async fn mouse_drag(&self, step: &MouseDragStep, vars: &Variables) -> Result<()> {
         let from = robost_template::ScreenPoint {
-            x: self.resolve_coord(&step.from_x, vars),
-            y: self.resolve_coord(&step.from_y, vars),
+            x: self.resolve_coord(&step.from_x, vars)?,
+            y: self.resolve_coord(&step.from_y, vars)?,
         };
         let to = robost_template::ScreenPoint {
-            x: self.resolve_coord(&step.to_x, vars),
-            y: self.resolve_coord(&step.to_y, vars),
+            x: self.resolve_coord(&step.to_x, vars)?,
+            y: self.resolve_coord(&step.to_y, vars)?,
         };
         if self.dry_run {
             info!(dry_run = true, "mouse_drag skipped");
@@ -3420,8 +3433,8 @@ impl ScenarioEngine {
     }
 
     async fn mouse_hover(&self, step: &MouseHoverStep, vars: &Variables) -> Result<()> {
-        let x = self.resolve_coord(&step.x, vars);
-        let y = self.resolve_coord(&step.y, vars);
+        let x = self.resolve_coord(&step.x, vars)?;
+        let y = self.resolve_coord(&step.y, vars)?;
         if self.dry_run {
             info!(
                 dry_run = true,
@@ -3439,17 +3452,13 @@ impl ScenarioEngine {
         Ok(())
     }
 
-    /// Expand template variables in `s`, then parse as i32.
-    /// Returns 0 on parse failure (and logs a warning).
-    fn resolve_coord(&self, s: &str, vars: &Variables) -> i32 {
+    fn resolve_coord(&self, s: &str, vars: &Variables) -> Result<i32> {
         let expanded = vars.expand(s);
-        match expanded.trim().parse::<i32>() {
-            Ok(v) => v,
-            Err(_) => {
-                warn!(raw = %s, expanded = %expanded, "resolve_coord: invalid coordinate, defaulting to 0");
-                0
-            }
-        }
+        expanded.trim().parse::<i32>().map_err(|_| {
+            EngineError::Other(format!(
+                "invalid coordinate '{s}' (expanded: '{expanded}')"
+            ))
+        })
     }
 
     // ── HTTP client methods ─────────────────────────────────────────────────
