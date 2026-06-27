@@ -85,10 +85,7 @@ impl ExecutionReport {
                 .map(|p| p.display().to_string())
                 .unwrap_or_default();
             let msg = s.outcome.message().replace('"', "\"\"");
-            let conf = s
-                .confidence
-                .map(|c| format!("{c:.3}"))
-                .unwrap_or_default();
+            let conf = s.confidence.map(|c| format!("{c:.3}")).unwrap_or_default();
             writeln!(
                 f,
                 "{},{},{},{},{},{},\"{}\",{}",
@@ -139,10 +136,7 @@ impl ExecutionReport {
             let cls = s.outcome.css_class();
             let icon = s.outcome.icon();
             let msg = html_escape(s.outcome.message());
-            let conf_cell = s
-                .confidence
-                .map(|c| format!("{c:.3}"))
-                .unwrap_or_default();
+            let conf_cell = s.confidence.map(|c| format!("{c:.3}")).unwrap_or_default();
             let mut detail = String::new();
             if !msg.is_empty() {
                 detail.push_str(&msg);

@@ -100,9 +100,7 @@ fn capture_window_class(class_name: &str) -> Result<RgbaImage> {
 
         let wide: Vec<u16> = class_name.encode_utf16().chain(Some(0)).collect();
         // ponytail: finds the first top-level window of this class; good enough
-        let hwnd = unsafe {
-            FindWindowExW(None, None, PCWSTR(wide.as_ptr()), PCWSTR::null())
-        };
+        let hwnd = unsafe { FindWindowExW(None, None, PCWSTR(wide.as_ptr()), PCWSTR::null()) };
         match hwnd {
             Ok(h) if !h.is_invalid() => {
                 let mut buf = vec![0u16; 512];

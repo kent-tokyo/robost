@@ -471,9 +471,8 @@ mod windows_impl {
                         (UIA_ClassNamePropertyId, CondValue::Str(s.clone()))
                     }
                     UiaSelector::ControlType(s) => {
-                        let type_id = control_type_id(s).ok_or_else(|| {
-                            UiaError::Other(format!("unknown control type: {s}"))
-                        })?;
+                        let type_id = control_type_id(s)
+                            .ok_or_else(|| UiaError::Other(format!("unknown control type: {s}")))?;
                         (UIA_ControlTypePropertyId, CondValue::Int(type_id))
                     }
                 };
@@ -527,7 +526,11 @@ mod windows_impl {
                     let child = el_array
                         .GetElement(i)
                         .map_err(|e| UiaError::Com(e.to_string()))?;
-                    let name = child.CurrentName().unwrap_or_default().to_string().to_lowercase();
+                    let name = child
+                        .CurrentName()
+                        .unwrap_or_default()
+                        .to_string()
+                        .to_lowercase();
                     if name.contains(&needle) {
                         return Ok(Element {
                             el: child,

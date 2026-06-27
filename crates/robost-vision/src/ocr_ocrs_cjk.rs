@@ -4,9 +4,9 @@
 //! - `detection.rten` (or `.onnx`) — text detection model
 //! - `recognition.rten` (or `.onnx`) — text recognition model (PP-OCRv5 CJK)
 
-use std::path::Path;
-use image::RgbaImage;
 use crate::types::Rect;
+use image::RgbaImage;
+use std::path::Path;
 
 /// Character-level OCR result with bounding box and recognition confidence.
 pub struct OcrWord {
@@ -88,13 +88,16 @@ impl OcrsCjkEngine {
     ) -> Result<String, OcrsCjkError> {
         let x0 = region.x.max(0) as u32;
         let y0 = region.y.max(0) as u32;
-        let x1 = (region.x + region.width as i32).min(image.width() as i32).max(0) as u32;
-        let y1 = (region.y + region.height as i32).min(image.height() as i32).max(0) as u32;
+        let x1 = (region.x + region.width as i32)
+            .min(image.width() as i32)
+            .max(0) as u32;
+        let y1 = (region.y + region.height as i32)
+            .min(image.height() as i32)
+            .max(0) as u32;
         if x1 <= x0 || y1 <= y0 {
             return Ok(String::new());
         }
-        let cropped =
-            image::imageops::crop_imm(image, x0, y0, x1 - x0, y1 - y0).to_image();
+        let cropped = image::imageops::crop_imm(image, x0, y0, x1 - x0, y1 - y0).to_image();
         self.extract_text(&cropped)
     }
 

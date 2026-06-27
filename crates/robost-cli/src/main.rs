@@ -194,7 +194,11 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    match cli.command.unwrap_or(Commands::Agent { port: 9921, scenarios_dir: None, no_browser: false }) {
+    match cli.command.unwrap_or(Commands::Agent {
+        port: 9921,
+        scenarios_dir: None,
+        no_browser: false,
+    }) {
         Commands::Run {
             scenario,
             wait_ms,
@@ -382,7 +386,11 @@ fn main() -> Result<()> {
                 .build()?;
             rt.block_on(server::run_agent_server(&bind_addr, dir))
         }
-        Commands::Inspect { window, point, hover } => run_inspect(window, point, hover),
+        Commands::Inspect {
+            window,
+            point,
+            hover,
+        } => run_inspect(window, point, hover),
         Commands::Plugin { action } => match action {
             PluginCommands::Install { source, yes } => {
                 let (_tmpdir, wasm_path) = resolve_plugin_source(&source)?;
@@ -471,8 +479,7 @@ fn run_inspect(window: Option<String>, point: Option<Vec<i32>>, hover: Option<u6
         let secs = if secs == 0 { 5 } else { secs };
         eprintln!("カーソルを要素に合わせてください... ({secs} 秒後に取得)");
         std::thread::sleep(std::time::Duration::from_secs(secs));
-        let (x, y) = robost_uia::UiaFinder::cursor_pos()
-            .context("cursor_pos: Windows only")?;
+        let (x, y) = robost_uia::UiaFinder::cursor_pos().context("cursor_pos: Windows only")?;
         let finder = robost_uia::UiaFinder::new().context("UIA init failed — Windows only")?;
         let el = finder
             .element_at_point(x, y)
@@ -481,8 +488,7 @@ fn run_inspect(window: Option<String>, point: Option<Vec<i32>>, hover: Option<u6
         return Ok(());
     }
 
-    let finder = robost_uia::UiaFinder::new()
-        .context("UIA init failed — Windows only")?;
+    let finder = robost_uia::UiaFinder::new().context("UIA init failed — Windows only")?;
 
     let elements: Vec<robost_uia::ElementInfo> = if let Some(coords) = point {
         let el = finder
@@ -647,8 +653,12 @@ fn run_doctor() -> Result<()> {
                     .or_else(|_| std::env::var("USERPROFILE"))
                     .map(|h| format!("{h}/.robost/models"))
                     .unwrap_or_default();
-                let has_default = std::path::Path::new(&default_dir).join("detection.rten").exists()
-                    || std::path::Path::new(&default_dir).join("detection.onnx").exists();
+                let has_default = std::path::Path::new(&default_dir)
+                    .join("detection.rten")
+                    .exists()
+                    || std::path::Path::new(&default_dir)
+                        .join("detection.onnx")
+                        .exists();
                 if has_default {
                     println!("[OK]   ocrs-cjk OCR       (models found: {default_dir})");
                 } else {
@@ -694,7 +704,9 @@ fn run_doctor() -> Result<()> {
     #[cfg(target_os = "windows")]
     {
         if check_is_admin() {
-            println!("[OK]   Admin mode        (running as administrator — can automate elevated apps)");
+            println!(
+                "[OK]   Admin mode        (running as administrator — can automate elevated apps)"
+            );
         } else {
             println!("[WARN] Admin mode        (not admin — elevated apps cannot be automated; re-run as administrator if needed)");
         }
@@ -722,9 +734,12 @@ fn check_is_admin() -> bool {
 
 // ── rpa vision-bench ─────────────────────────────────────────────────────────
 
-fn run_vision_bench(template_path: &std::path::Path, screenshots_dir: &std::path::Path) -> Result<()> {
-    use robost_vision::TemplateMatcher;
+fn run_vision_bench(
+    template_path: &std::path::Path,
+    screenshots_dir: &std::path::Path,
+) -> Result<()> {
     use robost_template::ScreenPoint;
+    use robost_vision::TemplateMatcher;
 
     let template_img = image::open(template_path)
         .with_context(|| format!("failed to load template: {}", template_path.display()))?
@@ -801,7 +816,9 @@ fn run_vision_bench(template_path: &std::path::Path, screenshots_dir: &std::path
         }
     }
     if generic_warn {
-        println!("[WARN] Template matched >3 regions in at least one screenshot — may be too generic.");
+        println!(
+            "[WARN] Template matched >3 regions in at least one screenshot — may be too generic."
+        );
     }
 
     Ok(())

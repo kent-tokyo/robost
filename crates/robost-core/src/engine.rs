@@ -48,8 +48,8 @@ use crate::scenario::{
     UiaBy, UiaCheckStep, UiaClickStep, UiaFindStep, UiaGetChildrenStep, UiaGetStep, UiaSelectStep,
     UiaSetStep, UiaWaitStep, UntilSpec, UrlOpenStep, VarTypeStep, WaitChangeStep, WaitColorStep,
     WaitImageStep, WaitNoImageStep, WaitProcessStep, WaitUntilStep, WaitWindowStep, WhileStep,
-    WidthStep, WindowControlAction, WindowControlStep, WindowState, ZipCompressStep, ZipExtractStep,
-    ZipListStep,
+    WidthStep, WindowControlAction, WindowControlStep, WindowState, ZipCompressStep,
+    ZipExtractStep, ZipListStep,
 };
 #[cfg(feature = "http")]
 use crate::scenario::{
@@ -362,7 +362,11 @@ impl ScenarioEngine {
             obj["screenshot"] = serde_json::Value::String(p.to_string_lossy().into_owned());
         }
         let line = serde_json::to_string(&obj).unwrap_or_default() + "\n";
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
             let _ = f.write_all(line.as_bytes());
         }
     }
@@ -800,13 +804,12 @@ impl ScenarioEngine {
                             }
 
                             // Always screenshot (mode = Always).
-                            let success_shot = if self.effective_screenshots_mode()
-                                == ScreenshotsMode::Always
-                            {
-                                self.save_step_screenshot(i, step.name()).await
-                            } else {
-                                None
-                            };
+                            let success_shot =
+                                if self.effective_screenshots_mode() == ScreenshotsMode::Always {
+                                    self.save_step_screenshot(i, step.name()).await
+                                } else {
+                                    None
+                                };
 
                             if self.trace_path.is_some() {
                                 self.append_trace(
@@ -1904,7 +1907,14 @@ impl ScenarioEngine {
         let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         let target = Self::capture_target(&step.window);
         match self
-            .poll_match(template, target, deadline, interval_ms, step.masks.clone(), stable)
+            .poll_match(
+                template,
+                target,
+                deadline,
+                interval_ms,
+                step.masks.clone(),
+                stable,
+            )
             .await?
         {
             Some(m) => {
@@ -1949,7 +1959,12 @@ impl ScenarioEngine {
                     ClickAction::Double => self.backend.double_click(point)?,
                 }
             } else {
-                info!(dry_run = true, x = point.x, y = point.y, "click_image skipped");
+                info!(
+                    dry_run = true,
+                    x = point.x,
+                    y = point.y,
+                    "click_image skipped"
+                );
             }
             if let Some(ms) = step.post_click_ms {
                 sleep(Duration::from_millis(ms)).await;
@@ -1968,7 +1983,10 @@ impl ScenarioEngine {
                     *self.last_match_score.lock().unwrap() = Some(m.score);
                     return Ok(());
                 }
-                warn!(attempt, max_retries, "click_image: until condition not met; retrying");
+                warn!(
+                    attempt,
+                    max_retries, "click_image: until condition not met; retrying"
+                );
                 if attempt + 1 == max_retries {
                     return Err(EngineError::Timeout(format!(
                         "click_image until: condition not met after {} attempts",
@@ -2030,7 +2048,9 @@ impl ScenarioEngine {
         if let Some(ref no_img) = until.no_image {
             let p = self.safe_join(&vars.expand(no_img))?;
             let tmpl = Arc::new(self.load_image(&p)?);
-            return self.poll_gone(tmpl, target.clone(), deadline, interval_ms, vec![]).await;
+            return self
+                .poll_gone(tmpl, target.clone(), deadline, interval_ms, vec![])
+                .await;
         }
         if let Some(ref win_title) = until.window {
             let title = vars.expand(win_title);
@@ -3050,7 +3070,9 @@ impl ScenarioEngine {
             let home = std::env::var("HOME")
                 .or_else(|_| std::env::var("USERPROFILE"))
                 .map_err(|_| "cannot find home directory for OCR model path".to_string())?;
-            std::path::PathBuf::from(home).join(".robost").join("models")
+            std::path::PathBuf::from(home)
+                .join(".robost")
+                .join("models")
         };
 
         let try_ext = |name: &str| -> Option<std::path::PathBuf> {
@@ -3197,9 +3219,9 @@ impl ScenarioEngine {
                             })
                             .unwrap_or(1.0)
                             .max(1.0);
-                        let found = engine2
-                            .find_text_bounds(&img, &text2)
-                            .map_err(|e| EngineError::Other(format!("click_text[ocrs-cjk]: {e}")))?;
+                        let found = engine2.find_text_bounds(&img, &text2).map_err(|e| {
+                            EngineError::Other(format!("click_text[ocrs-cjk]: {e}"))
+                        })?;
                         Ok(found.map(|r| {
                             let cx = ((r.x + r.width as i32 / 2) as f32 / scale) as i32;
                             let cy = ((r.y + r.height as i32 / 2) as f32 / scale) as i32;
@@ -3249,7 +3271,10 @@ impl ScenarioEngine {
                 if cond_met {
                     return Ok(());
                 }
-                warn!(attempt, max_retries, "click_text[ocrs-cjk]: until not met; retrying");
+                warn!(
+                    attempt,
+                    max_retries, "click_text[ocrs-cjk]: until not met; retrying"
+                );
                 if attempt + 1 == max_retries {
                     return Err(EngineError::Timeout(format!(
                         "click_text[ocrs-cjk] until: condition not met after {max_retries} attempts"
@@ -3506,9 +3531,7 @@ impl ScenarioEngine {
                         Some(pt) => break pt,
                         None => {
                             if Instant::now() >= deadline {
-                                return Err(EngineError::Timeout(format!(
-                                    "click_text: {text:?}"
-                                )));
+                                return Err(EngineError::Timeout(format!("click_text: {text:?}")));
                             }
                             self.check_cancelled()?;
                             sleep(Duration::from_millis(step.retry_interval_ms)).await;
@@ -3545,7 +3568,10 @@ impl ScenarioEngine {
                     if cond_met {
                         return Ok(());
                     }
-                    warn!(attempt, max_retries, "click_text: until condition not met; retrying");
+                    warn!(
+                        attempt,
+                        max_retries, "click_text: until condition not met; retrying"
+                    );
                     if attempt + 1 == max_retries {
                         return Err(EngineError::Timeout(format!(
                             "click_text until: condition not met after {max_retries} attempts"
@@ -3565,7 +3591,9 @@ impl ScenarioEngine {
                             let (img, _) = backend.capture_with_origin(&tgt)?;
                             let r = robost_vision::ocr::OcrEngine::new(l)
                                 .find_text_bounds(&img, &t)
-                                .map_err(|e| EngineError::Other(format!("click_text verify: {e}")))?;
+                                .map_err(|e| {
+                                    EngineError::Other(format!("click_text verify: {e}"))
+                                })?;
                             Ok(r.is_some())
                         })
                         .await
@@ -3582,7 +3610,10 @@ impl ScenarioEngine {
                     if gone {
                         return Ok(());
                     }
-                    warn!(attempt, max_retries, "click_text: text still visible; retrying");
+                    warn!(
+                        attempt,
+                        max_retries, "click_text: text still visible; retrying"
+                    );
                     if attempt + 1 == max_retries {
                         return Err(EngineError::Timeout(format!(
                             "click_text verify_gone: {text:?} still visible after {max_retries} attempts"
@@ -3804,8 +3835,7 @@ impl ScenarioEngine {
         {
             let _ = (step, vars);
             Err(EngineError::Other(
-                "ocr_dump requires the 'ocr', 'windows-ocr', or 'ocrs-cjk-ocr' feature"
-                    .to_owned(),
+                "ocr_dump requires the 'ocr', 'windows-ocr', or 'ocrs-cjk-ocr' feature".to_owned(),
             ))
         }
     }
@@ -4214,9 +4244,7 @@ impl ScenarioEngine {
     fn resolve_coord(&self, s: &str, vars: &Variables) -> Result<i32> {
         let expanded = vars.expand(s);
         expanded.trim().parse::<i32>().map_err(|_| {
-            EngineError::Other(format!(
-                "invalid coordinate '{s}' (expanded: '{expanded}')"
-            ))
+            EngineError::Other(format!("invalid coordinate '{s}' (expanded: '{expanded}')"))
         })
     }
 
@@ -5812,16 +5840,20 @@ impl ScenarioEngine {
         let save_as = step.save_as.clone();
         let window = step.window.clone();
         let result = Self::spawn_uia(move || {
-            uia_poll(selector, window, timeout_ms, "uia_get", |el| {
-                match property.as_str() {
+            uia_poll(
+                selector,
+                window,
+                timeout_ms,
+                "uia_get",
+                |el| match property.as_str() {
                     "name" => el.get_name(),
                     "value" => el.get_value(),
                     "class" => el.get_class_name(),
                     other => Err(robost_uia::UiaError::Other(format!(
                         "unknown uia property: {other}"
                     ))),
-                }
-            })
+                },
+            )
         })
         .await?;
         vars.set(save_as, serde_json::Value::String(result));
@@ -5886,8 +5918,7 @@ impl ScenarioEngine {
             use crate::scenario::UiaState;
             let finder = robost_uia::UiaFinder::new()
                 .map_err(|e| EngineError::Other(format!("uia_wait: {e}")))?;
-            let deadline =
-                std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
             loop {
                 let find_result = if let Some(ref win) = window {
                     finder
@@ -6943,7 +6974,7 @@ impl ScenarioEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scenario::{ScenarioStep, ScenarioDefaults, ScreenshotSaveStep};
+    use crate::scenario::{ScenarioDefaults, ScenarioStep, ScreenshotSaveStep};
 
     fn make_engine_bare() -> ScenarioEngine {
         use robost_backend::LocalBackend;
@@ -7017,7 +7048,7 @@ steps:
         match &scenario.steps[0] {
             ScenarioStep::OcrMatch(s) => {
                 assert_eq!(s.lang, "jpn+eng");
-                assert_eq!(s.timeout_ms, None);     // resolved at runtime via eff_timeout
+                assert_eq!(s.timeout_ms, None); // resolved at runtime via eff_timeout
                 assert_eq!(s.retry_interval_ms, None); // resolved at runtime via eff_interval
                 assert!(s.contains.is_none());
                 assert!(s.save_as.is_none());
