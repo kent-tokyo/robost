@@ -333,8 +333,7 @@ impl ScenarioEngine {
             .unwrap_or(builtin)
     }
 
-    /// Append a single JSONL line to the trace file (if configured). Sync write is acceptable
-    /// since each line is tiny (~200 bytes) and writes happen at most once per step.
+    #[allow(clippy::too_many_arguments)]
     fn append_trace(
         &self,
         index: usize,
@@ -620,6 +619,7 @@ impl ScenarioEngine {
 
     // ── Step execution ──────────────────────────────────────────────────────
 
+    #[allow(clippy::too_many_arguments)]
     fn make_step_record(
         index: usize,
         step: &ScenarioStep,
