@@ -5429,6 +5429,7 @@ dependencies = [
 [[package]]
 name = "ocrs-cjk"
 version = "0.1.0"
+source = "git+https://github.com/kent-tokyo/ocrs-cjk?rev=2f72f76ac2152ee1112ee6b6e36048bab069f391#2f72f76ac2152ee1112ee6b6e36048bab069f391"
 dependencies = [
  "anyhow",
  "rayon",

@@ -14,7 +14,27 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # Reject path deps that escape the workspace (they break CI on fresh checkouts).
+  # All external crates must use git = or version = instead.
+  check-external-path-deps:
+    name: Check no external path deps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Reject path deps escaping the workspace
+        shell: bash
+        run: |
+          bad=$(grep -rn 'path = "\.\./\.\./' crates/*/Cargo.toml || true)
+          if [ -n "$bad" ]; then
+            echo "ERROR: path dependency escaping the workspace:"
+            echo "$bad"
+            echo "Use git = or version = for dependencies outside this repo."
+            exit 1
+          fi
+          echo "OK: no external path dependencies found."
+
   build-and-test:
+    needs: check-external-path-deps
     name: build + test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -84,6 +104,7 @@ jobs:
 
   validate-embed-editor:
     name: Validate embed-editor feature
+    needs: check-external-path-deps
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
