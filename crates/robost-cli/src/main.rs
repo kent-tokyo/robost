@@ -751,10 +751,7 @@ fn run_vision_bench(template_path: &std::path::Path, screenshots_dir: &std::path
     let matcher = TemplateMatcher::default();
     let origin = ScreenPoint { x: 0, y: 0 };
 
-    println!(
-        "{:<40} {:>10}  {}",
-        "FILE", "CONFIDENCE", "FOUND"
-    );
+    println!("{:<40} {:>10}  FOUND", "FILE", "CONFIDENCE");
     println!("{}", "-".repeat(60));
 
     let mut scores: Vec<f32> = Vec::new();
