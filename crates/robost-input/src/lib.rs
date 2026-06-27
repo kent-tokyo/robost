@@ -209,7 +209,8 @@ fn windows_focus(title: &str) -> Result<()> {
 
 #[cfg(windows)]
 fn find_hwnd_by_title_contains(search: &str) -> Option<windows::Win32::Foundation::HWND> {
-    use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows::Win32::Foundation::{HWND, LPARAM};
+    use windows::core::BOOL;
     use windows::Win32::UI::WindowsAndMessaging::{
         EnumWindows, GetWindowTextLengthW, GetWindowTextW, IsWindowVisible,
     };

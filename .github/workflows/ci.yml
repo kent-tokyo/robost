@@ -32,6 +32,16 @@ jobs:
             exit 1
           fi
           echo "OK: no external path dependencies found."
+      - name: Reject Win32::Foundation::BOOL import (moved to windows::core in 0.61)
+        shell: bash
+        run: |
+          bad=$(grep -rn 'Foundation.*\bBOOL\b' crates/*/src/ || true)
+          if [ -n "$bad" ]; then
+            echo "ERROR: BOOL imported from Win32::Foundation; use windows::core::BOOL instead:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "OK: no Win32::Foundation::BOOL imports."
 
   build-and-test:
     needs: check-external-path-deps
