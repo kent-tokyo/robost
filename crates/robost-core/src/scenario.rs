@@ -12,6 +12,23 @@ pub struct DataSource {
     pub sheet: Option<String>,
 }
 
+/// Scenario-level defaults applied to every step that supports them.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ScenarioDefaults {
+    /// Default timeout (ms) for steps that accept timeout_ms: None.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+    /// Default retry interval (ms) for steps that accept retry_interval_ms: None.
+    #[serde(default)]
+    pub retry_interval_ms: Option<u64>,
+    /// Default stable_frames for steps that accept stable_frames: None.
+    #[serde(default)]
+    pub stable_frames: Option<u8>,
+    /// Auto-capture screenshot when a step fails.
+    #[serde(default)]
+    pub screenshot_on_failure: bool,
+}
+
 /// Top-level scenario loaded from a YAML file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Scenario {
@@ -30,6 +47,9 @@ pub struct Scenario {
     /// How long (ms) to sleep between reconnect poll attempts. Default: 1000ms.
     #[serde(default = "default_reconnect_retry_ms")]
     pub reconnect_retry_ms: u64,
+    /// Per-scenario timing and behaviour defaults applied to steps with None timing fields.
+    #[serde(default)]
+    pub defaults: ScenarioDefaults,
 }
 
 /// A single step inside a scenario or sub-scenario.
@@ -381,20 +401,43 @@ pub enum ClickAction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WaitImageStep {
     pub template: String,
-    #[serde(default = "default_timeout_ms")]
-    pub timeout_ms: u64,
-    #[serde(default = "default_retry_interval_ms")]
-    pub retry_interval_ms: u64,
+    /// Timeout in ms. None → resolved from scenario defaults or built-in 5000ms.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+    /// Retry interval in ms. None → resolved from scenario defaults or built-in 200ms.
+    #[serde(default)]
+    pub retry_interval_ms: Option<u64>,
     /// Restrict capture to the window whose title contains this string.
     #[serde(default)]
     pub window: Option<String>,
     /// Mask regions (template-local coords) excluded from NCC matching.
     #[serde(default)]
     pub masks: Vec<robost_template::MaskRegion>,
-    /// Number of consecutive successful matches required before accepting.
-    /// 0 or 1 means a single match is sufficient (default behaviour).
-    #[serde(default = "default_stable_frames")]
-    pub stable_frames: u8,
+    /// Number of consecutive matches required. None → resolved from scenario defaults or 1.
+    #[serde(default)]
+    pub stable_frames: Option<u8>,
+}
+
+/// Post-click success condition for `click_image` and `click_text`.
+/// The engine waits until one of the specified conditions is met before declaring success.
+/// At most one of `image`, `no_image`, `text`, `window` should be set.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UntilSpec {
+    /// Wait for this template image to appear after the click.
+    #[serde(default)]
+    pub image: Option<String>,
+    /// Wait for this template image to disappear after the click.
+    #[serde(default)]
+    pub no_image: Option<String>,
+    /// Wait for this OCR text to appear after the click (requires ocr feature).
+    #[serde(default)]
+    pub text: Option<String>,
+    /// Wait for a window whose title contains this string to appear after the click.
+    #[serde(default)]
+    pub window: Option<String>,
+    /// How long to wait for the condition (ms). Defaults to the enclosing step's timeout_ms.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -426,12 +469,15 @@ pub struct ClickImageStep {
     #[serde(default = "default_stable_frames")]
     pub stable_frames: u8,
     /// How long (ms) to poll after clicking, waiting for the template to disappear.
-    /// If absent, skip post-click verification.
+    /// If absent, skip post-click verification. Ignored when `until` is set.
     #[serde(default)]
     pub verify_gone_ms: Option<u64>,
     /// Maximum click-and-verify attempts. Default: 3.
     #[serde(default = "default_max_retries")]
     pub max_retries: u32,
+    /// Wait for a condition after clicking. Takes precedence over `verify_gone_ms`.
+    #[serde(default)]
+    pub until: Option<UntilSpec>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -815,10 +861,12 @@ pub struct OcrMatchStep {
     /// Tesseract language code(s): `"eng"`, `"jpn"`, `"jpn+eng"`, etc. Ignored for llm engine.
     #[serde(default = "default_ocr_lang")]
     pub lang: String,
-    #[serde(default = "default_timeout_ms")]
-    pub timeout_ms: u64,
-    #[serde(default = "default_retry_interval_ms")]
-    pub retry_interval_ms: u64,
+    /// Timeout in ms. None → resolved from scenario defaults or built-in 5000ms.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+    /// Retry interval in ms. None → resolved from scenario defaults or built-in 200ms.
+    #[serde(default)]
+    pub retry_interval_ms: Option<u64>,
     /// Stores `{found: bool, text: str}`. If absent and text doesn't match, returns an error.
     pub save_as: Option<String>,
     /// OCR engine to use. Absent = Tesseract (backward compatible).
@@ -853,6 +901,18 @@ pub struct ClickTextStep {
     pub timeout_ms: u64,
     #[serde(default = "default_retry_interval_ms")]
     pub retry_interval_ms: u64,
+    /// Maximum click-and-verify attempts. Default: 3.
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u32,
+    /// Milliseconds to wait after a successful click.
+    #[serde(default)]
+    pub post_click_ms: Option<u64>,
+    /// Wait for the text to disappear after clicking (ms). Ignored when `until` is set.
+    #[serde(default)]
+    pub verify_gone_ms: Option<u64>,
+    /// Wait for a condition after clicking. Takes precedence over `verify_gone_ms`.
+    #[serde(default)]
+    pub until: Option<UntilSpec>,
     /// OCR engine to use. Absent = Tesseract/WinRT (backward compatible).
     #[serde(default)]
     pub engine: Option<OcrEngineKind>,

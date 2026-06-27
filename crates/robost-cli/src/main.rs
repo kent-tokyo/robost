@@ -72,6 +72,12 @@ enum Commands {
         /// Start HTTP server and stream progress via SSE (e.g., "127.0.0.1:0" for dynamic port)
         #[arg(long)]
         serve: Option<String>,
+        /// Write per-step JSONL trace to this path (one JSON line per step)
+        #[arg(long)]
+        trace: Option<PathBuf>,
+        /// Save screenshots: never (default) | on-failure | always
+        #[arg(long, value_name = "MODE", default_value = "never")]
+        screenshots: String,
     },
     /// Plugin management
     Plugin {
@@ -208,6 +214,8 @@ fn main() -> Result<()> {
             report,
             progress,
             serve,
+            trace,
+            screenshots,
         } => {
             if tray {
                 return tray::run_tray(scenario, silent, reconnect_timeout);
@@ -236,13 +244,20 @@ fn main() -> Result<()> {
                     .parent()
                     .unwrap_or(std::path::Path::new("."))
                     .to_path_buf();
+                let screenshots_mode = match screenshots.as_str() {
+                    "on-failure" => robost_core::ScreenshotsMode::OnFailure,
+                    "always" => robost_core::ScreenshotsMode::Always,
+                    _ => robost_core::ScreenshotsMode::Never,
+                };
                 let mut engine = robost_core::ScenarioEngine::new(backend, base_dir)
                     .with_silent(silent)
                     .with_reconnect_timeout(reconnect_timeout)
                     .with_debug_step(step)
                     .with_dry_run(dry_run)
                     .with_break_at(break_at)
-                    .with_dump_vars(dump_vars);
+                    .with_dump_vars(dump_vars)
+                    .with_trace(trace)
+                    .with_screenshots_mode(screenshots_mode);
                 if let Some(report_path) = report {
                     engine = engine.with_report(report_path);
                 }

@@ -131,7 +131,7 @@ Full step reference: [Documentation → Step Reference](https://kent-tokyo.githu
 
 ## Template Capture (robost-snip)
 
-1. `cargo run -p robost-snip` — starts as a tray app
+1. `robost-snip.exe` (installed) or **from source:** `cargo run -p robost-snip` — starts as a tray app
 2. Open the target UI (dropdown, tooltip, etc.)
 3. **Ctrl+Shift+C** — freezes the screen into a fullscreen overlay
 4. Drag to select the template region; press **Match test** to verify

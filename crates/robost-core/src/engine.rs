@@ -24,12 +24,12 @@ use crate::scenario::{
     WebSwitchFrameStep, WebTypeStep, WebWaitStep, WebWaitTextStep,
 };
 use crate::scenario::{
-    Base64DecodeStep, Base64EncodeStep, CalcStep, CallScenarioStep, ClickAction, ClickImageStep,
-    ClickInWindowStep, ClickTextStep, ClipboardGetStep, ClipboardSetStep, CopyVarStep, CsvReadStep,
-    CsvWriteMode, CsvWriteStep, DateAddStep, DateDiffStep, DateFormatStep, DialogInputStep,
-    DialogSelectStep, DialogWaitStep, DiffUnit, DirCreateStep, DirDeleteStep, DirExistsStep,
-    DoWhileStep, EnvGetStep, ExcelAddSheetStep, ExcelDeleteSheetStep, ExcelFindRowStep,
-    ExcelGetDimsStep, ExcelReadCellStep, ExcelReadRangeStep, ExcelReadSheetStep,
+    AssertTextStep, Base64DecodeStep, Base64EncodeStep, CalcStep, CallScenarioStep, ClickAction,
+    ClickImageStep, ClickInWindowStep, ClickTextStep, ClipboardGetStep, ClipboardSetStep,
+    CopyVarStep, CsvReadStep, CsvWriteMode, CsvWriteStep, DateAddStep, DateDiffStep,
+    DateFormatStep, DialogInputStep, DialogSelectStep, DialogWaitStep, DiffUnit, DirCreateStep,
+    DirDeleteStep, DirExistsStep, DoWhileStep, EnvGetStep, ExcelAddSheetStep, ExcelDeleteSheetStep,
+    ExcelFindRowStep, ExcelGetDimsStep, ExcelReadCellStep, ExcelReadRangeStep, ExcelReadSheetStep,
     ExcelRenameSheetStep, ExcelWriteCellStep, ExcelWriteRangeStep, FileAppendStep, FileCopyStep,
     FileDeleteStep, FileExistsStep, FileListStep, FileModifiedAtStep, FileMoveStep, FileReadStep,
     FileRenameStep, FileSizeStep, FileWriteMode, FileWriteStep, FindImageStep, ForeachStep,
@@ -38,18 +38,18 @@ use crate::scenario::{
     ListGetStep, ListLengthStep, ListPushStep, ListRemoveStep, LoadVarsStep, LogLevel,
     LogWriteStep, MailReceiveStep, MailSendStep, MatchRectStep, MlDetectStep, MouseClickXyStep,
     MouseDragStep, MouseHoverStep, MouseMoveStep, MouseScrollStep, MoveToTextStep, NotifyStep,
-    NumberRandomStep, OcrMatchStep, PathBasenameStep, PathDirnameStep, PathJoinStep,
+    NumberRandomStep, OcrDumpStep, OcrMatchStep, PathBasenameStep, PathDirnameStep, PathJoinStep,
     PdfExtractTextStep, PdfPageCountStep, ProcessExistsStep, ProcessKillStep, ProcessStartStep,
-    ProcessWaitState, RepeatStep, SaveVarsStep, ScenarioStep, ScreenshotSaveStep, ScriptStep,
-    ShellStep, StringContainsStep, StringCountStep, StringEndsWithStep, StringFormatStep,
-    StringIndexOfStep, StringJoinStep, StringRegexStep, StringReplaceStep, StringSplitStep,
-    StringStartsWithStep, StringSubstringStep, StringTrimStep, SubScenarioStep, SwitchStep,
-    AssertTextStep, OcrDumpStep, ReadTextStep, ToNumberStep, ToStringStep, TrimSide, TryCatchStep,
-    TypeStep, UiaBy, UiaCheckStep, UiaClickStep, UiaFindStep, UiaGetChildrenStep, UiaGetStep,
-    UiaSelectStep, UiaSetStep, UiaWaitStep, UrlOpenStep, VarTypeStep, WaitChangeStep,
-    WaitColorStep, WaitImageStep, WaitNoImageStep, WaitProcessStep, WaitUntilStep, WaitWindowStep,
-    WhileStep, WidthStep, WindowControlAction, WindowControlStep, WindowState, ZipCompressStep,
-    ZipExtractStep, ZipListStep,
+    ProcessWaitState, ReadTextStep, RepeatStep, SaveVarsStep, ScenarioDefaults, ScenarioStep,
+    ScreenshotSaveStep, ScriptStep, ShellStep, StringContainsStep, StringCountStep,
+    StringEndsWithStep, StringFormatStep, StringIndexOfStep, StringJoinStep, StringRegexStep,
+    StringReplaceStep, StringSplitStep, StringStartsWithStep, StringSubstringStep, StringTrimStep,
+    SubScenarioStep, SwitchStep, ToNumberStep, ToStringStep, TrimSide, TryCatchStep, TypeStep,
+    UiaBy, UiaCheckStep, UiaClickStep, UiaFindStep, UiaGetChildrenStep, UiaGetStep, UiaSelectStep,
+    UiaSetStep, UiaWaitStep, UntilSpec, UrlOpenStep, VarTypeStep, WaitChangeStep, WaitColorStep,
+    WaitImageStep, WaitNoImageStep, WaitProcessStep, WaitUntilStep, WaitWindowStep, WhileStep,
+    WidthStep, WindowControlAction, WindowControlStep, WindowState, ZipCompressStep, ZipExtractStep,
+    ZipListStep,
 };
 #[cfg(feature = "http")]
 use crate::scenario::{
@@ -123,6 +123,18 @@ pub enum Flow {
 
 // ── Engine ─────────────────────────────────────────────────────────────────
 
+/// Controls when step screenshots are saved to the `screenshots/` directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ScreenshotsMode {
+    /// No additional screenshots (failure screenshots for reports are unaffected).
+    #[default]
+    Never,
+    /// Save a screenshot when any step fails.
+    OnFailure,
+    /// Save a screenshot after every step.
+    Always,
+}
+
 pub struct ScenarioEngine {
     backend: Arc<dyn Backend>,
     matcher: TemplateMatcher,
@@ -157,6 +169,12 @@ pub struct ScenarioEngine {
     progress_tx: Option<Arc<broadcast::Sender<ProgressEvent>>>,
     /// Score of the last successful image-match step; read and cleared by run_steps.
     last_match_score: std::sync::Mutex<Option<f32>>,
+    /// Scenario-level defaults for the currently-running scenario.
+    active_defaults: std::sync::Mutex<ScenarioDefaults>,
+    /// Write per-step JSONL trace to this path (None = disabled).
+    trace_path: Option<PathBuf>,
+    /// Controls when step screenshots are auto-saved.
+    screenshots_mode: ScreenshotsMode,
 }
 
 impl ScenarioEngine {
@@ -182,6 +200,9 @@ impl ScenarioEngine {
             progress_path: None,
             progress_tx: None,
             last_match_score: std::sync::Mutex::new(None),
+            active_defaults: std::sync::Mutex::new(ScenarioDefaults::default()),
+            trace_path: None,
+            screenshots_mode: ScreenshotsMode::Never,
         }
     }
 
@@ -235,6 +256,18 @@ impl ScenarioEngine {
         self
     }
 
+    /// Write per-step JSONL trace to `path` (one JSON line per step).
+    pub fn with_trace(mut self, path: Option<PathBuf>) -> Self {
+        self.trace_path = path;
+        self
+    }
+
+    /// Control when screenshots are auto-saved to the `screenshots/` directory.
+    pub fn with_screenshots_mode(mut self, mode: ScreenshotsMode) -> Self {
+        self.screenshots_mode = mode;
+        self
+    }
+
     /// Write step progress JSON `{"step":N,"name":"..."}` to `path` before each step.
     pub fn with_progress(mut self, path: Option<PathBuf>) -> Self {
         self.progress_path = path;
@@ -282,6 +315,69 @@ impl ScenarioEngine {
         }
     }
 
+    fn eff_timeout(&self, step_val: Option<u64>, builtin: u64) -> u64 {
+        step_val
+            .or_else(|| self.active_defaults.lock().unwrap().timeout_ms)
+            .unwrap_or(builtin)
+    }
+
+    fn eff_interval(&self, step_val: Option<u64>, builtin: u64) -> u64 {
+        step_val
+            .or_else(|| self.active_defaults.lock().unwrap().retry_interval_ms)
+            .unwrap_or(builtin)
+    }
+
+    fn eff_stable(&self, step_val: Option<u8>, builtin: u8) -> u8 {
+        step_val
+            .or_else(|| self.active_defaults.lock().unwrap().stable_frames)
+            .unwrap_or(builtin)
+    }
+
+    /// Append a single JSONL line to the trace file (if configured). Sync write is acceptable
+    /// since each line is tiny (~200 bytes) and writes happen at most once per step.
+    fn append_trace(
+        &self,
+        index: usize,
+        step_name: &str,
+        started_at: &chrono::DateTime<chrono::Local>,
+        elapsed_ms: u64,
+        result: &str,
+        error: Option<&str>,
+        screenshot: Option<&std::path::Path>,
+    ) {
+        let Some(ref path) = self.trace_path else {
+            return;
+        };
+        use std::io::Write;
+        let mut obj = serde_json::json!({
+            "i": index,
+            "step": step_name,
+            "started_at": started_at.to_rfc3339(),
+            "duration_ms": elapsed_ms,
+            "result": result,
+        });
+        if let Some(e) = error {
+            obj["error"] = serde_json::Value::String(e.to_owned());
+        }
+        if let Some(p) = screenshot {
+            obj["screenshot"] = serde_json::Value::String(p.to_string_lossy().into_owned());
+        }
+        let line = serde_json::to_string(&obj).unwrap_or_default() + "\n";
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = f.write_all(line.as_bytes());
+        }
+    }
+
+    fn effective_screenshots_mode(&self) -> ScreenshotsMode {
+        if self.screenshots_mode == ScreenshotsMode::Never
+            && self.active_defaults.lock().unwrap().screenshot_on_failure
+        {
+            ScreenshotsMode::OnFailure
+        } else {
+            self.screenshots_mode
+        }
+    }
+
     async fn debug_pause(&self, idx: usize, step: &ScenarioStep, vars: &Variables) -> Result<()> {
         use tokio::io::AsyncBufReadExt;
         eprintln!("\n[DEBUG] step {idx}: {}", step.name());
@@ -310,6 +406,9 @@ impl ScenarioEngine {
         data_override: Option<&std::path::Path>,
     ) -> Result<()> {
         let run_started = chrono::Local::now();
+
+        // Apply scenario-level defaults for this run.
+        *self.active_defaults.lock().unwrap() = scenario.defaults.clone();
 
         // Reset accumulated records for this run.
         if self.report_path.is_some() {
@@ -620,7 +719,17 @@ impl ScenarioEngine {
                             });
                             if Instant::now() >= *deadline {
                                 error!(error = %e, step = i, "step failed (reconnect timeout)");
+                                let elapsed_ms = step_timer.elapsed().as_millis() as u64;
                                 let screenshot = self.save_failure_screenshot(i).await;
+                                self.append_trace(
+                                    i,
+                                    step.name(),
+                                    &step_started,
+                                    elapsed_ms,
+                                    "error",
+                                    Some(&e.to_string()),
+                                    screenshot.as_deref(),
+                                );
                                 if self.report_path.is_some() {
                                     let vars_json = Some(vars.snapshot_json());
                                     self.last_match_score.lock().unwrap().take();
@@ -631,7 +740,7 @@ impl ScenarioEngine {
                                             i,
                                             step,
                                             step_started,
-                                            step_timer.elapsed().as_millis() as u64,
+                                            elapsed_ms,
                                             StepOutcome::Failed(e.to_string()),
                                             screenshot,
                                             None,
@@ -645,7 +754,17 @@ impl ScenarioEngine {
                         }
                         Err(e) => {
                             error!(error = %e, step = i, "step failed");
+                            let elapsed_ms = step_timer.elapsed().as_millis() as u64;
                             let screenshot = self.save_failure_screenshot(i).await;
+                            self.append_trace(
+                                i,
+                                step.name(),
+                                &step_started,
+                                elapsed_ms,
+                                "error",
+                                Some(&e.to_string()),
+                                screenshot.as_deref(),
+                            );
                             if self.report_path.is_some() {
                                 let vars_json = Some(vars.snapshot_json());
                                 self.last_match_score.lock().unwrap().take();
@@ -656,7 +775,7 @@ impl ScenarioEngine {
                                         i,
                                         step,
                                         step_started,
-                                        step_timer.elapsed().as_millis() as u64,
+                                        elapsed_ms,
                                         StepOutcome::Failed(e.to_string()),
                                         screenshot,
                                         None,
@@ -679,6 +798,28 @@ impl ScenarioEngine {
                             if self.dump_vars {
                                 eprintln!("[VARS] step {i}: {}", vars.debug_dump());
                             }
+
+                            // Always screenshot (mode = Always).
+                            let success_shot = if self.effective_screenshots_mode()
+                                == ScreenshotsMode::Always
+                            {
+                                self.save_step_screenshot(i, step.name()).await
+                            } else {
+                                None
+                            };
+
+                            if self.trace_path.is_some() {
+                                self.append_trace(
+                                    i,
+                                    step.name(),
+                                    &step_started,
+                                    elapsed_ms,
+                                    "ok",
+                                    None,
+                                    success_shot.as_deref(),
+                                );
+                            }
+
                             if self.report_path.is_some() {
                                 let confidence = self.last_match_score.lock().unwrap().take();
                                 self.report_records
@@ -690,7 +831,7 @@ impl ScenarioEngine {
                                         step_started,
                                         elapsed_ms,
                                         StepOutcome::Ok,
-                                        None,
+                                        success_shot,
                                         confidence,
                                         None,
                                     ));
@@ -1757,17 +1898,13 @@ impl ScenarioEngine {
     async fn wait_image(&self, step: &WaitImageStep, vars: &Variables) -> Result<()> {
         let path = self.safe_join(&vars.expand(&step.template))?;
         let template = Arc::new(self.load_image(&path)?);
-        let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
+        let timeout_ms = self.eff_timeout(step.timeout_ms, 5000);
+        let interval_ms = self.eff_interval(step.retry_interval_ms, 200);
+        let stable = self.eff_stable(step.stable_frames, 1);
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         let target = Self::capture_target(&step.window);
         match self
-            .poll_match(
-                template,
-                target,
-                deadline,
-                step.retry_interval_ms,
-                step.masks.clone(),
-                step.stable_frames,
-            )
+            .poll_match(template, target, deadline, interval_ms, step.masks.clone(), stable)
             .await?
         {
             Some(m) => {
@@ -1812,19 +1949,33 @@ impl ScenarioEngine {
                     ClickAction::Double => self.backend.double_click(point)?,
                 }
             } else {
-                info!(
-                    dry_run = true,
-                    x = point.x,
-                    y = point.y,
-                    "click_image skipped"
-                );
+                info!(dry_run = true, x = point.x, y = point.y, "click_image skipped");
             }
             if let Some(ms) = step.post_click_ms {
                 sleep(Duration::from_millis(ms)).await;
             }
 
-            // Post-click verification: confirm the template disappeared.
-            if let Some(verify_ms) = step.verify_gone_ms {
+            // Post-click condition check: `until` takes precedence over `verify_gone_ms`.
+            if let Some(ref until) = step.until {
+                let until_timeout = until.timeout_ms.unwrap_or(step.timeout_ms);
+                let until_deadline = Instant::now() + Duration::from_millis(until_timeout);
+
+                let cond_met = self
+                    .check_until(until, &target, until_deadline, step.retry_interval_ms, vars)
+                    .await?;
+                if cond_met {
+                    info!(score = m.score, attempt, "click_image: until condition met");
+                    *self.last_match_score.lock().unwrap() = Some(m.score);
+                    return Ok(());
+                }
+                warn!(attempt, max_retries, "click_image: until condition not met; retrying");
+                if attempt + 1 == max_retries {
+                    return Err(EngineError::Timeout(format!(
+                        "click_image until: condition not met after {} attempts",
+                        max_retries
+                    )));
+                }
+            } else if let Some(verify_ms) = step.verify_gone_ms {
                 let gone_deadline = Instant::now() + Duration::from_millis(verify_ms);
                 let gone = self
                     .poll_gone(
@@ -1857,6 +2008,80 @@ impl ScenarioEngine {
         }
         // Unreachable but keeps the type checker happy.
         Ok(())
+    }
+
+    /// Evaluate a post-click `until` condition. Returns `true` if the condition is satisfied.
+    async fn check_until(
+        &self,
+        until: &UntilSpec,
+        target: &robost_template::Target,
+        deadline: Instant,
+        interval_ms: u64,
+        vars: &Variables,
+    ) -> Result<bool> {
+        if let Some(ref img_pat) = until.image {
+            let p = self.safe_join(&vars.expand(img_pat))?;
+            let tmpl = Arc::new(self.load_image(&p)?);
+            return Ok(self
+                .poll_match(tmpl, target.clone(), deadline, interval_ms, vec![], 1)
+                .await?
+                .is_some());
+        }
+        if let Some(ref no_img) = until.no_image {
+            let p = self.safe_join(&vars.expand(no_img))?;
+            let tmpl = Arc::new(self.load_image(&p)?);
+            return self.poll_gone(tmpl, target.clone(), deadline, interval_ms, vec![]).await;
+        }
+        if let Some(ref win_title) = until.window {
+            let title = vars.expand(win_title);
+            loop {
+                let title2 = title.clone();
+                let found = tokio::task::spawn_blocking(move || {
+                    xcap::Window::all()
+                        .unwrap_or_default()
+                        .iter()
+                        .any(|w| w.title().map(|t| t.contains(&title2)).unwrap_or(false))
+                })
+                .await
+                .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+                if found {
+                    return Ok(true);
+                }
+                if Instant::now() >= deadline {
+                    return Ok(false);
+                }
+                self.check_cancelled()?;
+                sleep(Duration::from_millis(interval_ms)).await;
+            }
+        }
+        #[cfg(feature = "_ocr")]
+        if let Some(ref text_pat) = until.text {
+            let text = vars.expand(text_pat);
+            loop {
+                let backend = Arc::clone(&self.backend);
+                let tgt = target.clone();
+                let text2 = text.clone();
+                let found: Result<bool> = tokio::task::spawn_blocking(move || {
+                    let (img, _) = backend.capture_with_origin(&tgt)?;
+                    let r = robost_vision::ocr::OcrEngine::new("jpn+eng".to_owned())
+                        .find_text_bounds(&img, &text2)
+                        .map_err(|e| EngineError::Other(format!("until.text: {e}")))?;
+                    Ok(r.is_some())
+                })
+                .await
+                .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+                if found? {
+                    return Ok(true);
+                }
+                if Instant::now() >= deadline {
+                    return Ok(false);
+                }
+                self.check_cancelled()?;
+                sleep(Duration::from_millis(interval_ms)).await;
+            }
+        }
+        // No condition specified or OCR feature absent: treat as success.
+        Ok(true)
     }
 
     /// Find an image without clicking. Stores position info in `save_as` if specified.
@@ -2737,7 +2962,9 @@ impl ScenarioEngine {
         #[cfg(feature = "_ocr")]
         {
             let target = Self::capture_target(&step.window);
-            let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
+            let timeout_ms = self.eff_timeout(step.timeout_ms, 5000);
+            let interval_ms = self.eff_interval(step.retry_interval_ms, 200);
+            let deadline = Instant::now() + Duration::from_millis(timeout_ms);
             let lang = step.lang.clone();
             let contains = step.contains.clone();
             let region = step.region;
@@ -2793,7 +3020,7 @@ impl ScenarioEngine {
                             return Err(EngineError::Timeout(format!("ocr_match: {:?}", contains)));
                         }
                         self.check_cancelled()?;
-                        sleep(Duration::from_millis(step.retry_interval_ms)).await;
+                        sleep(Duration::from_millis(interval_ms)).await;
                     }
                     Err(e) => return Err(e),
                 }
@@ -2864,7 +3091,9 @@ impl ScenarioEngine {
 
         let engine = std::sync::Arc::new(engine);
         let target = Self::capture_target(&step.window);
-        let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
+        let timeout_ms = self.eff_timeout(step.timeout_ms, 5000);
+        let interval_ms = self.eff_interval(step.retry_interval_ms, 200);
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         let contains = step.contains.clone();
         let region = step.region;
 
@@ -2915,7 +3144,7 @@ impl ScenarioEngine {
                         )));
                     }
                     self.check_cancelled()?;
-                    sleep(Duration::from_millis(step.retry_interval_ms)).await;
+                    sleep(Duration::from_millis(interval_ms)).await;
                 }
                 Err(e) => return Err(e),
             }
@@ -2945,67 +3174,97 @@ impl ScenarioEngine {
         let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
         let text = vars.expand(&step.text);
         let action = step.action.clone();
+        let max_retries = step.max_retries.max(1);
 
-        loop {
-            let backend = Arc::clone(&self.backend);
-            let tgt = target.clone();
-            let engine2 = std::sync::Arc::clone(&engine);
-            let text2 = text.clone();
-            let offset_x = step.offset_x;
-            let offset_y = step.offset_y;
+        for attempt in 0..max_retries {
+            let point = loop {
+                let backend = Arc::clone(&self.backend);
+                let tgt = target.clone();
+                let engine2 = std::sync::Arc::clone(&engine);
+                let text2 = text.clone();
+                let offset_x = step.offset_x;
+                let offset_y = step.offset_y;
 
-            let click_pt: Result<Option<robost_template::ScreenPoint>> =
-                tokio::task::spawn_blocking(move || {
-                    let (img, origin) = backend.capture_with_origin(&tgt)?;
-                    let scale: f32 = xcap::Monitor::all()
-                        .ok()
-                        .and_then(|ms| {
-                            ms.into_iter()
-                                .find(|m| m.is_primary().unwrap_or(false))
-                                .and_then(|m| m.scale_factor().ok())
-                        })
-                        .unwrap_or(1.0)
-                        .max(1.0);
-                    let found = engine2
-                        .find_text_bounds(&img, &text2)
-                        .map_err(|e| EngineError::Other(format!("click_text[ocrs-cjk]: {e}")))?;
-                    Ok(found.map(|r| {
-                        let cx = ((r.x + r.width as i32 / 2) as f32 / scale) as i32;
-                        let cy = ((r.y + r.height as i32 / 2) as f32 / scale) as i32;
-                        robost_template::ScreenPoint {
-                            x: origin.x + cx + offset_x,
-                            y: origin.y + cy + offset_y,
+                let click_pt: Result<Option<robost_template::ScreenPoint>> =
+                    tokio::task::spawn_blocking(move || {
+                        let (img, origin) = backend.capture_with_origin(&tgt)?;
+                        let scale: f32 = xcap::Monitor::all()
+                            .ok()
+                            .and_then(|ms| {
+                                ms.into_iter()
+                                    .find(|m| m.is_primary().unwrap_or(false))
+                                    .and_then(|m| m.scale_factor().ok())
+                            })
+                            .unwrap_or(1.0)
+                            .max(1.0);
+                        let found = engine2
+                            .find_text_bounds(&img, &text2)
+                            .map_err(|e| EngineError::Other(format!("click_text[ocrs-cjk]: {e}")))?;
+                        Ok(found.map(|r| {
+                            let cx = ((r.x + r.width as i32 / 2) as f32 / scale) as i32;
+                            let cy = ((r.y + r.height as i32 / 2) as f32 / scale) as i32;
+                            robost_template::ScreenPoint {
+                                x: origin.x + cx + offset_x,
+                                y: origin.y + cy + offset_y,
+                            }
+                        }))
+                    })
+                    .await
+                    .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+
+                match click_pt? {
+                    Some(pt) => break pt,
+                    None => {
+                        if Instant::now() >= deadline {
+                            return Err(EngineError::Timeout(format!(
+                                "click_text[ocrs-cjk]: {text:?}"
+                            )));
                         }
-                    }))
-                })
-                .await
-                .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
-
-            match click_pt? {
-                Some(point) => {
-                    info!(x = point.x, y = point.y, text = %text, "click_text[ocrs-cjk]");
-                    if !self.dry_run {
-                        match action {
-                            ClickAction::Left => self.backend.click(point)?,
-                            ClickAction::Right => self.backend.right_click(point)?,
-                            ClickAction::Double => self.backend.double_click(point)?,
-                        }
-                    } else {
-                        info!(dry_run = true, "click_text[ocrs-cjk] skipped");
+                        self.check_cancelled()?;
+                        sleep(Duration::from_millis(step.retry_interval_ms)).await;
                     }
+                }
+            };
+
+            info!(x = point.x, y = point.y, text = %text, "click_text[ocrs-cjk]");
+            if !self.dry_run {
+                match action {
+                    ClickAction::Left => self.backend.click(point)?,
+                    ClickAction::Right => self.backend.right_click(point)?,
+                    ClickAction::Double => self.backend.double_click(point)?,
+                }
+            } else {
+                info!(dry_run = true, "click_text[ocrs-cjk] skipped");
+            }
+            if let Some(ms) = step.post_click_ms {
+                sleep(Duration::from_millis(ms)).await;
+            }
+
+            if let Some(ref until) = step.until {
+                let until_timeout = until.timeout_ms.unwrap_or(step.timeout_ms);
+                let until_deadline = Instant::now() + Duration::from_millis(until_timeout);
+                let cond_met = self
+                    .check_until(until, &target, until_deadline, step.retry_interval_ms, vars)
+                    .await?;
+                if cond_met {
                     return Ok(());
                 }
-                None => {
-                    if Instant::now() >= deadline {
-                        return Err(EngineError::Timeout(format!(
-                            "click_text[ocrs-cjk]: {text:?}"
-                        )));
-                    }
-                    self.check_cancelled()?;
-                    sleep(Duration::from_millis(step.retry_interval_ms)).await;
+                warn!(attempt, max_retries, "click_text[ocrs-cjk]: until not met; retrying");
+                if attempt + 1 == max_retries {
+                    return Err(EngineError::Timeout(format!(
+                        "click_text[ocrs-cjk] until: condition not met after {max_retries} attempts"
+                    )));
                 }
+            } else if step.verify_gone_ms.is_some() {
+                // ponytail: verify_gone_ms is ignored for the ocrs-cjk engine path;
+                // add `until: { no_image: ... }` or use the standard OCR engine for this.
+                warn!("click_text[ocrs-cjk]: verify_gone_ms is not supported with ocrs-cjk engine; treating as success");
+                return Ok(());
+            } else {
+                return Ok(());
             }
         }
+        Ok(())
     }
 
     #[cfg(feature = "ocrs-cjk-ocr")]
@@ -3106,7 +3365,9 @@ impl ScenarioEngine {
         };
 
         let target = Self::capture_target(&step.window);
-        let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
+        let timeout_ms = self.eff_timeout(step.timeout_ms, 5000);
+        let interval_ms = self.eff_interval(step.retry_interval_ms, 200);
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         let contains = step.contains.clone();
         let region = step.region;
 
@@ -3166,7 +3427,7 @@ impl ScenarioEngine {
                         return Err(EngineError::Timeout(format!("ocr_match: {:?}", contains)));
                     }
                     self.check_cancelled()?;
-                    sleep(Duration::from_millis(step.retry_interval_ms)).await;
+                    sleep(Duration::from_millis(interval_ms)).await;
                 }
                 Err(e) => return Err(e),
             }
@@ -3198,80 +3459,141 @@ impl ScenarioEngine {
             let text = vars.expand(&step.text);
             let lang = step.lang.clone();
             let action = step.action.clone();
+            let max_retries = step.max_retries.max(1);
 
-            loop {
-                let backend = Arc::clone(&self.backend);
-                let tgt = target.clone();
-                let lang2 = lang.clone();
-                let text2 = text.clone();
+            for attempt in 0..max_retries {
+                // Find the text via OCR (retry until deadline or found).
+                let point = loop {
+                    let backend = Arc::clone(&self.backend);
+                    let tgt = target.clone();
+                    let lang2 = lang.clone();
+                    let text2 = text.clone();
+                    let offset_x = step.offset_x;
+                    let offset_y = step.offset_y;
+                    let click_pt: Result<Option<robost_template::ScreenPoint>> =
+                        tokio::task::spawn_blocking(move || {
+                            let (img, origin) = backend.capture_with_origin(&tgt)?;
 
-                let offset_x = step.offset_x;
-                let offset_y = step.offset_y;
-                let click_pt: Result<Option<robost_template::ScreenPoint>> =
-                    tokio::task::spawn_blocking(move || {
-                        let (img, origin) = backend.capture_with_origin(&tgt)?;
+                            // On HiDPI / Retina, captured image is at physical resolution;
+                            // click coords must be in logical (1×) units.
+                            let scale: f32 = xcap::Monitor::all()
+                                .ok()
+                                .and_then(|ms| {
+                                    ms.into_iter()
+                                        .find(|m| m.is_primary().unwrap_or(false))
+                                        .and_then(|m| m.scale_factor().ok())
+                                })
+                                .unwrap_or(1.0)
+                                .max(1.0);
 
-                        // On HiDPI / Retina, the captured image is at physical resolution
-                        // (e.g. 2×) while click coordinates must be in logical (1×) units.
-                        // Compute the scale factor from the primary monitor.
-                        let scale: f32 = xcap::Monitor::all()
-                            .ok()
-                            .and_then(|ms| {
-                                ms.into_iter()
-                                    .find(|m| m.is_primary().unwrap_or(false))
-                                    .and_then(|m| m.scale_factor().ok())
-                            })
-                            .unwrap_or(1.0)
-                            .max(1.0);
+                            let found = robost_vision::ocr::OcrEngine::new(lang2)
+                                .find_text_bounds(&img, &text2)
+                                .map_err(|e| EngineError::Other(format!("click_text: {e}")))?;
 
-                        let found = robost_vision::ocr::OcrEngine::new(lang2)
-                            .find_text_bounds(&img, &text2)
-                            .map_err(|e| EngineError::Other(format!("click_text: {e}")))?;
+                            Ok(found.map(|r| {
+                                let cx = ((r.x + (r.width as i32) / 2) as f32 / scale) as i32;
+                                let cy = ((r.y + (r.height as i32) / 2) as f32 / scale) as i32;
+                                robost_template::ScreenPoint {
+                                    x: origin.x + cx + offset_x,
+                                    y: origin.y + cy + offset_y,
+                                }
+                            }))
+                        })
+                        .await
+                        .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
 
-                        Ok(found.map(|r| {
-                            let cx = ((r.x + (r.width as i32) / 2) as f32 / scale) as i32;
-                            let cy = ((r.y + (r.height as i32) / 2) as f32 / scale) as i32;
-                            robost_template::ScreenPoint {
-                                x: origin.x + cx + offset_x,
-                                y: origin.y + cy + offset_y,
+                    match click_pt? {
+                        Some(pt) => break pt,
+                        None => {
+                            if Instant::now() >= deadline {
+                                return Err(EngineError::Timeout(format!(
+                                    "click_text: {text:?}"
+                                )));
                             }
-                        }))
-                    })
-                    .await
-                    .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+                            self.check_cancelled()?;
+                            sleep(Duration::from_millis(step.retry_interval_ms)).await;
+                        }
+                    }
+                };
 
-                match click_pt? {
-                    Some(point) => {
-                        info!(x = point.x, y = point.y, text = %text, "click_text");
-                        if let Some(ref tx) = self.progress_tx {
-                            let _ = tx.send(ProgressEvent::Log {
-                                level: "info".into(),
-                                message: format!(
-                                    "click_text: \"{text}\" → ({}, {})",
-                                    point.x, point.y
-                                ),
-                            });
-                        }
-                        if !self.dry_run {
-                            match action {
-                                ClickAction::Left => self.backend.click(point)?,
-                                ClickAction::Right => self.backend.right_click(point)?,
-                                ClickAction::Double => self.backend.double_click(point)?,
-                            }
-                        } else {
-                            info!(dry_run = true, "click_text skipped");
-                        }
+                info!(x = point.x, y = point.y, text = %text, "click_text");
+                if let Some(ref tx) = self.progress_tx {
+                    let _ = tx.send(ProgressEvent::Log {
+                        level: "info".into(),
+                        message: format!("click_text: \"{text}\" → ({}, {})", point.x, point.y),
+                    });
+                }
+                if !self.dry_run {
+                    match action {
+                        ClickAction::Left => self.backend.click(point)?,
+                        ClickAction::Right => self.backend.right_click(point)?,
+                        ClickAction::Double => self.backend.double_click(point)?,
+                    }
+                } else {
+                    info!(dry_run = true, "click_text skipped");
+                }
+                if let Some(ms) = step.post_click_ms {
+                    sleep(Duration::from_millis(ms)).await;
+                }
+
+                if let Some(ref until) = step.until {
+                    let until_timeout = until.timeout_ms.unwrap_or(step.timeout_ms);
+                    let until_deadline = Instant::now() + Duration::from_millis(until_timeout);
+                    let cond_met = self
+                        .check_until(until, &target, until_deadline, step.retry_interval_ms, vars)
+                        .await?;
+                    if cond_met {
                         return Ok(());
                     }
-                    None => {
-                        if Instant::now() >= deadline {
-                            return Err(EngineError::Timeout(format!("click_text: {text:?}")));
+                    warn!(attempt, max_retries, "click_text: until condition not met; retrying");
+                    if attempt + 1 == max_retries {
+                        return Err(EngineError::Timeout(format!(
+                            "click_text until: condition not met after {max_retries} attempts"
+                        )));
+                    }
+                } else if let Some(verify_ms) = step.verify_gone_ms {
+                    // OCR-based "text gone" check
+                    let gone_deadline = Instant::now() + Duration::from_millis(verify_ms);
+                    let text2 = text.clone();
+                    let lang2 = lang.clone();
+                    let gone = loop {
+                        let backend = Arc::clone(&self.backend);
+                        let tgt = target.clone();
+                        let t = text2.clone();
+                        let l = lang2.clone();
+                        let still_there: Result<bool> = tokio::task::spawn_blocking(move || {
+                            let (img, _) = backend.capture_with_origin(&tgt)?;
+                            let r = robost_vision::ocr::OcrEngine::new(l)
+                                .find_text_bounds(&img, &t)
+                                .map_err(|e| EngineError::Other(format!("click_text verify: {e}")))?;
+                            Ok(r.is_some())
+                        })
+                        .await
+                        .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+                        if !still_there? {
+                            break true;
+                        }
+                        if Instant::now() >= gone_deadline {
+                            break false;
                         }
                         self.check_cancelled()?;
                         sleep(Duration::from_millis(step.retry_interval_ms)).await;
+                    };
+                    if gone {
+                        return Ok(());
                     }
+                    warn!(attempt, max_retries, "click_text: text still visible; retrying");
+                    if attempt + 1 == max_retries {
+                        return Err(EngineError::Timeout(format!(
+                            "click_text verify_gone: {text:?} still visible after {max_retries} attempts"
+                        )));
+                    }
+                } else {
+                    return Ok(());
                 }
             }
+            // Unreachable; keeps the type checker happy.
+            Ok(())
         }
     }
 
@@ -3379,8 +3701,8 @@ impl ScenarioEngine {
             window: step.window.clone(),
             contains: None,
             lang: step.lang.clone(),
-            timeout_ms: step.timeout_ms,
-            retry_interval_ms: step.retry_interval_ms,
+            timeout_ms: Some(step.timeout_ms),
+            retry_interval_ms: Some(step.retry_interval_ms),
             save_as: Some(step.save_as.clone()),
             engine: step.engine.clone(),
         };
@@ -3389,14 +3711,14 @@ impl ScenarioEngine {
 
     /// Assert that specific text is visible right now — single shot, no retry.
     async fn assert_text(&self, step: &AssertTextStep, vars: &mut Variables) -> Result<()> {
-        // Use ocr_match with timeout_ms=0 so the first failed attempt is the last.
+        // Use ocr_match with timeout_ms=Some(0) so the first failed attempt is the last.
         let proxy = crate::scenario::OcrMatchStep {
             region: step.region,
             window: step.window.clone(),
             contains: Some(step.contains.clone()),
             lang: step.lang.clone(),
-            timeout_ms: 0,
-            retry_interval_ms: 0,
+            timeout_ms: Some(0),
+            retry_interval_ms: Some(0),
             save_as: None,
             engine: step.engine.clone(),
         };
@@ -5129,6 +5451,23 @@ impl ScenarioEngine {
             })
     }
 
+    async fn save_step_screenshot(&self, step_index: usize, step_name: &str) -> Option<PathBuf> {
+        let _ = tokio::fs::create_dir_all(&self.screenshot_dir).await;
+        let path = self
+            .screenshot_dir
+            .join(format!("step_{step_index:04}_{step_name}.png"));
+        if let Ok(img) = self.backend.capture(&robost_template::Target::Screen) {
+            if let Err(e) = img.save(&path) {
+                warn!(error = %e, "failed to save step screenshot");
+                None
+            } else {
+                Some(path)
+            }
+        } else {
+            None
+        }
+    }
+
     async fn save_failure_screenshot(&self, step_index: usize) -> Option<PathBuf> {
         let _ = tokio::fs::create_dir_all(&self.screenshot_dir).await;
         let ts = chrono::Local::now().timestamp_millis();
@@ -6604,7 +6943,44 @@ impl ScenarioEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scenario::{ScenarioStep, ScreenshotSaveStep};
+    use crate::scenario::{ScenarioStep, ScenarioDefaults, ScreenshotSaveStep};
+
+    fn make_engine_bare() -> ScenarioEngine {
+        use robost_backend::LocalBackend;
+        use std::sync::Arc;
+        ScenarioEngine::new(
+            Arc::new(LocalBackend::new().unwrap()),
+            std::path::PathBuf::from("."),
+        )
+    }
+
+    #[test]
+    fn eff_helpers_precedence() {
+        let engine = make_engine_bare();
+
+        // No step value, no defaults → builtin wins
+        assert_eq!(engine.eff_timeout(None, 5000), 5000);
+        assert_eq!(engine.eff_interval(None, 200), 200);
+        assert_eq!(engine.eff_stable(None, 1), 1);
+
+        // Set scenario defaults
+        *engine.active_defaults.lock().unwrap() = ScenarioDefaults {
+            timeout_ms: Some(30_000),
+            retry_interval_ms: Some(500),
+            stable_frames: Some(3),
+            screenshot_on_failure: false,
+        };
+
+        // No step value → defaults win
+        assert_eq!(engine.eff_timeout(None, 5000), 30_000);
+        assert_eq!(engine.eff_interval(None, 200), 500);
+        assert_eq!(engine.eff_stable(None, 1), 3);
+
+        // Explicit step value → step wins over defaults
+        assert_eq!(engine.eff_timeout(Some(1000), 5000), 1000);
+        assert_eq!(engine.eff_interval(Some(50), 200), 50);
+        assert_eq!(engine.eff_stable(Some(2), 1), 2);
+    }
 
     #[test]
     fn ocr_match_step_yaml_roundtrip() {
@@ -6623,7 +6999,7 @@ steps:
             ScenarioStep::OcrMatch(s) => {
                 assert_eq!(s.contains.as_deref(), Some("ログイン"));
                 assert_eq!(s.lang, "jpn+eng");
-                assert_eq!(s.timeout_ms, 3000);
+                assert_eq!(s.timeout_ms, Some(3000));
                 assert_eq!(s.save_as.as_deref(), Some("result"));
             }
             _ => panic!("expected OcrMatch"),
@@ -6641,8 +7017,8 @@ steps:
         match &scenario.steps[0] {
             ScenarioStep::OcrMatch(s) => {
                 assert_eq!(s.lang, "jpn+eng");
-                assert_eq!(s.timeout_ms, 5000);
-                assert_eq!(s.retry_interval_ms, 200);
+                assert_eq!(s.timeout_ms, None);     // resolved at runtime via eff_timeout
+                assert_eq!(s.retry_interval_ms, None); // resolved at runtime via eff_interval
                 assert!(s.contains.is_none());
                 assert!(s.save_as.is_none());
             }

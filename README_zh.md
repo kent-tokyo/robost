@@ -86,6 +86,21 @@
 
 ## 快速开始
 
+### Windows — 无需编译・无需安装
+
+1. 从 [GitHub Releases](https://github.com/kent-tokyo/robost/releases/latest) 下载 **`rpa-x86_64-windows.zip`**
+2. 解压到任意文件夹（例如 `C:\Tools\robost`）
+3. **双击 `rpa.exe`** → 浏览器自动打开可视化编辑器
+
+无需 Rust、Cargo、Visual Studio Build Tools、Python 或 Node.js。
+
+```
+rpa run examples\windows\notepad.yaml
+rpa run examples\windows\notepad.yaml --dry-run   # 预览，不实际执行
+```
+
+### 编写场景
+
 ```yaml
 # scenario.yaml
 name: "login"
@@ -107,19 +122,18 @@ steps:
       do: [ { type: "{{ 氏名 }}" }, { press: Tab } ]
 ```
 
-```bash
-cargo build -p robost-cli
-./target/debug/rpa run scenario.yaml
-
-# 带数据源（逐行读取 Excel）
-./target/debug/rpa run scenario.yaml --data data.xlsx
 ```
+rpa run scenario.yaml
+rpa run scenario.yaml --data data.xlsx
+```
+
+> **开发者（从源码编译）:** → 参见[开发](#开发)章节
 
 完整步骤参考：[详细文档 → 步骤参考](https://kent-tokyo.github.io/robost/)
 
 ## 模板截取（robost-snip）
 
-1. `cargo run -p robost-snip` — 以托盘应用启动
+1. `robost-snip.exe`（安装版）或开发者模式：`cargo run -p robost-snip` — 以托盘应用启动
 2. 打开目标 UI（下拉菜单、悬浮提示等）
 3. **Ctrl+Shift+C** — 将屏幕冻结为全屏覆盖层
 4. 拖动选择模板区域；点击**匹配测试**进行验证

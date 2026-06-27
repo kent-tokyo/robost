@@ -5,7 +5,7 @@ pub mod report;
 pub mod scenario;
 pub mod variables;
 
-pub use engine::{EngineError, Flow, ScenarioEngine};
+pub use engine::{EngineError, Flow, ScenarioEngine, ScreenshotsMode};
 pub use progress::ProgressEvent;
 pub use report::{ExecutionReport, Outcome, StepOutcome, StepRecord};
 pub use scenario::{DataSource, Scenario, ScenarioStep};
