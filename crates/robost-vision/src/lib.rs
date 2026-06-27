@@ -56,6 +56,11 @@ pub mod ocr;
 #[cfg(any(feature = "ml", feature = "ml-vision"))]
 pub mod ml;
 
+#[cfg(feature = "ocrs-cjk-ocr")]
+pub mod ocr_ocrs_cjk;
+#[cfg(feature = "ocrs-cjk-ocr")]
+pub use ocr_ocrs_cjk::OcrsCjkEngine;
+
 /// Load an image file as RGBA8.
 ///
 /// Thin convenience wrapper around [`image::open`] + `into_rgba8()`.

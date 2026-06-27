@@ -95,11 +95,25 @@ pub fn capture(target: &Target) -> Result<RgbaImage> {
 fn capture_window_class(class_name: &str) -> Result<RgbaImage> {
     #[cfg(target_os = "windows")]
     {
-        // Find the first top-level window with the given class name via xcap title search.
-        // xcap does not expose class names directly, so we enumerate all windows and
-        // fall back to the title-based search using the class_name string as a title fragment.
-        // Prefer the class_name as the search key; behaviour is best-effort on Windows.
-        capture_window(class_name)
+        use windows::core::PCWSTR;
+        use windows::Win32::UI::WindowsAndMessaging::{FindWindowExW, GetWindowTextW};
+
+        let wide: Vec<u16> = class_name.encode_utf16().chain(Some(0)).collect();
+        // ponytail: finds the first top-level window of this class; good enough
+        let hwnd = unsafe {
+            FindWindowExW(None, None, PCWSTR(wide.as_ptr()), PCWSTR::null())
+        };
+        match hwnd {
+            Ok(h) if !h.is_invalid() => {
+                let mut buf = vec![0u16; 512];
+                let len = unsafe { GetWindowTextW(h, &mut buf) };
+                if len == 0 {
+                    return Err(CaptureError::WindowNotFound(class_name.to_owned()));
+                }
+                capture_window(&String::from_utf16_lossy(&buf[..len as usize]))
+            }
+            _ => capture_window(class_name), // fallback: treat as title fragment
+        }
     }
     #[cfg(not(target_os = "windows"))]
     {

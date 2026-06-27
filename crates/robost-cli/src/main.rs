@@ -94,6 +94,15 @@ enum Commands {
         /// Directory containing screenshot images to test against
         screenshots: PathBuf,
     },
+    /// Inspect UIA elements in a window or at a screen point (Windows only)
+    Inspect {
+        /// Window title substring — lists all UIA elements in that window
+        #[arg(long)]
+        window: Option<String>,
+        /// Screen point — prints the element at x y (two values)
+        #[arg(long, num_args = 2, value_names = ["X", "Y"])]
+        point: Option<Vec<i32>>,
+    },
     /// Start the local RPA agent with a built-in HTTP server and web UI
     Agent {
         /// Port to listen on
@@ -355,6 +364,7 @@ fn main() -> Result<()> {
                 .build()?;
             rt.block_on(server::run_agent_server(&bind_addr, dir))
         }
+        Commands::Inspect { window, point } => run_inspect(window, point),
         Commands::Plugin { action } => match action {
             PluginCommands::Install { source, yes } => {
                 let (_tmpdir, wasm_path) = resolve_plugin_source(&source)?;
@@ -416,6 +426,47 @@ fn main() -> Result<()> {
             }
         },
     }
+}
+
+// ── rpa inspect ──────────────────────────────────────────────────────────────
+
+fn run_inspect(window: Option<String>, point: Option<Vec<i32>>) -> Result<()> {
+    let finder = robost_uia::UiaFinder::new()
+        .context("UIA init failed — Windows only")?;
+
+    let elements: Vec<robost_uia::ElementInfo> = if let Some(coords) = point {
+        let el = finder
+            .element_at_point(coords[0], coords[1])
+            .context("no element at that point")?;
+        vec![finder.element_info(&el)]
+    } else if let Some(ref title) = window {
+        let win_el = finder
+            .find_window_element(title)
+            .with_context(|| format!("window not found: {title}"))?;
+        finder
+            .list_descendants(&win_el)
+            .context("failed to enumerate descendants")?
+    } else {
+        anyhow::bail!("specify --window <TITLE> or --point <X> <Y>");
+    };
+
+    for info in &elements {
+        println!("- name: {:?}", info.name);
+        println!("  automation_id: {:?}", info.automation_id);
+        println!("  class_name: {:?}", info.class_name);
+        println!("  control_type: {:?}", info.control_type);
+        let (x, y, w, h) = info.rect;
+        println!("  rect: [{x}, {y}, {w}, {h}]");
+        println!("  enabled: {}", info.enabled);
+        if !info.automation_id.is_empty() {
+            println!("  # suggested: by: {{ id: {:?} }}", info.automation_id);
+        } else if !info.name.is_empty() {
+            println!("  # suggested: by: {{ name: {:?} }}", info.name);
+        } else if !info.class_name.is_empty() {
+            println!("  # suggested: by: {{ class: {:?} }}", info.class_name);
+        }
+    }
+    Ok(())
 }
 
 // ── Plugin source resolution ──────────────────────────────────────────────────
@@ -535,6 +586,42 @@ fn run_doctor() -> Result<()> {
     println!("[OK]   OCR backend        (Tesseract / leptess)");
     #[cfg(not(any(feature = "ocr", feature = "windows-ocr")))]
     println!("[WARN] OCR backend        (no OCR feature enabled; rebuild with --features ocr)");
+
+    // ocrs-cjk OCR backend
+    #[cfg(feature = "ocrs-cjk-ocr")]
+    {
+        match std::env::var("ROBOST_OCR_MODEL_DIR") {
+            Ok(dir) => {
+                let has_det = ["detection.rten", "detection.onnx"]
+                    .iter()
+                    .any(|f| std::path::Path::new(&dir).join(f).exists());
+                let has_rec = ["recognition.rten", "recognition.onnx"]
+                    .iter()
+                    .any(|f| std::path::Path::new(&dir).join(f).exists());
+                if has_det && has_rec {
+                    println!("[OK]   ocrs-cjk OCR       (models found: {dir})");
+                } else {
+                    println!("[WARN] ocrs-cjk OCR       (models missing in {dir}: need detection.* + recognition.*)");
+                }
+            }
+            Err(_) => {
+                // Check default location
+                let default_dir = std::env::var("HOME")
+                    .or_else(|_| std::env::var("USERPROFILE"))
+                    .map(|h| format!("{h}/.robost/models"))
+                    .unwrap_or_default();
+                let has_default = std::path::Path::new(&default_dir).join("detection.rten").exists()
+                    || std::path::Path::new(&default_dir).join("detection.onnx").exists();
+                if has_default {
+                    println!("[OK]   ocrs-cjk OCR       (models found: {default_dir})");
+                } else {
+                    println!("[WARN] ocrs-cjk OCR       (set ROBOST_OCR_MODEL_DIR or place models in ~/.robost/models)");
+                }
+            }
+        }
+    }
+    #[cfg(not(feature = "ocrs-cjk-ocr"))]
+    println!("[SKIP] ocrs-cjk OCR       (rebuild with --features ocrs-cjk-ocr to enable)");
 
     // 4. Keychain access
     #[cfg(feature = "keychain")]

@@ -126,7 +126,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 zip = "2"
 
 # PDF text extraction
-pdf-extract = "0.7"
+pdf-extract = "0.12"
 
 # Desktop notification (optional feature)
 notify-rust  = "4"

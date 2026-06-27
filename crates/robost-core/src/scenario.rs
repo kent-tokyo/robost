@@ -778,10 +778,22 @@ pub struct LlmOcrConfig {
     pub prompt: Option<String>,
 }
 
+#[cfg(feature = "ocrs-cjk-ocr")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OcrsCjkConfig {
+    /// Directory containing `detection.rten/.onnx` and `recognition.rten/.onnx`.
+    /// Falls back to `ROBOST_OCR_MODEL_DIR` env var, then `~/.robost/models`.
+    #[serde(default)]
+    pub model_dir: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OcrEngineKind {
     Tesseract,
+    /// ocrs-cjk: Pure Rust, offline, CJK-enhanced OCR (PP-OCRv5).
+    #[cfg(feature = "ocrs-cjk-ocr")]
+    OcrsCjk(OcrsCjkConfig),
     #[cfg(feature = "llm-ocr")]
     Llm(LlmOcrConfig),
 }
@@ -838,6 +850,9 @@ pub struct ClickTextStep {
     pub timeout_ms: u64,
     #[serde(default = "default_retry_interval_ms")]
     pub retry_interval_ms: u64,
+    /// OCR engine to use. Absent = Tesseract/WinRT (backward compatible).
+    #[serde(default)]
+    pub engine: Option<OcrEngineKind>,
 }
 
 // ── Move mouse to text via OCR ────────────────────────────────────────────
@@ -863,6 +878,9 @@ pub struct MoveToTextStep {
     pub timeout_ms: u64,
     #[serde(default = "default_retry_interval_ms")]
     pub retry_interval_ms: u64,
+    /// OCR engine to use. Absent = Tesseract/WinRT (backward compatible).
+    #[serde(default)]
+    pub engine: Option<OcrEngineKind>,
 }
 
 // ── ML detection step type ────────────────────────────────────────────────
@@ -1570,6 +1588,8 @@ pub enum UiaBy {
     Id(String),
     /// Match by the element's ClassName.
     Class(String),
+    /// Match by control type name: "Button", "Edit", "Window", etc.
+    ControlType(String),
 }
 
 /// Get a UI Automation element property.
@@ -1588,6 +1608,9 @@ pub struct UiaGetStep {
     pub save_as: String,
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
+    /// Scope the search to a window whose title contains this string.
+    #[serde(default)]
+    pub window: Option<String>,
 }
 
 /// Set a UIA element value.
@@ -1597,6 +1620,8 @@ pub struct UiaSetStep {
     pub value: String,
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
+    #[serde(default)]
+    pub window: Option<String>,
 }
 
 /// Invoke (click) a UIA element.
@@ -1605,6 +1630,8 @@ pub struct UiaClickStep {
     pub by: UiaBy,
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
+    #[serde(default)]
+    pub window: Option<String>,
 }
 
 /// Find a UIA element and store its bounding rect.
@@ -1615,6 +1642,8 @@ pub struct UiaFindStep {
     pub save_as: String,
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
+    #[serde(default)]
+    pub window: Option<String>,
 }
 
 fn default_uia_property() -> String {
@@ -1649,6 +1678,8 @@ pub struct UiaWaitStep {
     pub state: UiaState,
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
+    #[serde(default)]
+    pub window: Option<String>,
 }
 
 /// Select a named item in a ComboBox or ListBox.
@@ -1664,6 +1695,8 @@ pub struct UiaSelectStep {
     pub item: String,
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
+    #[serde(default)]
+    pub window: Option<String>,
 }
 
 /// Enumerate immediate children of a UIA element.
@@ -1680,6 +1713,8 @@ pub struct UiaGetChildrenStep {
     pub save_as: String,
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
+    #[serde(default)]
+    pub window: Option<String>,
 }
 
 /// Set or clear a checkbox via `IUIAutomationTogglePattern`.
@@ -1695,6 +1730,8 @@ pub struct UiaCheckStep {
     pub checked: bool,
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
+    #[serde(default)]
+    pub window: Option<String>,
 }
 
 // ── Pixel / colour step types ─────────────────────────────────────────────

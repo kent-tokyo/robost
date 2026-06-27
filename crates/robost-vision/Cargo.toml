@@ -19,6 +19,7 @@ ocr = ["dep:leptess"]
 windows-ocr = []
 ml         = ["dep:ort", "dep:ndarray"]
 ml-vision  = ["dep:objc2", "dep:objc2-foundation", "dep:objc2-core-graphics", "dep:objc2-core-foundation"]
+ocrs-cjk-ocr = ["dep:ocrs-cjk", "dep:rten"]
 
 [dependencies]
 serde.workspace = true
@@ -28,9 +29,11 @@ thiserror.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, optional = true }
 
-leptess = { version = "0.14", optional = true }
-ort     = { version = "2.0.0-rc.12", optional = true }
-ndarray = { version = "0.17", optional = true }
+leptess  = { version = "0.14", optional = true }
+ort      = { version = "2.0.0-rc.12", optional = true }
+ndarray  = { version = "0.17", optional = true }
+ocrs-cjk = { path = "../../../ocrs-cjk/ocrs", optional = true }
+rten     = { version = "0.24.0", optional = true, default-features = false, features = ["rten_format"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61", features = [

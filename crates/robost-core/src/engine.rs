@@ -2698,6 +2698,11 @@ impl ScenarioEngine {
     }
 
     async fn ocr_match(&self, step: &OcrMatchStep, vars: &mut Variables) -> Result<()> {
+        #[cfg(feature = "ocrs-cjk-ocr")]
+        if let Some(crate::scenario::OcrEngineKind::OcrsCjk(cfg)) = &step.engine {
+            return self.ocr_match_ocrs_cjk(step, cfg, vars).await;
+        }
+
         #[cfg(feature = "llm-ocr")]
         if let Some(crate::scenario::OcrEngineKind::Llm(cfg)) = &step.engine {
             return self.ocr_match_llm(step, cfg, vars).await;
@@ -2776,6 +2781,294 @@ impl ScenarioEngine {
                         sleep(Duration::from_millis(step.retry_interval_ms)).await;
                     }
                     Err(e) => return Err(e),
+                }
+            }
+        }
+    }
+
+    // ── ocrs-cjk helpers ───────────────────────────────────────────────────
+
+    #[cfg(feature = "ocrs-cjk-ocr")]
+    fn resolve_ocrs_model_paths(
+        cfg: &crate::scenario::OcrsCjkConfig,
+    ) -> std::result::Result<(std::path::PathBuf, std::path::PathBuf), String> {
+        let model_dir: std::path::PathBuf = if let Some(dir) = &cfg.model_dir {
+            // simple tilde expand
+            if dir.starts_with("~/") {
+                let home = std::env::var("HOME")
+                    .or_else(|_| std::env::var("USERPROFILE"))
+                    .unwrap_or_default();
+                std::path::PathBuf::from(format!("{}{}", home, &dir[1..]))
+            } else {
+                std::path::PathBuf::from(dir)
+            }
+        } else if let Ok(dir) = std::env::var("ROBOST_OCR_MODEL_DIR") {
+            std::path::PathBuf::from(dir)
+        } else {
+            let home = std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .map_err(|_| "cannot find home directory for OCR model path".to_string())?;
+            std::path::PathBuf::from(home).join(".robost").join("models")
+        };
+
+        let try_ext = |name: &str| -> Option<std::path::PathBuf> {
+            for ext in ["rten", "onnx"] {
+                let p = model_dir.join(format!("{name}.{ext}"));
+                if p.exists() {
+                    return Some(p);
+                }
+            }
+            None
+        };
+
+        let det = try_ext("detection")
+            .ok_or_else(|| format!("detection model not found in {}", model_dir.display()))?;
+        let rec = try_ext("recognition")
+            .ok_or_else(|| format!("recognition model not found in {}", model_dir.display()))?;
+        Ok((det, rec))
+    }
+
+    #[cfg(feature = "ocrs-cjk-ocr")]
+    async fn ocr_match_ocrs_cjk(
+        &self,
+        step: &crate::scenario::OcrMatchStep,
+        cfg: &crate::scenario::OcrsCjkConfig,
+        vars: &mut Variables,
+    ) -> Result<()> {
+        use robost_vision::ocr_ocrs_cjk::OcrsCjkEngine;
+        let (det, rec) = Self::resolve_ocrs_model_paths(cfg)
+            .map_err(|e| EngineError::Other(format!("ocr_match[ocrs-cjk]: {e}")))?;
+
+        // Load models once before the retry loop (slow but blocking is fine here)
+        let engine = tokio::task::spawn_blocking(move || {
+            OcrsCjkEngine::new(&det, &rec)
+                .map_err(|e| EngineError::Other(format!("ocr_match[ocrs-cjk]: {e}")))
+        })
+        .await
+        .map_err(|e| EngineError::TaskPanic(e.to_string()))??;
+
+        let engine = std::sync::Arc::new(engine);
+        let target = Self::capture_target(&step.window);
+        let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
+        let contains = step.contains.clone();
+        let region = step.region;
+
+        loop {
+            let backend = Arc::clone(&self.backend);
+            let tgt = target.clone();
+            let engine2 = std::sync::Arc::clone(&engine);
+
+            let text_result: Result<String> = tokio::task::spawn_blocking(move || {
+                let (img, _origin) = backend.capture_with_origin(&tgt)?;
+                let text = if let Some(r) = region {
+                    engine2.extract_text_in_region(&img, r)
+                } else {
+                    engine2.extract_text(&img)
+                }
+                .map_err(|e| EngineError::Other(format!("ocr_match[ocrs-cjk]: {e}")))?;
+                Ok(text)
+            })
+            .await
+            .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+
+            match text_result {
+                Ok(text) => {
+                    let found = contains
+                        .as_ref()
+                        .map_or(true, |pat| text.contains(pat.as_str()));
+                    info!(found, text_len = text.len(), "ocr_match[ocrs-cjk]");
+                    if found {
+                        if let Some(save_as) = &step.save_as {
+                            vars.set(
+                                save_as.clone(),
+                                serde_json::json!({ "found": true, "text": text }),
+                            );
+                        }
+                        return Ok(());
+                    }
+                    if Instant::now() >= deadline {
+                        if let Some(save_as) = &step.save_as {
+                            vars.set(
+                                save_as.clone(),
+                                serde_json::json!({ "found": false, "text": text }),
+                            );
+                            return Ok(());
+                        }
+                        return Err(EngineError::Timeout(format!(
+                            "ocr_match[ocrs-cjk]: {:?}",
+                            contains
+                        )));
+                    }
+                    self.check_cancelled()?;
+                    sleep(Duration::from_millis(step.retry_interval_ms)).await;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    #[cfg(feature = "ocrs-cjk-ocr")]
+    async fn click_text_ocrs_cjk(
+        &self,
+        step: &crate::scenario::ClickTextStep,
+        cfg: &crate::scenario::OcrsCjkConfig,
+        vars: &Variables,
+    ) -> Result<()> {
+        use robost_vision::ocr_ocrs_cjk::OcrsCjkEngine;
+        let (det, rec) = Self::resolve_ocrs_model_paths(cfg)
+            .map_err(|e| EngineError::Other(format!("click_text[ocrs-cjk]: {e}")))?;
+
+        let engine = tokio::task::spawn_blocking(move || {
+            OcrsCjkEngine::new(&det, &rec)
+                .map_err(|e| EngineError::Other(format!("click_text[ocrs-cjk]: {e}")))
+        })
+        .await
+        .map_err(|e| EngineError::TaskPanic(e.to_string()))??;
+
+        let engine = std::sync::Arc::new(engine);
+        let target = Self::capture_target(&step.window);
+        let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
+        let text = vars.expand(&step.text);
+        let action = step.action.clone();
+
+        loop {
+            let backend = Arc::clone(&self.backend);
+            let tgt = target.clone();
+            let engine2 = std::sync::Arc::clone(&engine);
+            let text2 = text.clone();
+            let offset_x = step.offset_x;
+            let offset_y = step.offset_y;
+
+            let click_pt: Result<Option<robost_template::ScreenPoint>> =
+                tokio::task::spawn_blocking(move || {
+                    let (img, origin) = backend.capture_with_origin(&tgt)?;
+                    let scale: f32 = xcap::Monitor::all()
+                        .ok()
+                        .and_then(|ms| {
+                            ms.into_iter()
+                                .find(|m| m.is_primary().unwrap_or(false))
+                                .and_then(|m| m.scale_factor().ok())
+                        })
+                        .unwrap_or(1.0)
+                        .max(1.0);
+                    let found = engine2
+                        .find_text_bounds(&img, &text2)
+                        .map_err(|e| EngineError::Other(format!("click_text[ocrs-cjk]: {e}")))?;
+                    Ok(found.map(|r| {
+                        let cx = ((r.x + r.width as i32 / 2) as f32 / scale) as i32;
+                        let cy = ((r.y + r.height as i32 / 2) as f32 / scale) as i32;
+                        robost_template::ScreenPoint {
+                            x: origin.x + cx + offset_x,
+                            y: origin.y + cy + offset_y,
+                        }
+                    }))
+                })
+                .await
+                .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+
+            match click_pt? {
+                Some(point) => {
+                    info!(x = point.x, y = point.y, text = %text, "click_text[ocrs-cjk]");
+                    if !self.dry_run {
+                        match action {
+                            ClickAction::Left => self.backend.click(point)?,
+                            ClickAction::Right => self.backend.right_click(point)?,
+                            ClickAction::Double => self.backend.double_click(point)?,
+                        }
+                    } else {
+                        info!(dry_run = true, "click_text[ocrs-cjk] skipped");
+                    }
+                    return Ok(());
+                }
+                None => {
+                    if Instant::now() >= deadline {
+                        return Err(EngineError::Timeout(format!(
+                            "click_text[ocrs-cjk]: {text:?}"
+                        )));
+                    }
+                    self.check_cancelled()?;
+                    sleep(Duration::from_millis(step.retry_interval_ms)).await;
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "ocrs-cjk-ocr")]
+    async fn move_to_text_ocrs_cjk(
+        &self,
+        step: &crate::scenario::MoveToTextStep,
+        cfg: &crate::scenario::OcrsCjkConfig,
+        vars: &Variables,
+    ) -> Result<()> {
+        use robost_vision::ocr_ocrs_cjk::OcrsCjkEngine;
+        let (det, rec) = Self::resolve_ocrs_model_paths(cfg)
+            .map_err(|e| EngineError::Other(format!("move_to_text[ocrs-cjk]: {e}")))?;
+
+        let engine = tokio::task::spawn_blocking(move || {
+            OcrsCjkEngine::new(&det, &rec)
+                .map_err(|e| EngineError::Other(format!("move_to_text[ocrs-cjk]: {e}")))
+        })
+        .await
+        .map_err(|e| EngineError::TaskPanic(e.to_string()))??;
+
+        let engine = std::sync::Arc::new(engine);
+        let target = Self::capture_target(&step.window);
+        let deadline = Instant::now() + Duration::from_millis(step.timeout_ms);
+        let text = vars.expand(&step.text);
+
+        loop {
+            let backend = Arc::clone(&self.backend);
+            let tgt = target.clone();
+            let engine2 = std::sync::Arc::clone(&engine);
+            let text2 = text.clone();
+            let offset_x = step.offset_x;
+            let offset_y = step.offset_y;
+
+            let move_pt: Result<Option<robost_template::ScreenPoint>> =
+                tokio::task::spawn_blocking(move || {
+                    let (img, origin) = backend.capture_with_origin(&tgt)?;
+                    let scale: f32 = xcap::Monitor::all()
+                        .ok()
+                        .and_then(|ms| {
+                            ms.into_iter()
+                                .find(|m| m.is_primary().unwrap_or(false))
+                                .and_then(|m| m.scale_factor().ok())
+                        })
+                        .unwrap_or(1.0)
+                        .max(1.0);
+                    let found = engine2
+                        .find_text_bounds(&img, &text2)
+                        .map_err(|e| EngineError::Other(format!("move_to_text[ocrs-cjk]: {e}")))?;
+                    Ok(found.map(|r| {
+                        let cx = ((r.x + r.width as i32 / 2) as f32 / scale) as i32;
+                        let cy = ((r.y + r.height as i32 / 2) as f32 / scale) as i32;
+                        robost_template::ScreenPoint {
+                            x: origin.x + cx + offset_x,
+                            y: origin.y + cy + offset_y,
+                        }
+                    }))
+                })
+                .await
+                .map_err(|e| EngineError::TaskPanic(e.to_string()))?;
+
+            match move_pt? {
+                Some(point) => {
+                    info!(x = point.x, y = point.y, text = %text, "move_to_text[ocrs-cjk]");
+                    if !self.dry_run {
+                        self.backend.move_mouse(point)?;
+                    } else {
+                        info!(dry_run = true, "move_to_text[ocrs-cjk] skipped");
+                    }
+                    return Ok(());
+                }
+                None => {
+                    if Instant::now() >= deadline {
+                        return Err(EngineError::Timeout(format!(
+                            "move_to_text[ocrs-cjk]: {text:?}"
+                        )));
+                    }
+                    self.check_cancelled()?;
+                    sleep(Duration::from_millis(step.retry_interval_ms)).await;
                 }
             }
         }
@@ -2868,6 +3161,11 @@ impl ScenarioEngine {
     // ── Click text via OCR ──────────────────────────────────────────────────
 
     async fn click_text(&self, step: &ClickTextStep, vars: &Variables) -> Result<()> {
+        #[cfg(feature = "ocrs-cjk-ocr")]
+        if let Some(crate::scenario::OcrEngineKind::OcrsCjk(cfg)) = &step.engine {
+            return self.click_text_ocrs_cjk(step, cfg, vars).await;
+        }
+
         #[cfg(not(feature = "_ocr"))]
         {
             let _ = (step, vars);
@@ -2965,6 +3263,11 @@ impl ScenarioEngine {
     // ── Move mouse to text via OCR ──────────────────────────────────────────
 
     async fn move_to_text(&self, step: &MoveToTextStep, vars: &Variables) -> Result<()> {
+        #[cfg(feature = "ocrs-cjk-ocr")]
+        if let Some(crate::scenario::OcrEngineKind::OcrsCjk(cfg)) = &step.engine {
+            return self.move_to_text_ocrs_cjk(step, cfg, vars).await;
+        }
+
         #[cfg(not(feature = "_ocr"))]
         {
             let _ = (step, vars);
@@ -4724,13 +5027,16 @@ fn uia_selector_from_by(by: &UiaBy, vars: &Variables) -> robost_uia::UiaSelector
         UiaBy::Name(s) => robost_uia::UiaSelector::from_name(vars.expand(s)),
         UiaBy::Id(s) => robost_uia::UiaSelector::from_id(vars.expand(s)),
         UiaBy::Class(s) => robost_uia::UiaSelector::from_class(vars.expand(s)),
+        UiaBy::ControlType(s) => robost_uia::UiaSelector::from_control_type(vars.expand(s)),
     }
 }
 
 /// Poll UIA until the element matching `selector` is found, then apply `f`.
 /// Retries every 200 ms until `timeout_ms` expires.
+/// When `window` is Some, scopes the search to that window's subtree.
 fn uia_poll<T, E, F>(
     selector: robost_uia::UiaSelector,
+    window: Option<String>,
     timeout_ms: u64,
     op: &'static str,
     f: F,
@@ -4743,7 +5049,14 @@ where
         robost_uia::UiaFinder::new().map_err(|e| EngineError::Other(format!("{op}: {e}")))?;
     let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
     loop {
-        match finder.find(&selector) {
+        let find_result = if let Some(ref win) = window {
+            finder
+                .find_window_element(win)
+                .and_then(|w| finder.find_in(&w, &selector))
+        } else {
+            finder.find(&selector)
+        };
+        match find_result {
             Ok(el) => {
                 return f(el).map_err(|e| EngineError::Other(format!("{op}: {e}")));
             }
@@ -5024,8 +5337,9 @@ impl ScenarioEngine {
         let property = step.property.clone();
         let timeout_ms = step.timeout_ms;
         let save_as = step.save_as.clone();
+        let window = step.window.clone();
         let result = Self::spawn_uia(move || {
-            uia_poll(selector, timeout_ms, "uia_get", |el| {
+            uia_poll(selector, window, timeout_ms, "uia_get", |el| {
                 match property.as_str() {
                     "name" => el.get_name(),
                     "value" => el.get_value(),
@@ -5045,8 +5359,11 @@ impl ScenarioEngine {
         let selector = uia_selector_from_by(&step.by, vars);
         let value = vars.expand(&step.value);
         let timeout_ms = step.timeout_ms;
+        let window = step.window.clone();
         Self::spawn_uia(move || {
-            uia_poll(selector, timeout_ms, "uia_set", |el| el.set_value(&value))
+            uia_poll(selector, window, timeout_ms, "uia_set", |el| {
+                el.set_value(&value)
+            })
         })
         .await
     }
@@ -5054,19 +5371,24 @@ impl ScenarioEngine {
     async fn uia_click(&self, step: &UiaClickStep, vars: &Variables) -> Result<()> {
         let selector = uia_selector_from_by(&step.by, vars);
         let timeout_ms = step.timeout_ms;
+        let window = step.window.clone();
         if self.dry_run {
             info!(dry_run = true, "uia_click skipped");
             return Ok(());
         }
-        Self::spawn_uia(move || uia_poll(selector, timeout_ms, "uia_click", |el| el.invoke())).await
+        Self::spawn_uia(move || {
+            uia_poll(selector, window, timeout_ms, "uia_click", |el| el.invoke())
+        })
+        .await
     }
 
     async fn uia_find(&self, step: &UiaFindStep, vars: &mut Variables) -> Result<()> {
         let selector = uia_selector_from_by(&step.by, vars);
         let timeout_ms = step.timeout_ms;
         let save_as = step.save_as.clone();
+        let window = step.window.clone();
         let (name, (x, y, w, h)) = tokio::task::spawn_blocking(move || {
-            uia_poll(selector, timeout_ms, "uia_find", |el| {
+            uia_poll(selector, window, timeout_ms, "uia_find", |el| {
                 let name = el.get_name().unwrap_or_default();
                 let rect = el.bounding_rect().unwrap_or((0, 0, 0, 0));
                 Ok::<_, std::convert::Infallible>((name, rect))
@@ -5085,14 +5407,23 @@ impl ScenarioEngine {
         let selector = uia_selector_from_by(&step.by, vars);
         let state = step.state;
         let timeout_ms = step.timeout_ms;
+        let window = step.window.clone();
 
         tokio::task::spawn_blocking(move || {
             use crate::scenario::UiaState;
             let finder = robost_uia::UiaFinder::new()
                 .map_err(|e| EngineError::Other(format!("uia_wait: {e}")))?;
-            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+            let deadline =
+                std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
             loop {
-                let ready = match finder.find(&selector) {
+                let find_result = if let Some(ref win) = window {
+                    finder
+                        .find_window_element(win)
+                        .and_then(|w| finder.find_in(&w, &selector))
+                } else {
+                    finder.find(&selector)
+                };
+                let ready = match find_result {
                     Ok(el) => match state {
                         UiaState::Enabled => el.is_enabled().unwrap_or(false),
                         UiaState::Visible => !el.is_offscreen().unwrap_or(true),
@@ -5117,8 +5448,9 @@ impl ScenarioEngine {
         let selector = uia_selector_from_by(&step.by, vars);
         let item = vars.expand(&step.item);
         let timeout_ms = step.timeout_ms;
+        let window = step.window.clone();
         Self::spawn_uia(move || {
-            uia_poll(selector, timeout_ms, "uia_select", |el| {
+            uia_poll(selector, window, timeout_ms, "uia_select", |el| {
                 el.select_item(&item)
             })
         })
@@ -5133,8 +5465,9 @@ impl ScenarioEngine {
         let selector = uia_selector_from_by(&step.by, vars);
         let timeout_ms = step.timeout_ms;
         let save_as = step.save_as.clone();
+        let window = step.window.clone();
         let result = Self::spawn_uia(move || {
-            uia_poll(selector, timeout_ms, "uia_get_children", |el| {
+            uia_poll(selector, window, timeout_ms, "uia_get_children", |el| {
                 let children = el.children()?;
                 Ok::<_, robost_uia::UiaError>(
                     children
@@ -5159,8 +5492,9 @@ impl ScenarioEngine {
         let selector = uia_selector_from_by(&step.by, vars);
         let checked = step.checked;
         let timeout_ms = step.timeout_ms;
+        let window = step.window.clone();
         Self::spawn_uia(move || {
-            uia_poll(selector, timeout_ms, "uia_check", |el| {
+            uia_poll(selector, window, timeout_ms, "uia_check", |el| {
                 el.set_checked(checked)
             })
         })

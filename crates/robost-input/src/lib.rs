@@ -208,17 +208,50 @@ fn windows_focus(title: &str) -> Result<()> {
 }
 
 #[cfg(windows)]
-fn windows_control(title: &str, action: &str) -> Result<()> {
-    use windows::core::PCWSTR;
-    use windows::Win32::Foundation::{LPARAM, WPARAM};
+fn find_hwnd_by_title_contains(search: &str) -> Option<windows::Win32::Foundation::HWND> {
+    use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, PostMessageW, SetForegroundWindow, ShowWindow, SW_MAXIMIZE, SW_MINIMIZE,
-        WM_CLOSE,
+        EnumWindows, GetWindowTextLengthW, GetWindowTextW, IsWindowVisible,
     };
 
-    let wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
-    let hwnd = unsafe { FindWindowW(PCWSTR::null(), PCWSTR(wide.as_ptr())) }
-        .map_err(|_| InputError::Focus(format!("window not found: {title}")))?;
+    struct State {
+        needle: String,
+        found: Option<HWND>,
+    }
+
+    unsafe extern "system" fn enum_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let s = &mut *(lparam.0 as *mut State);
+        if !IsWindowVisible(hwnd).as_bool() {
+            return BOOL(1);
+        }
+        let len = GetWindowTextLengthW(hwnd);
+        if len == 0 {
+            return BOOL(1);
+        }
+        let mut buf = vec![0u16; (len + 1) as usize];
+        GetWindowTextW(hwnd, &mut buf);
+        let text = String::from_utf16_lossy(&buf[..len as usize]).to_lowercase();
+        if text.contains(&s.needle) {
+            s.found = Some(hwnd);
+            return BOOL(0); // stop enumeration
+        }
+        BOOL(1)
+    }
+
+    let mut state = State { needle: search.to_lowercase(), found: None };
+    unsafe { let _ = EnumWindows(Some(enum_cb), LPARAM(&mut state as *mut _ as isize)); }
+    state.found
+}
+
+#[cfg(windows)]
+fn windows_control(title: &str, action: &str) -> Result<()> {
+    use windows::Win32::Foundation::{LPARAM, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        PostMessageW, SetForegroundWindow, ShowWindow, SW_MAXIMIZE, SW_MINIMIZE, WM_CLOSE,
+    };
+
+    let hwnd = find_hwnd_by_title_contains(title)
+        .ok_or_else(|| InputError::Focus(format!("window not found: {title}")))?;
     match action {
         "focus" => {
             let _ = unsafe { SetForegroundWindow(hwnd) };

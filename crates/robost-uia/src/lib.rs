@@ -17,6 +17,7 @@
 //!     value: "{{ username }}"
 //!
 //! - uia_click:
+//!     window: "請求管理"
 //!     by: { id: "btnLogin" }
 //!
 //! - uia_find:
@@ -47,6 +48,8 @@ pub enum UiaSelector {
     AutomationId(String),
     /// Match by the element's ClassName property.
     ClassName(String),
+    /// Match by the element's control type name: "Button", "Edit", "Window", etc.
+    ControlType(String),
 }
 
 impl UiaSelector {
@@ -59,6 +62,21 @@ impl UiaSelector {
     pub fn from_class(s: impl Into<String>) -> Self {
         Self::ClassName(s.into())
     }
+    pub fn from_control_type(s: impl Into<String>) -> Self {
+        Self::ControlType(s.into())
+    }
+}
+
+/// Properties of a UIA element, returned by `UiaFinder::element_info` for the inspect command.
+pub struct ElementInfo {
+    pub name: String,
+    pub automation_id: String,
+    pub class_name: String,
+    /// Human-readable control type name, e.g. `"Button"`, `"Edit"`, `"Window"`.
+    pub control_type: String,
+    /// Bounding rectangle as `(x, y, width, height)` in screen coordinates.
+    pub rect: (i32, i32, i32, i32),
+    pub enabled: bool,
 }
 
 /// A located UI Automation element.
@@ -99,6 +117,77 @@ impl UiaFinder {
         #[cfg(not(target_os = "windows"))]
         {
             let _ = selector;
+            Err(UiaError::Unsupported)
+        }
+    }
+
+    /// Find the first top-level Window element whose name contains `title_contains` (case-insensitive).
+    pub fn find_window_element(&self, title_contains: &str) -> Result<UiaElement> {
+        #[cfg(target_os = "windows")]
+        {
+            let el = self.inner.find_window_element(title_contains)?;
+            Ok(UiaElement { inner: el })
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = title_contains;
+            Err(UiaError::Unsupported)
+        }
+    }
+
+    /// Find the first element matching `selector` within the subtree rooted at `root`.
+    pub fn find_in(&self, root: &UiaElement, selector: &UiaSelector) -> Result<UiaElement> {
+        #[cfg(target_os = "windows")]
+        {
+            let el = self.inner.find_in(&root.inner, selector)?;
+            Ok(UiaElement { inner: el })
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (root, selector);
+            Err(UiaError::Unsupported)
+        }
+    }
+
+    /// Find the UIA element at the given screen coordinates.
+    pub fn element_at_point(&self, x: i32, y: i32) -> Result<UiaElement> {
+        #[cfg(target_os = "windows")]
+        {
+            let el = self.inner.element_at_point(x, y)?;
+            Ok(UiaElement { inner: el })
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = (x, y);
+            Err(UiaError::Unsupported)
+        }
+    }
+
+    /// Collect all properties of a UIA element into an `ElementInfo`.
+    pub fn element_info(&self, el: &UiaElement) -> ElementInfo {
+        #[cfg(target_os = "windows")]
+        return self.inner.element_info(&el.inner);
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = el;
+            ElementInfo {
+                name: String::new(),
+                automation_id: String::new(),
+                class_name: String::new(),
+                control_type: String::new(),
+                rect: (0, 0, 0, 0),
+                enabled: false,
+            }
+        }
+    }
+
+    /// List all descendant elements under `root`, collecting their properties.
+    pub fn list_descendants(&self, root: &UiaElement) -> Result<Vec<ElementInfo>> {
+        #[cfg(target_os = "windows")]
+        return self.inner.list_descendants(&root.inner);
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = root;
             Err(UiaError::Unsupported)
         }
     }
@@ -216,10 +305,11 @@ impl UiaElement {
 
 #[cfg(target_os = "windows")]
 mod windows_impl {
-    use super::{UiaError, UiaSelector};
+    use super::{ElementInfo, UiaError, UiaSelector};
     use windows::{
         core::{Interface, BSTR},
         Win32::{
+            Foundation::POINT,
             System::{
                 Com::{
                     CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
@@ -228,11 +318,102 @@ mod windows_impl {
             },
             UI::Accessibility::{
                 CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationValuePattern,
-                TreeScope_Descendants, UIA_AutomationIdPropertyId, UIA_ClassNamePropertyId,
-                UIA_NamePropertyId, UIA_ValuePatternId,
+                TreeScope_Children, TreeScope_Descendants, UIA_AutomationIdPropertyId,
+                UIA_ClassNamePropertyId, UIA_ControlTypePropertyId, UIA_NamePropertyId,
+                UIA_ValuePatternId, UIA_WindowControlTypeId,
             },
         },
     };
+
+    fn control_type_id(name: &str) -> Option<i32> {
+        match name.to_lowercase().as_str() {
+            "button" => Some(50000),
+            "calendar" => Some(50001),
+            "checkbox" | "check_box" => Some(50002),
+            "combobox" | "combo_box" => Some(50003),
+            "edit" => Some(50004),
+            "hyperlink" => Some(50005),
+            "image" => Some(50006),
+            "listitem" | "list_item" => Some(50007),
+            "list" => Some(50008),
+            "menu" => Some(50009),
+            "menubar" | "menu_bar" => Some(50010),
+            "menuitem" | "menu_item" => Some(50011),
+            "progressbar" | "progress_bar" => Some(50012),
+            "radiobutton" | "radio_button" => Some(50013),
+            "scrollbar" | "scroll_bar" => Some(50014),
+            "slider" => Some(50015),
+            "spinner" => Some(50016),
+            "statusbar" | "status_bar" => Some(50017),
+            "tab" => Some(50018),
+            "tabitem" | "tab_item" => Some(50019),
+            "text" => Some(50020),
+            "toolbar" | "tool_bar" => Some(50021),
+            "tooltip" | "tool_tip" => Some(50022),
+            "tree" => Some(50023),
+            "treeitem" | "tree_item" => Some(50024),
+            "custom" => Some(50025),
+            "group" => Some(50026),
+            "thumb" => Some(50027),
+            "datagrid" | "data_grid" => Some(50028),
+            "dataitem" | "data_item" => Some(50029),
+            "document" => Some(50030),
+            "splitbutton" | "split_button" => Some(50031),
+            "window" => Some(50032),
+            "pane" => Some(50033),
+            "header" => Some(50034),
+            "headeritem" | "header_item" => Some(50035),
+            "table" => Some(50036),
+            "titlebar" | "title_bar" => Some(50037),
+            "separator" => Some(50038),
+            _ => None,
+        }
+    }
+
+    fn control_type_name(id: i32) -> &'static str {
+        match id {
+            50000 => "Button",
+            50001 => "Calendar",
+            50002 => "CheckBox",
+            50003 => "ComboBox",
+            50004 => "Edit",
+            50005 => "Hyperlink",
+            50006 => "Image",
+            50007 => "ListItem",
+            50008 => "List",
+            50009 => "Menu",
+            50010 => "MenuBar",
+            50011 => "MenuItem",
+            50012 => "ProgressBar",
+            50013 => "RadioButton",
+            50014 => "ScrollBar",
+            50015 => "Slider",
+            50016 => "Spinner",
+            50017 => "StatusBar",
+            50018 => "Tab",
+            50019 => "TabItem",
+            50020 => "Text",
+            50021 => "ToolBar",
+            50022 => "ToolTip",
+            50023 => "Tree",
+            50024 => "TreeItem",
+            50025 => "Custom",
+            50026 => "Group",
+            50027 => "Thumb",
+            50028 => "DataGrid",
+            50029 => "DataItem",
+            50030 => "Document",
+            50031 => "SplitButton",
+            50032 => "Window",
+            50033 => "Pane",
+            50034 => "Header",
+            50035 => "HeaderItem",
+            50036 => "Table",
+            50037 => "TitleBar",
+            50038 => "Separator",
+            _ => "Unknown",
+        }
+    }
 
     pub struct Finder {
         automation: IUIAutomation,
@@ -256,33 +437,166 @@ mod windows_impl {
             }
         }
 
+        /// Find the first element matching `selector` under `root_el` (searching descendants).
+        fn find_first_from(
+            &self,
+            root_el: &IUIAutomationElement,
+            selector: &UiaSelector,
+        ) -> super::Result<Element> {
+            unsafe {
+                enum CondValue {
+                    Str(String),
+                    Int(i32),
+                }
+                let (prop_id, cond_value) = match selector {
+                    UiaSelector::Name(s) => (UIA_NamePropertyId, CondValue::Str(s.clone())),
+                    UiaSelector::AutomationId(s) => {
+                        (UIA_AutomationIdPropertyId, CondValue::Str(s.clone()))
+                    }
+                    UiaSelector::ClassName(s) => {
+                        (UIA_ClassNamePropertyId, CondValue::Str(s.clone()))
+                    }
+                    UiaSelector::ControlType(s) => {
+                        let type_id = control_type_id(s).ok_or_else(|| {
+                            UiaError::Other(format!("unknown control type: {s}"))
+                        })?;
+                        (UIA_ControlTypePropertyId, CondValue::Int(type_id))
+                    }
+                };
+                let variant = match cond_value {
+                    CondValue::Str(s) => VARIANT::from(BSTR::from(s.as_str())),
+                    CondValue::Int(i) => VARIANT::from(i),
+                };
+                let condition = self
+                    .automation
+                    .CreatePropertyCondition(prop_id, &variant)
+                    .map_err(|e| UiaError::Com(e.to_string()))?;
+                let el = root_el
+                    .FindFirst(TreeScope_Descendants, &condition)
+                    .map_err(|e| UiaError::Com(e.to_string()))?;
+                Ok(Element {
+                    el,
+                    automation: self.automation.clone(),
+                })
+            }
+        }
+
         pub fn find(&self, selector: &UiaSelector) -> super::Result<Element> {
             unsafe {
                 let root = self
                     .automation
                     .GetRootElement()
                     .map_err(|e| UiaError::Com(e.to_string()))?;
+                self.find_first_from(&root, selector)
+            }
+        }
 
-                let (prop_id, value) = match selector {
-                    UiaSelector::Name(s) => (UIA_NamePropertyId, s.clone()),
-                    UiaSelector::AutomationId(s) => (UIA_AutomationIdPropertyId, s.clone()),
-                    UiaSelector::ClassName(s) => (UIA_ClassNamePropertyId, s.clone()),
-                };
-
-                let variant = VARIANT::from(BSTR::from(value.as_str()));
-                let condition = self
+        pub fn find_window_element(&self, title_contains: &str) -> super::Result<Element> {
+            unsafe {
+                let root = self
                     .automation
-                    .CreatePropertyCondition(prop_id, &variant)
+                    .GetRootElement()
                     .map_err(|e| UiaError::Com(e.to_string()))?;
-
-                let el = root
-                    .FindFirst(TreeScope_Descendants, &condition)
+                let window_type_variant = VARIANT::from(UIA_WindowControlTypeId.0);
+                let window_cond = self
+                    .automation
+                    .CreatePropertyCondition(UIA_ControlTypePropertyId, &window_type_variant)
                     .map_err(|e| UiaError::Com(e.to_string()))?;
+                let el_array = root
+                    .FindAll(TreeScope_Children, &window_cond)
+                    .map_err(|e| UiaError::Com(e.to_string()))?;
+                let count = el_array
+                    .Length()
+                    .map_err(|e| UiaError::Com(e.to_string()))?;
+                let needle = title_contains.to_lowercase();
+                for i in 0..count {
+                    let child = el_array
+                        .GetElement(i)
+                        .map_err(|e| UiaError::Com(e.to_string()))?;
+                    let name = child.CurrentName().unwrap_or_default().to_string().to_lowercase();
+                    if name.contains(&needle) {
+                        return Ok(Element {
+                            el: child,
+                            automation: self.automation.clone(),
+                        });
+                    }
+                }
+                Err(UiaError::NotFound(format!(
+                    "window containing '{title_contains}'"
+                )))
+            }
+        }
 
+        pub fn find_in(&self, root: &Element, selector: &UiaSelector) -> super::Result<Element> {
+            self.find_first_from(&root.el, selector)
+        }
+
+        pub fn element_at_point(&self, x: i32, y: i32) -> super::Result<Element> {
+            unsafe {
+                let el = self
+                    .automation
+                    .ElementFromPoint(POINT { x, y })
+                    .map_err(|e| UiaError::Com(e.to_string()))?;
                 Ok(Element {
                     el,
                     automation: self.automation.clone(),
                 })
+            }
+        }
+
+        pub fn element_info(&self, el: &Element) -> ElementInfo {
+            unsafe {
+                let name = el.el.CurrentName().unwrap_or_default().to_string();
+                let automation_id = el.el.CurrentAutomationId().unwrap_or_default().to_string();
+                let class_name = el.el.CurrentClassName().unwrap_or_default().to_string();
+                let ct_id = el.el.CurrentControlType().map(|v| v.0).unwrap_or(0);
+                let control_type = control_type_name(ct_id).to_string();
+                let rect = el
+                    .el
+                    .CurrentBoundingRectangle()
+                    .map(|r| (r.left, r.top, r.right - r.left, r.bottom - r.top))
+                    .unwrap_or((0, 0, 0, 0));
+                let enabled = el
+                    .el
+                    .CurrentIsEnabled()
+                    .map(|b| b.as_bool())
+                    .unwrap_or(false);
+                ElementInfo {
+                    name,
+                    automation_id,
+                    class_name,
+                    control_type,
+                    rect,
+                    enabled,
+                }
+            }
+        }
+
+        pub fn list_descendants(&self, root: &Element) -> super::Result<Vec<ElementInfo>> {
+            unsafe {
+                let true_cond = self
+                    .automation
+                    .CreateTrueCondition()
+                    .map_err(|e| UiaError::Com(e.to_string()))?;
+                let el_array = root
+                    .el
+                    .FindAll(TreeScope_Descendants, &true_cond)
+                    .map_err(|e| UiaError::Com(e.to_string()))?;
+                let count = el_array
+                    .Length()
+                    .map_err(|e| UiaError::Com(e.to_string()))?;
+                let mut result = Vec::with_capacity(count as usize);
+                for i in 0..count {
+                    let child = el_array
+                        .GetElement(i)
+                        .map_err(|e| UiaError::Com(e.to_string()))?;
+                    let el = Element {
+                        el: child,
+                        automation: self.automation.clone(),
+                    };
+                    result.push(self.element_info(&el));
+                }
+                Ok(result)
             }
         }
     }
