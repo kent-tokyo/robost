@@ -5,9 +5,9 @@
 A Rust-based OSS desktop automation (RPA) tool.
 
 [![CI](https://github.com/kent-tokyo/robost/actions/workflows/ci.yml/badge.svg)](https://github.com/kent-tokyo/robost/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/kent-tokyo/robost/actions/workflows/codeql.yml/badge.svg)](https://github.com/kent-tokyo/robost/actions/workflows/codeql.yml)
 [![Security audit](https://github.com/kent-tokyo/robost/actions/workflows/security-audit.yml/badge.svg)](https://github.com/kent-tokyo/robost/actions/workflows/security-audit.yml)
 [![Release](https://github.com/kent-tokyo/robost/actions/workflows/release.yml/badge.svg)](https://github.com/kent-tokyo/robost/actions/workflows/release.yml)
+[![Docs](https://github.com/kent-tokyo/robost/actions/workflows/docs.yml/badge.svg)](https://github.com/kent-tokyo/robost/actions/workflows/docs.yml)
 
 [日本語](README_ja.md) | [中文](README_zh.md) | [Documentation](https://kent-tokyo.github.io/robost/)
 
