@@ -181,6 +181,20 @@ impl UiaFinder {
         }
     }
 
+    /// Return the current mouse cursor position in screen coordinates.
+    pub fn cursor_pos() -> Result<(i32, i32)> {
+        #[cfg(target_os = "windows")]
+        unsafe {
+            use windows::Win32::Foundation::POINT;
+            use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+            let mut p = POINT { x: 0, y: 0 };
+            GetCursorPos(&mut p).map_err(|e| UiaError::Com(e.to_string()))?;
+            Ok((p.x, p.y))
+        }
+        #[cfg(not(target_os = "windows"))]
+        Err(UiaError::Unsupported)
+    }
+
     /// List all descendant elements under `root`, collecting their properties.
     pub fn list_descendants(&self, root: &UiaElement) -> Result<Vec<ElementInfo>> {
         #[cfg(target_os = "windows")]

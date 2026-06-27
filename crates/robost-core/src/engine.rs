@@ -44,12 +44,12 @@ use crate::scenario::{
     ShellStep, StringContainsStep, StringCountStep, StringEndsWithStep, StringFormatStep,
     StringIndexOfStep, StringJoinStep, StringRegexStep, StringReplaceStep, StringSplitStep,
     StringStartsWithStep, StringSubstringStep, StringTrimStep, SubScenarioStep, SwitchStep,
-    ToNumberStep, ToStringStep, TrimSide, TryCatchStep, TypeStep, UiaBy, UiaCheckStep,
-    UiaClickStep, UiaFindStep, UiaGetChildrenStep, UiaGetStep, UiaSelectStep, UiaSetStep,
-    UiaWaitStep, UrlOpenStep, VarTypeStep, WaitChangeStep, WaitColorStep, WaitImageStep,
-    WaitNoImageStep, WaitProcessStep, WaitUntilStep, WaitWindowStep, WhileStep, WidthStep,
-    WindowControlAction, WindowControlStep, WindowState, ZipCompressStep, ZipExtractStep,
-    ZipListStep,
+    AssertTextStep, OcrDumpStep, ReadTextStep, ToNumberStep, ToStringStep, TrimSide, TryCatchStep,
+    TypeStep, UiaBy, UiaCheckStep, UiaClickStep, UiaFindStep, UiaGetChildrenStep, UiaGetStep,
+    UiaSelectStep, UiaSetStep, UiaWaitStep, UrlOpenStep, VarTypeStep, WaitChangeStep,
+    WaitColorStep, WaitImageStep, WaitNoImageStep, WaitProcessStep, WaitUntilStep, WaitWindowStep,
+    WhileStep, WidthStep, WindowControlAction, WindowControlStep, WindowState, ZipCompressStep,
+    ZipExtractStep, ZipListStep,
 };
 #[cfg(feature = "http")]
 use crate::scenario::{
@@ -892,6 +892,21 @@ impl ScenarioEngine {
 
             ScenarioStep::MoveToText(s) => {
                 self.move_to_text(s, vars).await?;
+                Ok(Flow::Done)
+            }
+
+            ScenarioStep::ReadText(s) => {
+                self.read_text(s, vars).await?;
+                Ok(Flow::Done)
+            }
+
+            ScenarioStep::AssertText(s) => {
+                self.assert_text(s, vars).await?;
+                Ok(Flow::Done)
+            }
+
+            ScenarioStep::OcrDump(s) => {
+                self.ocr_dump(s, vars).await?;
                 Ok(Flow::Done)
             }
 
@@ -3351,6 +3366,125 @@ impl ScenarioEngine {
                     }
                 }
             }
+        }
+    }
+
+    // ── read_text / assert_text / ocr_dump ────────────────────────────────
+
+    /// Extract text from screen (or region) and save it — no condition required.
+    async fn read_text(&self, step: &ReadTextStep, vars: &mut Variables) -> Result<()> {
+        // Reuse ocr_match logic: contains=None means any text passes immediately.
+        let proxy = crate::scenario::OcrMatchStep {
+            region: step.region,
+            window: step.window.clone(),
+            contains: None,
+            lang: step.lang.clone(),
+            timeout_ms: step.timeout_ms,
+            retry_interval_ms: step.retry_interval_ms,
+            save_as: Some(step.save_as.clone()),
+            engine: step.engine.clone(),
+        };
+        self.ocr_match(&proxy, vars).await
+    }
+
+    /// Assert that specific text is visible right now — single shot, no retry.
+    async fn assert_text(&self, step: &AssertTextStep, vars: &mut Variables) -> Result<()> {
+        // Use ocr_match with timeout_ms=0 so the first failed attempt is the last.
+        let proxy = crate::scenario::OcrMatchStep {
+            region: step.region,
+            window: step.window.clone(),
+            contains: Some(step.contains.clone()),
+            lang: step.lang.clone(),
+            timeout_ms: 0,
+            retry_interval_ms: 0,
+            save_as: None,
+            engine: step.engine.clone(),
+        };
+        self.ocr_match(&proxy, vars).await.map_err(|e| {
+            EngineError::Other(format!("assert_text: {:?} not found — {e}", step.contains))
+        })
+    }
+
+    /// Dump structured OCR output: `{ full_text, lines, words: [{text, rect, confidence}] }`.
+    async fn ocr_dump(&self, step: &OcrDumpStep, vars: &mut Variables) -> Result<()> {
+        #[cfg(feature = "ocrs-cjk-ocr")]
+        if let Some(crate::scenario::OcrEngineKind::OcrsCjk(cfg)) = &step.engine {
+            use robost_vision::ocr_ocrs_cjk::OcrsCjkEngine;
+            let (det, rec) = Self::resolve_ocrs_model_paths(cfg)
+                .map_err(|e| EngineError::Other(format!("ocr_dump[ocrs-cjk]: {e}")))?;
+            let target = Self::capture_target(&step.window);
+            let region = step.region;
+            let save_as = step.save_as.clone();
+            let backend = Arc::clone(&self.backend);
+            let result = tokio::task::spawn_blocking(move || {
+                let engine = OcrsCjkEngine::new(&det, &rec)
+                    .map_err(|e| EngineError::Other(format!("ocr_dump[ocrs-cjk]: {e}")))?;
+                let (img, _origin) = backend.capture_with_origin(&target)?;
+                let (full_text, line_texts, words) = if let Some(r) = region {
+                    engine.extract_words_in_region(&img, r)
+                } else {
+                    engine.extract_words(&img)
+                }
+                .map_err(|e| EngineError::Other(format!("ocr_dump[ocrs-cjk]: {e}")))?;
+                Ok::<_, EngineError>(serde_json::json!({
+                    "full_text": full_text,
+                    "lines": line_texts,
+                    "words": words.into_iter().map(|w| serde_json::json!({
+                        "text": w.text,
+                        "confidence": w.confidence,
+                        "rect": { "x": w.rect.x, "y": w.rect.y, "width": w.rect.width, "height": w.rect.height },
+                    })).collect::<Vec<_>>(),
+                }))
+            })
+            .await
+            .map_err(|e| EngineError::TaskPanic(e.to_string()))??;
+            vars.set(save_as, result);
+            return Ok(());
+        }
+
+        // Fallback: classic OCR — full_text and lines only (no word boxes)
+        #[cfg(feature = "_ocr")]
+        {
+            let target = Self::capture_target(&step.window);
+            let region = step.region;
+            let lang = step.lang.clone();
+            let save_as = step.save_as.clone();
+            let backend = Arc::clone(&self.backend);
+            let text = tokio::task::spawn_blocking(move || {
+                let (img, _origin) = backend.capture_with_origin(&target)?;
+                let ocr_img = if let Some(r) = region {
+                    let x0 = r.x.max(0) as u32;
+                    let y0 = r.y.max(0) as u32;
+                    let x1 = (r.x + r.width as i32).min(img.width() as i32).max(0) as u32;
+                    let y1 = (r.y + r.height as i32).min(img.height() as i32).max(0) as u32;
+                    image::imageops::crop_imm(&img, x0, y0, x1 - x0, y1 - y0).to_image()
+                } else {
+                    img
+                };
+                robost_vision::ocr::OcrEngine::new(lang)
+                    .extract_text(&ocr_img)
+                    .map_err(|e| EngineError::Other(format!("ocr_dump: {e}")))
+            })
+            .await
+            .map_err(|e| EngineError::TaskPanic(e.to_string()))??;
+            let lines: Vec<serde_json::Value> = text
+                .lines()
+                .map(|l| serde_json::Value::String(l.to_owned()))
+                .collect();
+            vars.set(
+                save_as,
+                serde_json::json!({ "full_text": text, "lines": lines, "words": [] }),
+            );
+            return Ok(());
+        }
+
+        #[cfg(not(any(feature = "_ocr", feature = "ocrs-cjk-ocr")))]
+        {
+            let _ = (step, vars);
+            Err(EngineError::Other(
+                "ocr_dump requires the 'ocr', 'windows-ocr', or 'ocrs-cjk-ocr' feature"
+                    .to_owned(),
+            ))
         }
     }
 

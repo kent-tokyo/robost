@@ -59,7 +59,7 @@ pub mod ml;
 #[cfg(feature = "ocrs-cjk-ocr")]
 pub mod ocr_ocrs_cjk;
 #[cfg(feature = "ocrs-cjk-ocr")]
-pub use ocr_ocrs_cjk::OcrsCjkEngine;
+pub use ocr_ocrs_cjk::{OcrWord, OcrsCjkEngine};
 
 /// Load an image file as RGBA8.
 ///

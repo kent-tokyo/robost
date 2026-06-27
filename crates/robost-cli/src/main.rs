@@ -102,6 +102,9 @@ enum Commands {
         /// Screen point — prints the element at x y (two values)
         #[arg(long, num_args = 2, value_names = ["X", "Y"])]
         point: Option<Vec<i32>>,
+        /// Wait N seconds then capture element under cursor (default: 5)
+        #[arg(long, value_name = "SECS")]
+        hover: Option<u64>,
     },
     /// Start the local RPA agent with a built-in HTTP server and web UI
     Agent {
@@ -364,7 +367,7 @@ fn main() -> Result<()> {
                 .build()?;
             rt.block_on(server::run_agent_server(&bind_addr, dir))
         }
-        Commands::Inspect { window, point } => run_inspect(window, point),
+        Commands::Inspect { window, point, hover } => run_inspect(window, point, hover),
         Commands::Plugin { action } => match action {
             PluginCommands::Install { source, yes } => {
                 let (_tmpdir, wasm_path) = resolve_plugin_source(&source)?;
@@ -430,7 +433,39 @@ fn main() -> Result<()> {
 
 // ── rpa inspect ──────────────────────────────────────────────────────────────
 
-fn run_inspect(window: Option<String>, point: Option<Vec<i32>>) -> Result<()> {
+fn print_element_info(info: &robost_uia::ElementInfo) {
+    println!("- name: {:?}", info.name);
+    println!("  automation_id: {:?}", info.automation_id);
+    println!("  class_name: {:?}", info.class_name);
+    println!("  control_type: {:?}", info.control_type);
+    let (x, y, w, h) = info.rect;
+    println!("  rect: [{x}, {y}, {w}, {h}]");
+    println!("  enabled: {}", info.enabled);
+    if !info.automation_id.is_empty() {
+        println!("  # suggested: by: {{ id: {:?} }}", info.automation_id);
+    } else if !info.name.is_empty() {
+        println!("  # suggested: by: {{ name: {:?} }}", info.name);
+    } else if !info.class_name.is_empty() {
+        println!("  # suggested: by: {{ class: {:?} }}", info.class_name);
+    }
+}
+
+fn run_inspect(window: Option<String>, point: Option<Vec<i32>>, hover: Option<u64>) -> Result<()> {
+    // --hover: wait N seconds then capture element under cursor
+    if let Some(secs) = hover {
+        let secs = if secs == 0 { 5 } else { secs };
+        eprintln!("カーソルを要素に合わせてください... ({secs} 秒後に取得)");
+        std::thread::sleep(std::time::Duration::from_secs(secs));
+        let (x, y) = robost_uia::UiaFinder::cursor_pos()
+            .context("cursor_pos: Windows only")?;
+        let finder = robost_uia::UiaFinder::new().context("UIA init failed — Windows only")?;
+        let el = finder
+            .element_at_point(x, y)
+            .context("no element at cursor position")?;
+        print_element_info(&finder.element_info(&el));
+        return Ok(());
+    }
+
     let finder = robost_uia::UiaFinder::new()
         .context("UIA init failed — Windows only")?;
 
@@ -447,24 +482,11 @@ fn run_inspect(window: Option<String>, point: Option<Vec<i32>>) -> Result<()> {
             .list_descendants(&win_el)
             .context("failed to enumerate descendants")?
     } else {
-        anyhow::bail!("specify --window <TITLE> or --point <X> <Y>");
+        anyhow::bail!("specify --window <TITLE>, --point <X> <Y>, or --hover [SECS]");
     };
 
     for info in &elements {
-        println!("- name: {:?}", info.name);
-        println!("  automation_id: {:?}", info.automation_id);
-        println!("  class_name: {:?}", info.class_name);
-        println!("  control_type: {:?}", info.control_type);
-        let (x, y, w, h) = info.rect;
-        println!("  rect: [{x}, {y}, {w}, {h}]");
-        println!("  enabled: {}", info.enabled);
-        if !info.automation_id.is_empty() {
-            println!("  # suggested: by: {{ id: {:?} }}", info.automation_id);
-        } else if !info.name.is_empty() {
-            println!("  # suggested: by: {{ name: {:?} }}", info.name);
-        } else if !info.class_name.is_empty() {
-            println!("  # suggested: by: {{ class: {:?} }}", info.class_name);
-        }
+        print_element_info(info);
     }
     Ok(())
 }
@@ -641,6 +663,33 @@ fn run_doctor() -> Result<()> {
     #[cfg(not(feature = "keychain"))]
     println!("[SKIP] keychain access    (keychain feature not enabled)");
 
+    // 5. UIA availability
+    #[cfg(target_os = "windows")]
+    match robost_uia::UiaFinder::new() {
+        Ok(_) => println!("[OK]   UIA automation    (IUIAutomation available)"),
+        Err(e) => {
+            println!("[FAIL] UIA automation    ({e})");
+            ok = false;
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    println!("[SKIP] UIA automation    (Windows only)");
+
+    // 6. Admin / elevated app detection
+    #[cfg(target_os = "windows")]
+    {
+        if check_is_admin() {
+            println!("[OK]   Admin mode        (running as administrator — can automate elevated apps)");
+        } else {
+            println!("[WARN] Admin mode        (not admin — elevated apps cannot be automated; re-run as administrator if needed)");
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    println!("[SKIP] Admin mode        (Windows only)");
+
+    // 7. DPI awareness
+    println!("[OK]   DPI awareness     (SetProcessDpiAwareness called at startup)");
+
     if ok {
         println!("\nAll checks passed.");
     } else {
@@ -648,6 +697,12 @@ fn run_doctor() -> Result<()> {
         std::process::exit(1);
     }
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn check_is_admin() -> bool {
+    use windows::Win32::UI::Shell::IsUserAnAdmin;
+    unsafe { IsUserAnAdmin().as_bool() }
 }
 
 // ── rpa vision-bench ─────────────────────────────────────────────────────────

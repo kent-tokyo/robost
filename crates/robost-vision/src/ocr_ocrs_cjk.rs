@@ -8,6 +8,13 @@ use std::path::Path;
 use image::RgbaImage;
 use crate::types::Rect;
 
+/// Character-level OCR result with bounding box and recognition confidence.
+pub struct OcrWord {
+    pub text: String,
+    pub confidence: f32,
+    pub rect: Rect,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum OcrsCjkError {
     #[error("ocrs-cjk init failed: {0}")]
@@ -89,6 +96,58 @@ impl OcrsCjkEngine {
         let cropped =
             image::imageops::crop_imm(image, x0, y0, x1 - x0, y1 - y0).to_image();
         self.extract_text(&cropped)
+    }
+
+    /// Run OCR and return `(full_text, line_texts, char_level_words)`.
+    /// Words include bounding boxes and per-character confidence.
+    pub fn extract_words(
+        &self,
+        image: &RgbaImage,
+    ) -> Result<(String, Vec<String>, Vec<OcrWord>), OcrsCjkError> {
+        use ocrs_cjk::TextItem as _;
+        let lines = self.run_ocr(image)?;
+        let mut full: Vec<String> = Vec::new();
+        let mut line_texts: Vec<String> = Vec::new();
+        let mut words: Vec<OcrWord> = Vec::new();
+        for line in lines.iter().flatten() {
+            let text = line.to_string();
+            full.push(text.clone());
+            line_texts.push(text);
+            for tc in line.chars() {
+                words.push(OcrWord {
+                    text: tc.char.to_string(),
+                    confidence: tc.confidence,
+                    rect: Rect {
+                        x: tc.rect.left(),
+                        y: tc.rect.top(),
+                        width: tc.rect.width().max(0) as u32,
+                        height: tc.rect.height().max(0) as u32,
+                    },
+                });
+            }
+        }
+        Ok((full.join("\n"), line_texts, words))
+    }
+
+    /// Same as `extract_words` but crops to `region` first.
+    pub fn extract_words_in_region(
+        &self,
+        image: &RgbaImage,
+        region: Rect,
+    ) -> Result<(String, Vec<String>, Vec<OcrWord>), OcrsCjkError> {
+        let x0 = region.x.max(0) as u32;
+        let y0 = region.y.max(0) as u32;
+        let x1 = (region.x + region.width as i32)
+            .min(image.width() as i32)
+            .max(0) as u32;
+        let y1 = (region.y + region.height as i32)
+            .min(image.height() as i32)
+            .max(0) as u32;
+        if x1 <= x0 || y1 <= y0 {
+            return Ok((String::new(), Vec::new(), Vec::new()));
+        }
+        let cropped = image::imageops::crop_imm(image, x0, y0, x1 - x0, y1 - y0).to_image();
+        self.extract_words(&cropped)
     }
 
     /// Return the bounding rectangle of the first occurrence of `needle` in the image.

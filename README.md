@@ -4,6 +4,11 @@
 
 A Rust-based OSS desktop automation (RPA) tool.
 
+[![CI](https://github.com/kent-tokyo/robost/actions/workflows/ci.yml/badge.svg)](https://github.com/kent-tokyo/robost/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/kent-tokyo/robost/actions/workflows/codeql.yml/badge.svg)](https://github.com/kent-tokyo/robost/actions/workflows/codeql.yml)
+[![Security audit](https://github.com/kent-tokyo/robost/actions/workflows/security-audit.yml/badge.svg)](https://github.com/kent-tokyo/robost/actions/workflows/security-audit.yml)
+[![Release](https://github.com/kent-tokyo/robost/actions/workflows/release.yml/badge.svg)](https://github.com/kent-tokyo/robost/actions/workflows/release.yml)
+
 [日本語](README_ja.md) | [中文](README_zh.md) | [Documentation](https://kent-tokyo.github.io/robost/)
 
 ## Visual Scenario Editor
@@ -86,33 +91,40 @@ Plugins run in a WASM sandbox: permissions are declared in `plugin.toml` and enf
 
 ## Quick Start
 
-```yaml
-# scenario.yaml
-name: "login"
-target:
-  kind: window
-  title_contains: "MyApp"
-steps:
-  - wait_image:  { template: login_button.png, timeout_ms: 5000 }
-  - click_image: { template: login_button.png }
-  - type: "username"
-  - type: { secret_env: PASSWORD }
-  - press: Tab
-  - if:
-      cond: "logged_in"
-      then: [ { wait_image: { template: dashboard.png } } ]
-      else: [ { press: Escape } ]
-  - foreach:
-      var: __rows__
-      do: [ { type: "{{ 氏名 }}" }, { press: Tab } ]
+### Windows — No build required
+
+1. Download **[robost-setup.exe](https://github.com/kent-tokyo/robost/releases/latest/download/robost-setup.exe)** and install (or use the [portable ZIP](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip))
+2. Launch from the Desktop shortcut — browser opens automatically to the visual editor
+3. Load an example scenario and run it:
+
+```
+rpa run examples\windows\notepad.yaml
+rpa run examples\windows\calculator.yaml
 ```
 
-```bash
-cargo build -p robost-cli
-./target/debug/rpa run scenario.yaml
+### Inspect UI elements (Windows)
 
-# With a data source (Excel row-by-row)
-./target/debug/rpa run scenario.yaml --data data.xlsx
+```
+rpa inspect --window "メモ帳"       # list all UIA elements in a window
+rpa inspect --hover 5               # hover cursor over element; captures after 5 seconds
+rpa inspect --point 800 400         # element at specific screen coordinates
+```
+
+### Write a scenario
+
+```yaml
+# notepad_demo.yaml
+steps:
+  - shell: { command: "notepad.exe" }
+  - wait: { ms: 1000 }
+  - uia_click: { window: "メモ帳", by: { name: "ファイル" } }
+  - uia_click: { window: "メモ帳", by: { name: "新規" } }
+  - type_text: { text: "robost で自動入力しました" }
+```
+
+```
+rpa run notepad_demo.yaml
+rpa run notepad_demo.yaml --dry-run   # preview without executing
 ```
 
 Full step reference: [Documentation → Step Reference](https://kent-tokyo.github.io/robost/)

@@ -98,6 +98,9 @@ pub enum ScenarioStep {
     OcrMatch(OcrMatchStep),
     ClickText(ClickTextStep),
     MoveToText(MoveToTextStep),
+    ReadText(ReadTextStep),
+    AssertText(AssertTextStep),
+    OcrDump(OcrDumpStep),
 
     // --- ML detection ---
     MlDetect(MlDetectStep),
@@ -879,6 +882,75 @@ pub struct MoveToTextStep {
     #[serde(default = "default_retry_interval_ms")]
     pub retry_interval_ms: u64,
     /// OCR engine to use. Absent = Tesseract/WinRT (backward compatible).
+    #[serde(default)]
+    pub engine: Option<OcrEngineKind>,
+}
+
+// ── Additional OCR step types ─────────────────────────────────────────────
+
+/// Extract text from the screen (or region) and save it — no condition required.
+///
+/// ```yaml
+/// - read_text:
+///     region: { x: 420, y: 180, width: 360, height: 120 }
+///     save_as: invoice_status
+///     engine: { ocrs_cjk: {} }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadTextStep {
+    #[serde(default)]
+    pub region: Option<robost_template::Rect>,
+    #[serde(default)]
+    pub window: Option<String>,
+    #[serde(default = "default_ocr_lang")]
+    pub lang: String,
+    pub save_as: String,
+    #[serde(default = "default_timeout_ms")]
+    pub timeout_ms: u64,
+    #[serde(default = "default_retry_interval_ms")]
+    pub retry_interval_ms: u64,
+    #[serde(default)]
+    pub engine: Option<OcrEngineKind>,
+}
+
+/// Assert that specific text is visible right now — fails immediately if absent (no retry).
+///
+/// ```yaml
+/// - assert_text:
+///     contains: "承認済"
+///     window: "請求管理"
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssertTextStep {
+    #[serde(default)]
+    pub region: Option<robost_template::Rect>,
+    #[serde(default)]
+    pub window: Option<String>,
+    pub contains: String,
+    #[serde(default = "default_ocr_lang")]
+    pub lang: String,
+    #[serde(default)]
+    pub engine: Option<OcrEngineKind>,
+}
+
+/// Dump OCR result as structured JSON: `{ full_text, lines, words: [{text, rect, confidence}] }`.
+/// `words` with bounding boxes is only populated when `engine: { ocrs_cjk: {} }` is used.
+///
+/// ```yaml
+/// - ocr_dump:
+///     region: { x: 0, y: 0, width: 1920, height: 1080 }
+///     save_as: ocr_result
+///     engine: { ocrs_cjk: {} }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OcrDumpStep {
+    #[serde(default)]
+    pub region: Option<robost_template::Rect>,
+    #[serde(default)]
+    pub window: Option<String>,
+    pub save_as: String,
+    #[serde(default = "default_ocr_lang")]
+    pub lang: String,
     #[serde(default)]
     pub engine: Option<OcrEngineKind>,
 }
@@ -2600,6 +2672,9 @@ const KNOWN_VARIANTS: &[&str] = &[
     "ocr_match",
     "click_text",
     "move_to_text",
+    "read_text",
+    "assert_text",
+    "ocr_dump",
     "ml_detect",
     "import_vars",
     "save_vars",
@@ -2818,6 +2893,9 @@ impl<'de> serde::de::Visitor<'de> for ScenarioStepVisitor {
             "ocr_match" => ScenarioStep::OcrMatch(map.next_value()?),
             "click_text" => ScenarioStep::ClickText(map.next_value()?),
             "move_to_text" => ScenarioStep::MoveToText(map.next_value()?),
+            "read_text" => ScenarioStep::ReadText(map.next_value()?),
+            "assert_text" => ScenarioStep::AssertText(map.next_value()?),
+            "ocr_dump" => ScenarioStep::OcrDump(map.next_value()?),
             // --- ML detection ---
             "ml_detect" => ScenarioStep::MlDetect(map.next_value()?),
             // --- variable persistence ---
@@ -3125,6 +3203,9 @@ impl ScenarioStep {
             Self::OcrMatch(_) => "ocr_match",
             Self::ClickText(_) => "click_text",
             Self::MoveToText(_) => "move_to_text",
+            Self::ReadText(_) => "read_text",
+            Self::AssertText(_) => "assert_text",
+            Self::OcrDump(_) => "ocr_dump",
             Self::MlDetect(_) => "ml_detect",
             Self::ImportVars(_) => "import_vars",
             Self::SaveVars(_) => "save_vars",
