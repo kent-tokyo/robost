@@ -30,7 +30,7 @@ jobs:
         run: npm ci && npm run build
 
       - name: Upload dist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-editor-dist
           path: apps/web-editor/dist/
@@ -138,14 +138,14 @@ jobs:
           }
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.archive }}
           path: ${{ matrix.archive }}
 
       - name: Upload installer artifact (Windows)
         if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: robost-setup
           path: installer/output/robost-setup.exe
