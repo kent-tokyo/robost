@@ -465,11 +465,11 @@ fn print_element_info(info: &robost_uia::ElementInfo) {
     println!("  rect: [{x}, {y}, {w}, {h}]");
     println!("  enabled: {}", info.enabled);
     if !info.automation_id.is_empty() {
-        println!("  # suggested: by: {{ id: {:?} }}", info.automation_id);
+        println!("  # suggested: by: !id {:?}", info.automation_id);
     } else if !info.name.is_empty() {
-        println!("  # suggested: by: {{ name: {:?} }}", info.name);
+        println!("  # suggested: by: !name {:?}", info.name);
     } else if !info.class_name.is_empty() {
-        println!("  # suggested: by: {{ class: {:?} }}", info.class_name);
+        println!("  # suggested: by: !class {:?}", info.class_name);
     }
 }
 

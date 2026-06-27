@@ -1,13 +1,12 @@
 name: "notepad_demo"
-description: "メモ帳を開いてテキストを入力し保存する"
 steps:
-  - shell: { command: "notepad.exe" }
-  - wait: { ms: 1000 }
-  - focus_window: { title_contains: "メモ帳" }
-  - type_text: { text: "robost で自動入力しました。\nWindows RPA — ビルド不要。" }
-  - key: { key: "ctrl+a" }
-  - key: { key: "ctrl+c" }
-  - log: { message: "テキストをクリップボードにコピーしました" }
-  - key: { key: "ctrl+z" }
-  - key: { key: "ctrl+z" }
-  - close_window: { title_contains: "メモ帳" }
+  - shell: { cmd: "notepad.exe" }
+  - wait_ms: 1000
+  - window_control: { title_contains: "メモ帳", action: focus }
+  - type: "robost で自動入力しました。\nWindows RPA — ビルド不要。"
+  - press: "ctrl+a"
+  - press: "ctrl+c"
+  - log_write: { file: "notepad_run.log", message: "クリップボードにコピーしました" }
+  - press: "ctrl+z"
+  - press: "ctrl+z"
+  - window_control: { title_contains: "メモ帳", action: close }

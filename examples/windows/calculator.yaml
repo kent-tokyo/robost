@@ -1,19 +1,18 @@
 name: "calculator_demo"
-description: "電卓で 12 + 34 = を UIA で操作して結果を取得する"
 steps:
-  - shell: { command: "calc.exe" }
-  - wait: { ms: 1000 }
-  - uia_wait: { window: "電卓", by: { name: "1" }, state: enabled, timeout_ms: 5000 }
-  - uia_click: { window: "電卓", by: { name: "1" } }
-  - uia_click: { window: "電卓", by: { name: "2" } }
-  - uia_click: { window: "電卓", by: { name: "プラス" } }
-  - uia_click: { window: "電卓", by: { name: "3" } }
-  - uia_click: { window: "電卓", by: { name: "4" } }
-  - uia_click: { window: "電卓", by: { name: "等号" } }
+  - shell: { cmd: "calc.exe" }
+  - wait_ms: 1000
+  - uia_wait: { window: "電卓", by: !name "1", state: enabled, timeout_ms: 5000 }
+  - uia_click: { window: "電卓", by: !name "1" }
+  - uia_click: { window: "電卓", by: !name "2" }
+  - uia_click: { window: "電卓", by: !name "プラス" }
+  - uia_click: { window: "電卓", by: !name "3" }
+  - uia_click: { window: "電卓", by: !name "4" }
+  - uia_click: { window: "電卓", by: !name "等号" }
   - uia_get:
       window: "電卓"
-      by: { automation_id: "CalculatorResults" }
+      by: !id "CalculatorResults"
       property: name
       save_as: result
-  - log: { message: "12 + 34 = {{ result }}" }
-  - close_window: { title_contains: "電卓" }
+  - log_write: { file: "calc_run.log", message: "12 + 34 = {{ result }}" }
+  - window_control: { title_contains: "電卓", action: close }

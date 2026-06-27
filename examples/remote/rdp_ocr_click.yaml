@@ -1,12 +1,11 @@
 name: "rdp_ocr_click"
-description: "RDP ウィンドウ内のテキストを OCR で見つけてクリックする"
 
 # 前提: リモートデスクトップ接続が確立済みで
 #       ocrs-cjk モデルが ROBOST_OCR_MODEL_DIR に配置されていること
 
 steps:
-  - focus_window: { title_contains: "リモート デスクトップ" }
-  - wait: { ms: 500 }
+  - window_control: { title_contains: "リモート デスクトップ", action: focus }
+  - wait_ms: 500
 
   # ログイン完了をOCRで待つ
   - ocr_match:
@@ -24,9 +23,9 @@ steps:
       timeout_ms: 5000
 
   # 検索フォームに文字を入力
-  - type_text: { text: "取引先名" }
-  - key: { key: "enter" }
-  - wait: { ms: 1000 }
+  - type: "取引先名"
+  - press: "enter"
+  - wait_ms: 1000
 
   # 結果が表示されたか確認
   - assert_text:
@@ -40,4 +39,4 @@ steps:
       engine:
         ocrs_cjk: {}
 
-  - log: { message: "検索結果: {{ search_result }}" }
+  - log_write: { file: "rdp_run.log", message: "検索結果: {{ search_result }}" }
