@@ -4844,8 +4844,7 @@ steps:
 
     #[test]
     fn examples_parse() {
-        let base =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
+        let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
         for rel in &[
             "hello.yaml",
             "data_source.yaml",
@@ -4855,8 +4854,7 @@ steps:
             let path = base.join(rel);
             let yaml = std::fs::read_to_string(&path)
                 .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
-            Scenario::from_yaml(&yaml)
-                .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            Scenario::from_yaml(&yaml).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         }
     }
 }
