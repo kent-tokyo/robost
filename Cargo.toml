@@ -141,4 +141,4 @@ croner = "2"
 keyring = "3"
 
 # FTP/FTPS client (robost-stdlib ftp feature)
-suppaftp = { version = "6", features = ["native-tls"] }
+suppaftp = { version = "9", features = ["native-tls"] }
