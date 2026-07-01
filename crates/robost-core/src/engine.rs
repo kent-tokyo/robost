@@ -168,8 +168,10 @@ pub struct ScenarioEngine {
     /// If set, send progress events (e.g., for HTTP/SSE streaming).
     progress_tx: Option<Arc<broadcast::Sender<ProgressEvent>>>,
     /// Score of the last successful image-match step; read and cleared by run_steps.
+    /// Never held across `.await` or fallible work, so `.lock().unwrap()` can't observe poisoning.
     last_match_score: std::sync::Mutex<Option<f32>>,
     /// Scenario-level defaults for the currently-running scenario.
+    /// Never held across `.await` or fallible work, so `.lock().unwrap()` can't observe poisoning.
     active_defaults: std::sync::Mutex<ScenarioDefaults>,
     /// Write per-step JSONL trace to this path (None = disabled).
     trace_path: Option<PathBuf>,
@@ -6088,6 +6090,8 @@ impl ScenarioEngine {
 
     // ── Web automation methods ──────────────────────────────────────────────
 
+    /// Callers hold the returned guard with no `.await` in between, so `guard.as_ref().unwrap()`
+    /// can't observe a state change from the `is_none()` check below.
     #[cfg(feature = "web")]
     async fn require_web_session(
         &self,
