@@ -156,8 +156,8 @@ rpa plugin install ./my-plugin.wasm   # 确认权限后安装
 ```bash
 cargo build --workspace
 cargo test --workspace
-cargo run -p robost-snip     # 模板截取工具
-cargo run -p robost-editor   # 可视化场景编辑器
+cargo run -p robost-snip                                    # 模板截取工具
+cargo run -p robost-cli --features embed-editor -- agent   # 可视化场景编辑器（在浏览器中打开）
 ```
 
 所有 crate 已发布至 [crates.io](https://crates.io/search?q=robost)（v0.1.2）。

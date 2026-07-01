@@ -156,8 +156,8 @@ rpa plugin install ./my-plugin.wasm   # 権限を確認してインストール
 ```bash
 cargo build --workspace
 cargo test --workspace
-cargo run -p robost-snip     # テンプレート採取ツール
-cargo run -p robost-editor   # ビジュアルシナリオエディタ
+cargo run -p robost-snip                                    # テンプレート採取ツール
+cargo run -p robost-cli --features embed-editor -- agent   # ビジュアルシナリオエディタ (ブラウザで開く)
 ```
 
 全クレートは [crates.io](https://crates.io/search?q=robost) で公開中 (v0.1.2)。

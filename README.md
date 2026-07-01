@@ -154,8 +154,8 @@ rpa plugin install ./my-plugin.wasm   # review permissions
 ```bash
 cargo build --workspace
 cargo test --workspace
-cargo run -p robost-snip     # template capture tool
-cargo run -p robost-editor   # visual scenario editor
+cargo run -p robost-snip                                    # template capture tool
+cargo run -p robost-cli --features embed-editor -- agent   # visual scenario editor (opens in browser)
 ```
 
 All crates are published on [crates.io](https://crates.io/search?q=robost) (v0.1.2).
