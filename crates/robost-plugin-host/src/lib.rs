@@ -30,12 +30,14 @@ pub type Result<T> = std::result::Result<T, HostError>;
 /// A loaded plugin ready to call functions on.
 pub struct PluginInstance {
     pub manifest: PluginManifest,
+    /// Directory containing the plugin's `.wasm` and `plugin.toml` — the root
+    /// a plugin's sandboxed filesystem access (if any) is scoped under.
+    #[cfg_attr(not(feature = "wasm"), allow(dead_code))]
+    plugin_dir: PathBuf,
     #[cfg(feature = "wasm")]
     engine: Arc<Engine>,
     #[cfg(feature = "wasm")]
     module: Module,
-    #[cfg(not(feature = "wasm"))]
-    _wasm_path: PathBuf,
 }
 
 impl PluginInstance {
@@ -44,6 +46,10 @@ impl PluginInstance {
     pub fn load(wasm_path: impl AsRef<Path>) -> Result<Self> {
         let wasm_path = wasm_path.as_ref().to_path_buf();
         let manifest_path = wasm_path.with_file_name("plugin.toml");
+        let plugin_dir = wasm_path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
 
         let raw = std::fs::read_to_string(&manifest_path)
             .map_err(|_| HostError::ManifestNotFound(manifest_path.clone()))?;
@@ -61,13 +67,28 @@ impl PluginInstance {
 
         Ok(Self {
             manifest,
+            plugin_dir,
             #[cfg(feature = "wasm")]
             engine,
             #[cfg(feature = "wasm")]
             module,
-            #[cfg(not(feature = "wasm"))]
-            _wasm_path: wasm_path,
         })
+    }
+
+    /// Maps the manifest's `permissions.filesystem` flags to a single sandboxed
+    /// directory (`<plugin_dir>/data`) plugins may be granted read and/or write
+    /// access to. Returns `None` if the plugin declared no filesystem permission.
+    #[cfg_attr(not(feature = "wasm"), allow(dead_code))]
+    fn resolve_fs_preopen(
+        filesystem_perms: &[String],
+        plugin_dir: &Path,
+    ) -> Option<(PathBuf, bool)> {
+        let readable = filesystem_perms.iter().any(|p| p == "read");
+        let writable = filesystem_perms.iter().any(|p| p == "write");
+        if !readable && !writable {
+            return None;
+        }
+        Some((plugin_dir.join("data"), writable))
     }
 
     /// Compile a wasm module with epoch-interruption enabled.
@@ -117,7 +138,7 @@ impl PluginInstance {
         use wasmtime::Store;
         use wasmtime_wasi::p1::{self, WasiP1Ctx};
         use wasmtime_wasi::p2::pipe::{MemoryInputPipe, MemoryOutputPipe};
-        use wasmtime_wasi::WasiCtxBuilder;
+        use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 
         // --- Build JSON request ---
         let request = serde_json::json!({
@@ -138,9 +159,22 @@ impl PluginInstance {
             .stdout(stdout.clone())
             .stderr(stderr.clone());
 
-        // Gate filesystem access: default = none.
-        // Preopened directories would be added here for plugins with "read"/"write" permissions.
-        // TODO(Phase 2): map manifest.permissions.filesystem to cap-std Dir preopens.
+        // Gate filesystem access: default = none. Plugins that declare "read"/"write"
+        // in their manifest get a single sandboxed directory scoped to their own plugin dir.
+        if let Some((data_dir, writable)) =
+            Self::resolve_fs_preopen(&self.manifest.permissions.filesystem, &self.plugin_dir)
+        {
+            std::fs::create_dir_all(&data_dir)
+                .map_err(|e| PluginError::Other(format!("plugin data dir: {e}")))?;
+            let (dir_perms, file_perms) = if writable {
+                (DirPerms::all(), FilePerms::all())
+            } else {
+                (DirPerms::READ, FilePerms::READ)
+            };
+            builder
+                .preopened_dir(&data_dir, "/data", dir_perms, file_perms)
+                .map_err(|e| PluginError::Other(format!("preopen plugin data dir: {e}")))?;
+        }
 
         let wasi: WasiP1Ctx = builder.build_p1();
 
@@ -239,5 +273,43 @@ impl PluginInstance {
         if !bytes.is_empty() {
             tracing::debug!(stderr = %String::from_utf8_lossy(&bytes), "plugin stderr");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_fs_preopen_none_when_no_permission_declared() {
+        let dir = Path::new("/plugins/example");
+        assert!(PluginInstance::resolve_fs_preopen(&[], dir).is_none());
+        assert!(PluginInstance::resolve_fs_preopen(&["network".to_string()], dir).is_none());
+    }
+
+    #[test]
+    fn resolve_fs_preopen_read_only() {
+        let dir = Path::new("/plugins/example");
+        let (data_dir, writable) =
+            PluginInstance::resolve_fs_preopen(&["read".to_string()], dir).unwrap();
+        assert_eq!(data_dir, dir.join("data"));
+        assert!(!writable);
+    }
+
+    #[test]
+    fn resolve_fs_preopen_write_implies_writable() {
+        let dir = Path::new("/plugins/example");
+        let (data_dir, writable) =
+            PluginInstance::resolve_fs_preopen(&["write".to_string()], dir).unwrap();
+        assert_eq!(data_dir, dir.join("data"));
+        assert!(writable);
+    }
+
+    #[test]
+    fn resolve_fs_preopen_read_and_write() {
+        let dir = Path::new("/plugins/example");
+        let perms = vec!["read".to_string(), "write".to_string()];
+        let (_, writable) = PluginInstance::resolve_fs_preopen(&perms, dir).unwrap();
+        assert!(writable);
     }
 }

@@ -36,3 +36,13 @@ jobs:
           cache-dependency-path: apps/web-editor/package-lock.json
       - run: npm ci
       - run: npm audit --audit-level=high
+
+  cargo-deny:
+    name: cargo deny (licenses)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+      - name: Run cargo deny
+        run: cargo deny check licenses

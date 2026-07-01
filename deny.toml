@@ -1,0 +1,32 @@
+# cargo-deny configuration.
+#
+# ponytail: initial rollout scoped to license auditing only. `bans` is left at
+# `warn` rather than `deny` because this workspace resolves ~1000 transitive
+# packages and a strict duplicate-version policy would likely fail on day one
+# with issues unrelated to what this check is for. Tighten to `deny` later if
+# duplicate-version bloat becomes something we actively want to enforce.
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unlicense",
+    "CC0-1.0",
+    "0BSD",
+    "BSL-1.0",
+    "CDLA-Permissive-2.0",
+    "MPL-2.0",
+]
+
+[bans]
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "warn"
