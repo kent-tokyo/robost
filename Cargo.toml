@@ -139,7 +139,7 @@ criterion = "0.8"
 croner = "2"
 
 # OS keychain credential storage
-keyring = "3"
+keyring = "4"
 
 # FTP/FTPS client (robost-stdlib ftp feature)
 suppaftp = { version = "6", features = ["native-tls"] }
