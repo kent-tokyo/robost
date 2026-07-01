@@ -43,6 +43,8 @@ function StepNode({ data }: NodeProps) {
   const activeScenario = useScenarioStore((s) => s.activeScenario)
   const startRunStep = useRunStore((s) => s.startRunStep)
   const isRunning = useRunStore((s) => s.status === 'running')
+  const currentStep = useRunStore((s) => s.currentStep)
+  const isActive = isRunning && stepIndex === currentStep
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -57,7 +59,7 @@ function StepNode({ data }: NodeProps) {
   }
 
   return (
-    <div className="step-node">
+    <div className={`step-node${isActive ? ' running' : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="step-node-body">
         <span className="step-node-label">{label}</span>

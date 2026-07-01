@@ -354,6 +354,10 @@
   position: relative;
 }
 .step-node:hover .step-node-actions { opacity: 1; }
+.step-node.running {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.4), 0 0 12px rgba(34, 197, 94, 0.5);
+}
 .step-node-body {
   padding: 10px 12px;
   display: flex;

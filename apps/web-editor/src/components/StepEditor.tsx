@@ -694,6 +694,18 @@ export function StepEditor({ step, stepIndex, onUpdate, onClose, onSave, onRunSt
           />
         </Field>
 
+        {/* 全ステップ共通: 有効/無効(スキップ) */}
+        <Field label="有効">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={(step.enabled as boolean) ?? true}
+              onChange={(e) => onUpdate({ enabled: e.target.checked })}
+            />
+            <span style={{ fontSize: 13, color: '#9090b0' }}>チェック OFF でこのステップを実行時にスキップ</span>
+          </label>
+        </Field>
+
         <div className="se-divider" />
 
         {/* タイプ別フィールド */}
