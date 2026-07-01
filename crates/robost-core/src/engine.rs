@@ -72,52 +72,76 @@ macro_rules! stdlib_inputs {
 
 // ── Error ──────────────────────────────────────────────────────────────────
 
+/// Errors that can occur while running a [`Scenario`](crate::scenario::Scenario).
 #[derive(Debug, Error)]
 pub enum EngineError {
+    /// A `wait_image`/`click_image`-style step didn't find its target before its deadline.
     #[error("template not found within timeout: {0}")]
     Timeout(String),
+    /// A template or reference image failed to load from disk.
     #[error("image load error: {path}: {source}")]
     ImageLoad {
+        /// Path to the image file that failed to load.
         path: PathBuf,
+        /// The underlying image-decoding error.
         source: image::ImageError,
     },
+    /// Template matching failed (see [`robost_vision::MatchError`]).
     #[error("vision error: {0}")]
     Vision(#[from] robost_vision::MatchError),
+    /// The input/capture backend returned an error.
     #[error("backend error: {0}")]
     Backend(#[from] robost_backend::BackendError),
+    /// A step referenced a secret environment variable that isn't set.
     #[error("secret env var missing: {0}")]
     MissingSecret(String),
+    /// A Rhai script step failed.
     #[error("script error: {0}")]
     Script(#[from] robost_script::ScriptError),
+    /// A `run_scenario` sub-scenario step failed.
     #[error("sub-scenario error: {0}")]
     SubScenario(String),
+    /// An I/O operation (file read/write, process spawn, etc.) failed.
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    /// A `shell_run` step exceeded its timeout.
     #[error("shell timeout: {0}")]
     ShellTimeout(String),
+    /// A blocking task (e.g. spawned via `spawn_blocking`) panicked.
     #[error("blocking task panicked: {0}")]
     TaskPanic(String),
+    /// The run was cancelled via the shared cancellation flag.
     #[error("scenario execution cancelled")]
     Cancelled,
+    /// Loading a `data_source` (CSV/XLSX) failed.
     #[error("data source error: {0}")]
     DataSource(#[from] crate::data_source::DataSourceError),
+    /// Writing a CSV export failed.
     #[error("csv export error: {0}")]
     CsvExport(#[from] csv::Error),
+    /// Writing an XLSX export failed.
     #[error("xlsx export error: {0}")]
     XlsxExport(String),
+    /// A catch-all error for cases not covered by a more specific variant.
     #[error("{0}")]
     Other(String),
 }
 
+/// Shorthand for `Result<T, EngineError>`, used throughout the engine.
 pub type Result<T> = std::result::Result<T, EngineError>;
 
 // ── Control flow signal returned by run_steps ──────────────────────────────
 
+/// Signals how step execution should proceed after a control-flow-affecting step.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Flow {
+    /// Continue to the next step normally.
     Done,
+    /// Break out of the enclosing loop.
     Break,
+    /// Skip to the next iteration of the enclosing loop.
     Continue,
+    /// Exit the whole scenario immediately.
     Exit,
 }
 
@@ -135,6 +159,10 @@ pub enum ScreenshotsMode {
     Always,
 }
 
+/// Runs a [`Scenario`](crate::scenario::Scenario) step-by-step against a [`Backend`].
+///
+/// Construct with [`ScenarioEngine::new`], optionally configure with the `with_*`
+/// builder methods, then call [`ScenarioEngine::run`].
 pub struct ScenarioEngine {
     backend: Arc<dyn Backend>,
     matcher: TemplateMatcher,
@@ -180,6 +208,8 @@ pub struct ScenarioEngine {
 }
 
 impl ScenarioEngine {
+    /// Create a new engine backed by `backend`, resolving relative scenario paths
+    /// (templates, data sources, screenshots) against `base_dir`.
     pub fn new(backend: Arc<dyn Backend>, base_dir: PathBuf) -> Self {
         let screenshot_dir = base_dir.join("screenshots");
         Self {
@@ -208,6 +238,8 @@ impl ScenarioEngine {
         }
     }
 
+    /// When `true`, dialog steps are auto-skipped or answered with their defaults
+    /// instead of blocking for interactive input.
     pub fn with_silent(mut self, silent: bool) -> Self {
         self.silent = silent;
         self

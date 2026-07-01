@@ -87,6 +87,8 @@ The main reason to reach for robost over PyAutoGUI or SikuliX is **RDP/Citrix su
 
 The scenario format is close to WinActor's node vocabulary (`click_image`, `wait_image`, `foreach`, `dialog_input`, …), so migrating existing automations is fairly direct. Scenarios are plain YAML — readable in any text editor and diffable in git with no proprietary tooling involved.
 
+The `robost` crate on crates.io is a documentation-only entry point — the actual functionality lives in `robost-core`, `robost-cli`, and the other workspace crates under `crates/`.
+
 Plugins run in a WASM sandbox: permissions are declared in `plugin.toml` and enforced at runtime. A plugin can only access what it declared, and if it panics, the runner keeps going. Plugins can be written in Rust, AssemblyScript, Go, or C — anything that compiles to `.wasm`.
 
 ## Quick Start
@@ -164,6 +166,11 @@ All crates are published on [crates.io](https://crates.io/search?q=robost) (v0.1
 |---|---|---|
 | **Phase 1** | ✅ Complete | 200+ scenario nodes · CLI · visual editor (AI chat, DnD, i18n) · snip tool · Web/UIA/Excel/Mail/OCR/Scheduler · all crates on crates.io |
 | **Phase 2** | 🔜 Planned | Scenario recorder · Word/SFTP/ML detection/Parallel execution/Registry/M365 |
+
+**Phase 2 priorities** (internal planning, subject to change):
+- 🔴 High: Word document automation, SFTP, more DB drivers (MySQL/PostgreSQL), stronger ML-based detection, OCR preprocessing, a `parallel` execution node, Windows registry/eventlog steps
+- 🟡 Medium: Microsoft 365 / Google Workspace integration, PDF field extraction, screen recording, SAP GUI, rotation-invariant template matching
+- 🟢 Low (Phase 3 candidate): Orchestrator, Process Mining, AI-assisted scenario generation, Test Suite
 
 ## Contributing
 

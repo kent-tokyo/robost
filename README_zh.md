@@ -82,6 +82,8 @@
 
 场景格式的节点词汇贴近 WinActor（`click_image`、`wait_image`、`foreach`、`dialog_input` 等），从现有自动化流程迁移比较直接。场景是纯 YAML，能在文本编辑器里看，用 git 管理变更，不需要专有工具。
 
+crates.io 上的 `robost` crate 只是一个文档入口，实际功能都在 `robost-core`、`robost-cli` 等 `crates/` 目录下的各个 crate 中。
+
 插件在 WASM 沙箱里运行：权限在 `plugin.toml` 里声明并在运行时强制检查。插件只能访问它声明过的资源，崩溃了主进程也继续运行。用 Rust、AssemblyScript、Go 或 C 编译成 `.wasm` 就能集成，不需要 fork 核心。
 
 ## 快速开始
@@ -166,6 +168,11 @@ cargo run -p robost-editor   # 可视化场景编辑器
 |---|---|---|
 | **Phase 1** | ✅ 已完成 | 200+ 场景节点 · CLI · 可视化编辑器（AI 聊天·拖放·多语言）· snip 工具 · Web/UIA/Excel/Mail/OCR/调度器 · 所有 crate 已发布至 crates.io |
 | **Phase 2** | 🔜 计划中 | 场景录制 · Word/SFTP/ML 检测/并行执行/注册表/M365 |
+
+**Phase 2 优先级**（内部规划，可能会调整）:
+- 🔴 高: Word 文档自动化、SFTP、更多数据库驱动（MySQL/PostgreSQL）、增强 ML 检测、OCR 预处理、`parallel` 并行执行节点、Windows 注册表/事件日志操作
+- 🟡 中: Microsoft 365 / Google Workspace 集成、PDF 字段提取、屏幕录制、SAP GUI、旋转不变模板匹配
+- 🟢 低（Phase 3 候选）: Orchestrator、Process Mining、AI 辅助场景生成、Test Suite
 
 ## 贡献
 
