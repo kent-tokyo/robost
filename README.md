@@ -83,7 +83,7 @@ A Rust-based OSS desktop automation (RPA) tool.
 
 ## Why robost?
 
-The main reason to reach for robost over PyAutoGUI or SikuliX is **RDP/Citrix support without an agent**. It captures the remote desktop window on the local machine and sends input through enigo, so it works regardless of what's running on the other end. Multi-scale NCC matching also handles DPI scaling (100/125/150%) that breaks pixel-perfect tools.
+The main reason to reach for robost over PyAutoGUI or SikuliX is **RDP/Citrix support without an agent**. It captures the remote desktop window on the local machine and sends input through enigo, so it works regardless of what's running on the other end. Multi-scale NCC matching also handles DPI scaling (100/125/150%) that breaks pixel-perfect tools — see [docs/benchmarks.md](docs/benchmarks.md) for the actual cost of that resilience.
 
 The scenario format is close to WinActor's node vocabulary (`click_image`, `wait_image`, `foreach`, `dialog_input`, …), so migrating existing automations is fairly direct. Scenarios are plain YAML — readable in any text editor and diffable in git with no proprietary tooling involved.
 

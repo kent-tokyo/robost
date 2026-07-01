@@ -78,7 +78,7 @@
 
 ## 为什么选 robost？
 
-相比 PyAutoGUI 和 SikuliX，最主要的区别是**无需在目标机器安装代理就能操作 RDP/Citrix**。它在本地捕获远程桌面窗口并通过 enigo 发送输入，不依赖对端运行的环境。多尺度 NCC 匹配也能自动处理会让像素精确工具失效的 DPI 缩放（100/125/150%）。
+相比 PyAutoGUI 和 SikuliX，最主要的区别是**无需在目标机器安装代理就能操作 RDP/Citrix**。它在本地捕获远程桌面窗口并通过 enigo 发送输入，不依赖对端运行的环境。多尺度 NCC 匹配也能自动处理会让像素精确工具失效的 DPI 缩放（100/125/150%）— 该耐性的实际开销参见 [docs/benchmarks.md](docs/benchmarks.md)。
 
 场景格式的节点词汇贴近 WinActor（`click_image`、`wait_image`、`foreach`、`dialog_input` 等），从现有自动化流程迁移比较直接。场景是纯 YAML，能在文本编辑器里看，用 git 管理变更，不需要专有工具。
 

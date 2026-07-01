@@ -78,7 +78,7 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 
 ## robost を選ぶ理由
 
-PyAutoGUI や SikuliX との一番の違いは **RDP/Citrix をエージェントなしで操作できる** 点です。ローカル側で RDP ウィンドウをキャプチャして enigo で入力を送るため、対象側の環境に依存しません。マルチスケール NCC マッチングで DPI スケーリング (100/125/150%) による座標ズレも自動で吸収します。
+PyAutoGUI や SikuliX との一番の違いは **RDP/Citrix をエージェントなしで操作できる** 点です。ローカル側で RDP ウィンドウをキャプチャして enigo で入力を送るため、対象側の環境に依存しません。マルチスケール NCC マッチングで DPI スケーリング (100/125/150%) による座標ズレも自動で吸収します — その耐性の実際のコストは [docs/benchmarks.md](docs/benchmarks.md) を参照してください。
 
 シナリオ形式は WinActor に近いノード語彙 (`click_image`、`wait_image`、`foreach`、`dialog_input` など) を持つため、既存の自動化処理からの移行がしやすいです。プレーン YAML なのでテキストエディタで読めますし、git で差分管理できます。
 

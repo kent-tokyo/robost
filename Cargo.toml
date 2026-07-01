@@ -133,6 +133,7 @@ notify-rust  = "4"
 
 # Test utilities
 tempfile = "3"
+criterion = "0.8"
 
 # Scheduler (cron expression parsing)
 croner = "2"
