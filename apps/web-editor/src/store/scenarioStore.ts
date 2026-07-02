@@ -17,7 +17,7 @@ interface ScenarioStore {
   newScenario: (name: string, folder?: string) => Promise<void>
   duplicateScenario: (name: string) => Promise<void>
   deleteScenario: (name: string) => Promise<void>
-  addStep: (stepType: string, defaults?: Record<string, unknown>) => void
+  addStep: (stepType: string, defaults?: Record<string, unknown>, atIndex?: number) => void
   deleteStep: (index: number) => void
   setDataSource: (file: string, sheet?: string) => void
   moveScenario: (from: string, to: string) => Promise<void>
@@ -99,9 +99,9 @@ export const useScenarioStore = create<ScenarioStore>((set, get) => ({
     }
   },
 
-  addStep: (stepType, defaults = {}) => {
+  addStep: (stepType, defaults = {}, atIndex) => {
     const { yaml } = get()
-    const newYaml = addStepToYaml(yaml, stepType, defaults)
+    const newYaml = addStepToYaml(yaml, stepType, defaults, atIndex)
     set({ yaml: newYaml, dirty: true })
   },
 

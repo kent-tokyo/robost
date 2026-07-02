@@ -169,11 +169,12 @@ export function deleteStepFromYaml(yamlText: string, stepIndex: number): string 
   return yaml.dump(scenario, { lineWidth: -1, noRefs: true })
 }
 
-/** Append a new step of the given type to the scenario YAML. */
+/** Add a new step of the given type to the scenario YAML, at `atIndex` or appended if omitted. */
 export function addStepToYaml(
   yamlText: string,
   stepType: KnownStepType | string,
   defaults: Record<string, unknown> = {},
+  atIndex?: number,
 ): string {
   let scenario: Scenario
   try {
@@ -184,7 +185,13 @@ export function addStepToYaml(
 
   if (!scenario.steps) scenario.steps = []
   const stepData = Object.keys(defaults).length > 0 ? defaults : null
-  ;(scenario.steps as unknown[]).push({ [stepType]: stepData })
+  const steps = scenario.steps as unknown[]
+  const entry = { [stepType]: stepData }
+  if (atIndex === undefined || atIndex < 0 || atIndex >= steps.length) {
+    steps.push(entry)
+  } else {
+    steps.splice(atIndex, 0, entry)
+  }
 
   return yaml.dump(scenario, { lineWidth: -1, noRefs: true })
 }
