@@ -251,6 +251,22 @@
 }
 .foreach-child-row:hover .foreach-child-del { opacity: 1; }
 .foreach-child-del:hover { color: #f87171; background: #2d2d4e; }
+.foreach-child-move {
+  background: none;
+  border: none;
+  color: #505070;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.foreach-child-row:hover .foreach-child-move { opacity: 1; }
+.foreach-child-move:hover:not(:disabled) { color: #7c6af7; background: #2d2d4e; }
+.foreach-child-move:disabled { opacity: 0.15 !important; cursor: not-allowed; }
 .foreach-child-body {
   padding: 10px;
   background: #0d0d1a;
