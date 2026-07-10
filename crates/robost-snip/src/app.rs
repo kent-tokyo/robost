@@ -971,10 +971,11 @@ fn do_save(
 }
 
 impl eframe::App for SnipApp {
-    fn ui(&mut self, _ui: &mut egui::Ui, _frame: &mut eframe::Frame) {}
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // eframe 0.35 hands us the root Ui; panels/windows still take the Context.
+        let ctx = ui.ctx().clone();
+        let ctx = &ctx;
 
-    #[allow(deprecated)]
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Pending live test: window was hidden last frame; run capture now and restore.
         if self.pending_live_test {
             self.pending_live_test = false;
@@ -1125,7 +1126,7 @@ impl eframe::App for SnipApp {
             && !self.show_help
         {
             // Onboarding screen: shown when the window is visible but no capture is active
-            egui::CentralPanel::default().show(ctx, |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.add_space(ui.available_height() * 0.2);
 
