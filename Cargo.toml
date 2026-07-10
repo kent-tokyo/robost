@@ -79,7 +79,7 @@ xcap = "0.9"
 enigo = "0.6"
 
 # GUI (robost-snip)
-eframe        = "0.34"
+eframe        = "0.35"
 egui          = "0.34"
 egui_extras   = { version = "0.34", features = ["svg"] }
 tray-icon     = "0.24"
