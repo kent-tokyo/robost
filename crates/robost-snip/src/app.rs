@@ -372,7 +372,7 @@ impl SnipApp {
             painter.rect_stroke(
                 r,
                 0.0,
-                egui::Stroke::new(2.0, crate::ACCENT),
+                egui::Stroke::new(2.0_f32, crate::ACCENT),
                 egui::StrokeKind::Middle,
             );
 
@@ -467,7 +467,7 @@ impl SnipApp {
                 painter.rect_stroke(
                     highlight,
                     0.0,
-                    egui::Stroke::new(3.0, egui::Color32::from_rgb(0, 255, 100)),
+                    egui::Stroke::new(3.0_f32, egui::Color32::from_rgb(0, 255, 100)),
                     egui::StrokeKind::Outside,
                 );
             }
@@ -554,7 +554,7 @@ impl SnipApp {
                     pp.rect_stroke(
                         mr,
                         0.0,
-                        egui::Stroke::new(1.5, egui::Color32::RED),
+                        egui::Stroke::new(1.5_f32, egui::Color32::RED),
                         egui::StrokeKind::Middle,
                     );
                 }
@@ -567,7 +567,7 @@ impl SnipApp {
                         pp.rect_stroke(
                             dr,
                             0.0,
-                            egui::Stroke::new(1.5, egui::Color32::from_rgb(255, 165, 0)),
+                            egui::Stroke::new(1.5_f32, egui::Color32::from_rgb(255, 165, 0)),
                             egui::StrokeKind::Middle,
                         );
                     }
@@ -582,8 +582,8 @@ impl SnipApp {
                     );
                     let c = egui::Color32::YELLOW;
                     pp.circle_filled(ap, 5.0 * scale.min(2.0), c);
-                    pp.line_segment([ap - egui::vec2(cross_r, 0.0), ap + egui::vec2(cross_r, 0.0)], egui::Stroke::new(1.5, c));
-                    pp.line_segment([ap - egui::vec2(0.0, cross_r), ap + egui::vec2(0.0, cross_r)], egui::Stroke::new(1.5, c));
+                    pp.line_segment([ap - egui::vec2(cross_r, 0.0), ap + egui::vec2(cross_r, 0.0)], egui::Stroke::new(1.5_f32, c));
+                    pp.line_segment([ap - egui::vec2(0.0, cross_r), ap + egui::vec2(0.0, cross_r)], egui::Stroke::new(1.5_f32, c));
                     pp.text(ap + egui::vec2(8.0, -8.0), egui::Align2::LEFT_TOP, (i + 1).to_string(), egui::FontId::monospace(11.0), c);
                 }
 
