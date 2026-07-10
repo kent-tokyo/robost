@@ -1,8 +1,33 @@
 # インストール
 
-## Windows: インストーラー or ポータブル ZIP（ビルド不要）
+> **最新リリース**: [GitHub Releases](https://github.com/kent-tokyo/robost/releases/latest)
 
-[README のダウンロード節](https://github.com/kent-tokyo/robost#download) を参照してください — `robost-setup.exe` またはポータブル ZIP、Rust ツールチェーンは不要です。
+## Windows — インストーラー（推奨）
+
+**[⬇ robost-setup.exe](https://github.com/kent-tokyo/robost/releases/latest/download/robost-setup.exe)** — ダブルクリックでインストール。追加の依存関係は不要です。
+
+- `Program Files\robost` にインストール。スタートメニューとデスクトップにショートカットを作成
+- ショートカットから起動するとブラウザが自動的に開き、ビジュアルエディタが使えます
+- Windows の「設定 → アプリ」から綺麗にアンインストール可能
+
+!!! warning "SmartScreen 警告について"
+    インストーラーはコード署名されていないため、「Windows によって PC が保護されました」と表示される場合があります。
+    **「詳細情報」→「実行」** をクリックしてください。これはコード署名証明書を持たないオープンソースソフトウェアでは一般的な表示です。
+
+## Windows — ポータブル ZIP
+
+| プラットフォーム | ダウンロード |
+|---|---|
+| Windows | [rpa-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip) |
+
+- 展開して **`rpa.exe` をダブルクリック** — ブラウザが自動で開きビジュアルエディタが使えます
+- インストール不要。どのフォルダからでも実行できます
+
+## macOS
+
+| プラットフォーム | ダウンロード |
+|---|---|
+| macOS (Apple Silicon) | [rpa-aarch64-apple-darwin.tar.gz](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-aarch64-apple-darwin.tar.gz) |
 
 ## ソースからビルド
 
