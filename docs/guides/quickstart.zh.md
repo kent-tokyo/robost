@@ -1,9 +1,36 @@
 # 快速入门
 
+## Windows — 无需构建
+
+1. 下载 [rpa-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip)
+2. 解压到任意位置，例如 `C:\Tools\robost`
+3. 双击 **`rpa.exe`** — 浏览器会自动打开可视化编辑器
+
+无需 Rust、Cargo 或 Visual Studio。
+
+从命令行运行场景：
+
+```
+rpa run examples\windows\calculator.yaml
+rpa run examples\windows\calculator.yaml --dry-run
+```
+
+> **开发者（从源码构建）：** `cargo build --workspace`
+
+---
+
 ## 1. 启动编辑器
 
+**安装程序 / 便携版 ZIP：**
+
+```
+rpa.exe
+```
+
+**从源码：**
+
 ```bash
-cargo run -p robost-editor
+cargo run -p robost-cli --features embed-editor -- agent
 ```
 
 ## 2. 创建第一个场景

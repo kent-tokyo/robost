@@ -501,31 +501,25 @@ function AddChildButton({ onAdd }: { onAdd: (type: string, defaults: unknown) =>
   )
 }
 
-// ── foreach コンテナエディタ ───────────────────────────────────────────────
+// ── ネスト配列共通エディタ (foreach.do / if.then / group.do / try_catch.try 等で共用) ──
 
-function ForeachChildStepsEditor({
-  step,
-  onUpdate,
+function NestedStepList({
+  steps,
+  onChange,
+  emptyHint,
 }: {
-  step: ScenarioStep
-  onUpdate: (p: Partial<ScenarioStep>) => void
+  steps: ScenarioStep[]
+  onChange: (updated: ScenarioStep[]) => void
+  emptyHint?: React.ReactNode
 }) {
-  const rawDo = (step.do as unknown[] | undefined) ?? []
-  const childSteps: ScenarioStep[] = rawDo.map(s =>
-    normalizeStep(s as Record<string, unknown>)
-  )
   const [openIdx, setOpenIdx] = useState<number | null>(null)
 
-  const rebuildDo = (updated: ScenarioStep[]) =>
-    onUpdate({ do: updated.map(denormalizeStep) })
-
   const updateChild = (i: number, patch: Partial<ScenarioStep>) => {
-    const next = childSteps.map((s, idx) => idx === i ? { ...s, ...patch } : s)
-    rebuildDo(next)
+    onChange(steps.map((s, idx) => idx === i ? { ...s, ...patch } : s))
   }
 
   const deleteChild = (i: number) => {
-    rebuildDo(childSteps.filter((_, idx) => idx !== i))
+    onChange(steps.filter((_, idx) => idx !== i))
     if (openIdx === i) setOpenIdx(null)
     else if (openIdx !== null && openIdx > i) setOpenIdx(openIdx - 1)
   }
@@ -535,11 +529,101 @@ function ForeachChildStepsEditor({
       ? (defaults as Record<string, unknown>)
       : {}
     const newStep: ScenarioStep = { type, ...data }
-    const next = [...childSteps, newStep]
-    rebuildDo(next)
+    const next = [...steps, newStep]
+    onChange(next)
     setOpenIdx(next.length - 1)
   }
 
+  const moveChild = (i: number, dir: -1 | 1) => {
+    const j = i + dir
+    if (j < 0 || j >= steps.length) return
+    const next = [...steps]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    onChange(next)
+    if (openIdx === i) setOpenIdx(j)
+    else if (openIdx === j) setOpenIdx(i)
+  }
+
+  return (
+    <div className="foreach-children">
+      <div className="foreach-children-header">
+        <span className="foreach-children-title">ステップ（{steps.length}）</span>
+        <AddChildButton onAdd={addChild} />
+      </div>
+
+      {steps.length === 0 && (
+        <p className="foreach-empty">{emptyHint ?? '「ステップ追加」で処理を追加してください'}</p>
+      )}
+
+      {steps.map((child, i) => {
+        const isOpen = openIdx === i
+        const label = STEP_LABELS[child.type ?? ''] ?? child.type ?? `Step ${i + 1}`
+        return (
+          <div key={i} className={`foreach-child${isOpen ? ' open' : ''}`}>
+            <div className="foreach-child-row" onClick={() => setOpenIdx(isOpen ? null : i)}>
+              {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              <span className="foreach-child-badge">{child.type ?? '?'}</span>
+              <span className="foreach-child-name">{child.name ?? label}</span>
+              <button
+                className="foreach-child-move"
+                onClick={e => { e.stopPropagation(); moveChild(i, -1) }}
+                disabled={i === 0}
+                title="上へ"
+              >
+                ↑
+              </button>
+              <button
+                className="foreach-child-move"
+                onClick={e => { e.stopPropagation(); moveChild(i, 1) }}
+                disabled={i === steps.length - 1}
+                title="下へ"
+              >
+                ↓
+              </button>
+              <button
+                className="foreach-child-del"
+                onClick={e => { e.stopPropagation(); deleteChild(i) }}
+                title="削除"
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
+            {isOpen && (
+              <div className="foreach-child-body">
+                <Field label="ステップ名">
+                  <TextInput
+                    value={(child.name as string) ?? ''}
+                    onChange={v => updateChild(i, { name: v })}
+                    placeholder="省略可"
+                  />
+                </Field>
+                <TypeSpecificEditor step={child} onUpdate={p => updateChild(i, p)} />
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Read a nested `ScenarioStep[]` field (already-parsed raw YAML array) as normalized steps. */
+function readStepList(step: ScenarioStep, field: string): ScenarioStep[] {
+  const raw = (step[field] as unknown[] | undefined) ?? []
+  return raw.map(s => normalizeStep(s as Record<string, unknown>))
+}
+
+/** Build the onChange handler for a nested `ScenarioStep[]` field. */
+function writeStepList(
+  onUpdate: (p: Partial<ScenarioStep>) => void,
+  field: string,
+): (updated: ScenarioStep[]) => void {
+  return (updated) => onUpdate({ [field]: updated.map(denormalizeStep) })
+}
+
+// ── foreach コンテナエディタ ───────────────────────────────────────────────
+
+function ForeachEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
   return (
     <>
       <Field label="ループする配列変数名">
@@ -556,51 +640,327 @@ function ForeachChildStepsEditor({
           placeholder="例: i"
         />
       </Field>
+      <NestedStepList
+        steps={readStepList(step, 'do')}
+        onChange={writeStepList(onUpdate, 'do')}
+        emptyHint={<>「ステップ追加」でループ内の処理を追加してください<br />各イテレーションで <code>{'{{item.列名}}'}</code> が使えます</>}
+      />
+    </>
+  )
+}
 
-      {/* ── ループ内ステップ ───────────────────────────── */}
-      <div className="foreach-children">
-        <div className="foreach-children-header">
-          <span className="foreach-children-title">ループ内ステップ（{childSteps.length}）</span>
-          <AddChildButton onAdd={addChild} />
-        </div>
+// ── グループ / 分岐 / 繰り返し / 例外処理 エディタ ─────────────────────────
 
-        {childSteps.length === 0 && (
-          <p className="foreach-empty">「ステップ追加」でループ内の処理を追加してください<br />各イテレーションで <code>{'{{item.列名}}'}</code> が使えます</p>
-        )}
+function GroupEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  return (
+    <NestedStepList steps={readStepList(step, 'do')} onChange={writeStepList(onUpdate, 'do')} />
+  )
+}
 
-        {childSteps.map((child, i) => {
-          const isOpen = openIdx === i
-          const label = STEP_LABELS[child.type ?? ''] ?? child.type ?? `Step ${i + 1}`
-          return (
-            <div key={i} className={`foreach-child${isOpen ? ' open' : ''}`}>
-              <div className="foreach-child-row" onClick={() => setOpenIdx(isOpen ? null : i)}>
-                {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                <span className="foreach-child-badge">{child.type ?? '?'}</span>
-                <span className="foreach-child-name">{child.name ?? label}</span>
-                <button
-                  className="foreach-child-del"
-                  onClick={e => { e.stopPropagation(); deleteChild(i) }}
-                  title="削除"
-                >
-                  <Trash2 size={11} />
-                </button>
-              </div>
-              {isOpen && (
-                <div className="foreach-child-body">
-                  <Field label="ステップ名">
-                    <TextInput
-                      value={(child.name as string) ?? ''}
-                      onChange={v => updateChild(i, { name: v })}
-                      placeholder="省略可"
-                    />
-                  </Field>
-                  <TypeSpecificEditor step={child} onUpdate={p => updateChild(i, p)} />
-                </div>
-              )}
-            </div>
-          )
-        })}
+function IfEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  return (
+    <>
+      <Field label="条件式 (Rhai、例: count > 10)">
+        <TextInput value={(step.cond as string) ?? ''} onChange={v => onUpdate({ cond: v })} placeholder="例: count > 10" />
+      </Field>
+      <Field label="真の場合 (then)">
+        <NestedStepList steps={readStepList(step, 'then')} onChange={writeStepList(onUpdate, 'then')} />
+      </Field>
+      <Field label="偽の場合 (else, 省略可)">
+        <NestedStepList steps={readStepList(step, 'else')} onChange={writeStepList(onUpdate, 'else')} />
+      </Field>
+    </>
+  )
+}
+
+function WhileLikeEditor({
+  step,
+  onUpdate,
+  condHint,
+}: {
+  step: ScenarioStep
+  onUpdate: (p: Partial<ScenarioStep>) => void
+  condHint: string
+}) {
+  return (
+    <>
+      <Field label={`条件式 (Rhai、${condHint})`}>
+        <TextInput value={(step.cond as string) ?? ''} onChange={v => onUpdate({ cond: v })} placeholder="例: count < 10" />
+      </Field>
+      <NestedStepList steps={readStepList(step, 'do')} onChange={writeStepList(onUpdate, 'do')} />
+    </>
+  )
+}
+
+function RepeatEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  return (
+    <>
+      <Field label="繰り返し回数">
+        <NumberInput value={(step.count as number) ?? 1} min={0} onChange={v => onUpdate({ count: v })} />
+      </Field>
+      <NestedStepList steps={readStepList(step, 'do')} onChange={writeStepList(onUpdate, 'do')} />
+    </>
+  )
+}
+
+function TryCatchEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  return (
+    <>
+      <Field label="試行するステップ (try)">
+        <NestedStepList steps={readStepList(step, 'try')} onChange={writeStepList(onUpdate, 'try')} />
+      </Field>
+      <Field label="失敗時のステップ (catch, 省略可)">
+        <NestedStepList steps={readStepList(step, 'catch')} onChange={writeStepList(onUpdate, 'catch')} />
+      </Field>
+      <Field label="必ず実行するステップ (finally, 省略可)">
+        <NestedStepList steps={readStepList(step, 'finally')} onChange={writeStepList(onUpdate, 'finally')} />
+      </Field>
+    </>
+  )
+}
+
+// ── 多分岐 (switch) エディタ ───────────────────────────────────────────────
+
+interface SwitchCase {
+  when: unknown
+  do: unknown[]
+}
+
+function SwitchCasesEditor({
+  cases,
+  onChange,
+}: {
+  cases: SwitchCase[]
+  onChange: (updated: SwitchCase[]) => void
+}) {
+  const updateCase = (i: number, patch: Partial<SwitchCase>) => {
+    onChange(cases.map((c, idx) => idx === i ? { ...c, ...patch } : c))
+  }
+  const removeCase = (i: number) => onChange(cases.filter((_, idx) => idx !== i))
+  const addCase = () => onChange([...cases, { when: '', do: [] }])
+
+  return (
+    <div className="foreach-children">
+      <div className="foreach-children-header">
+        <span className="foreach-children-title">ケース（{cases.length}）</span>
+        <button className="foreach-add-btn" onClick={addCase}><Plus size={12} /> ケース追加</button>
       </div>
+      {cases.length === 0 && <p className="foreach-empty">「ケース追加」で分岐条件を追加してください</p>}
+      {cases.map((c, i) => (
+        <div key={i} className="foreach-child open">
+          <div className="foreach-child-row">
+            <span className="foreach-child-badge">case</span>
+            <TextInput
+              value={String(c.when ?? '')}
+              onChange={v => updateCase(i, { when: v })}
+              placeholder="一致する値"
+            />
+            <button className="foreach-child-del" onClick={() => removeCase(i)} title="削除">
+              <Trash2 size={11} />
+            </button>
+          </div>
+          <div className="foreach-child-body">
+            <NestedStepList
+              steps={c.do.map(s => normalizeStep(s as Record<string, unknown>))}
+              onChange={updated => updateCase(i, { do: updated.map(denormalizeStep) })}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function SwitchEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  const cases = ((step.cases as SwitchCase[] | undefined) ?? [])
+  return (
+    <>
+      <Field label="判定する変数名">
+        <TextInput value={(step.on as string) ?? ''} onChange={v => onUpdate({ on: v })} placeholder="例: status" />
+      </Field>
+      <SwitchCasesEditor cases={cases} onChange={updated => onUpdate({ cases: updated })} />
+      <Field label="どのケースにも一致しない場合 (default, 省略可)">
+        <NestedStepList steps={readStepList(step, 'default')} onChange={writeStepList(onUpdate, 'default')} />
+      </Field>
+    </>
+  )
+}
+
+// ── ダイアログ (ユーザ操作待ち) エディタ ───────────────────────────────────
+
+function DialogWaitEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  return (
+    <>
+      <Field label="メッセージ">
+        <TextInput value={(step.message as string) ?? ''} onChange={v => onUpdate({ message: v })} placeholder="例: 確認後、続行してください" />
+      </Field>
+      <Field label="タイトル (省略可)">
+        <TextInput value={(step.title as string) ?? ''} onChange={v => onUpdate({ title: v || undefined })} placeholder="例: 確認" />
+      </Field>
+    </>
+  )
+}
+
+function DialogInputEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  return (
+    <>
+      <Field label="メッセージ">
+        <TextInput value={(step.message as string) ?? ''} onChange={v => onUpdate({ message: v })} placeholder="例: 顧客名を入力してください" />
+      </Field>
+      <Field label="タイトル (省略可)">
+        <TextInput value={(step.title as string) ?? ''} onChange={v => onUpdate({ title: v || undefined })} placeholder="例: 入力" />
+      </Field>
+      <Field label="初期値 (省略可)">
+        <TextInput value={(step.default as string) ?? ''} onChange={v => onUpdate({ default: v || undefined })} />
+      </Field>
+      <Field label="保存する変数名">
+        <TextInput value={(step.save_as as string) ?? ''} onChange={v => onUpdate({ save_as: v })} placeholder="例: customer_name" />
+      </Field>
+    </>
+  )
+}
+
+function DialogSelectEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  const options = (step.options as string[] | undefined) ?? []
+  return (
+    <>
+      <Field label="メッセージ">
+        <TextInput value={(step.message as string) ?? ''} onChange={v => onUpdate({ message: v })} placeholder="例: 処理を選択してください" />
+      </Field>
+      <Field label="タイトル (省略可)">
+        <TextInput value={(step.title as string) ?? ''} onChange={v => onUpdate({ title: v || undefined })} placeholder="例: 選択" />
+      </Field>
+      <Field label="選択肢 (1行に1つ)">
+        <textarea
+          className="se-input"
+          rows={4}
+          value={options.join('\n')}
+          onChange={e => onUpdate({ options: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
+          placeholder={'例:\n承認\n却下'}
+        />
+      </Field>
+      <Field label="保存する変数名">
+        <TextInput value={(step.save_as as string) ?? ''} onChange={v => onUpdate({ save_as: v })} placeholder="例: choice" />
+      </Field>
+    </>
+  )
+}
+
+// ── 変数系エディタ ─────────────────────────────────────────────────────────
+
+function CopyVarEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  return (
+    <>
+      <Field label="コピー元の変数名">
+        <TextInput value={(step.from as string) ?? ''} onChange={v => onUpdate({ from: v })} placeholder="例: item.名前" />
+      </Field>
+      <Field label="コピー先の変数名">
+        <TextInput value={(step.to as string) ?? ''} onChange={v => onUpdate({ to: v })} placeholder="例: customer_name" />
+      </Field>
+    </>
+  )
+}
+
+function GetDatetimeEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  return (
+    <>
+      <Field label="日時フォーマット (strftime)">
+        <TextInput value={(step.format as string) ?? '%Y-%m-%d %H:%M:%S'} onChange={v => onUpdate({ format: v })} />
+      </Field>
+      <Field label="保存する変数名">
+        <TextInput value={(step.save_as as string) ?? ''} onChange={v => onUpdate({ save_as: v })} placeholder="例: now" />
+      </Field>
+    </>
+  )
+}
+
+function IncrementEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  return (
+    <>
+      <Field label="カウンタ変数名">
+        <TextInput value={(step.name as string) ?? ''} onChange={v => onUpdate({ name: v })} placeholder="例: counter" />
+      </Field>
+      <Field label="増分 (負数で減算)">
+        <NumberInput value={(step.by as number) ?? 1} onChange={v => onUpdate({ by: v })} />
+      </Field>
+    </>
+  )
+}
+
+// ── 画像・ウィンドウ系エディタ (プロパティエディタ未対応分) ─────────────────
+
+function WaitImagePropsEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  return (
+    <>
+      <Field label="テンプレート画像パス">
+        <TextInput value={(step.template as string) ?? ''} onChange={v => onUpdate({ template: v })} placeholder="例: templates/button.png" />
+      </Field>
+      <Field label="タイムアウト (ms, 省略可)">
+        <NumberInput value={(step.timeout_ms as number) ?? 5000} min={0} onChange={v => onUpdate({ timeout_ms: v })} />
+      </Field>
+      <Field label="ウィンドウタイトル（含む、省略可）">
+        <TextInput value={(step.window as string) ?? ''} onChange={v => onUpdate({ window: v || undefined })} />
+      </Field>
+      <Field label="連続一致必要回数 (省略可)">
+        <NumberInput value={(step.stable_frames as number) ?? 1} min={1} onChange={v => onUpdate({ stable_frames: v })} />
+      </Field>
+    </>
+  )
+}
+
+function MatchRectEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  const rect = (step.rect as { x?: number; y?: number; width?: number; height?: number } | undefined) ?? {}
+  const updateRect = (patch: Partial<typeof rect>) => onUpdate({ rect: { x: 0, y: 0, width: 0, height: 0, ...rect, ...patch } })
+  return (
+    <>
+      <Field label="テンプレート画像パス">
+        <TextInput value={(step.template as string) ?? ''} onChange={v => onUpdate({ template: v })} placeholder="例: templates/icon.png" />
+      </Field>
+      <Field label="検索範囲 X">
+        <NumberInput value={rect.x ?? 0} onChange={v => updateRect({ x: v })} />
+      </Field>
+      <Field label="検索範囲 Y">
+        <NumberInput value={rect.y ?? 0} onChange={v => updateRect({ y: v })} />
+      </Field>
+      <Field label="検索範囲 幅">
+        <NumberInput value={rect.width ?? 0} min={0} onChange={v => updateRect({ width: v })} />
+      </Field>
+      <Field label="検索範囲 高さ">
+        <NumberInput value={rect.height ?? 0} min={0} onChange={v => updateRect({ height: v })} />
+      </Field>
+      <Field label="タイムアウト (ms, 省略可)">
+        <NumberInput value={(step.timeout_ms as number) ?? 5000} min={0} onChange={v => onUpdate({ timeout_ms: v })} />
+      </Field>
+      <Field label="保存する変数名 (省略可)">
+        <TextInput value={(step.save_as as string) ?? ''} onChange={v => onUpdate({ save_as: v || undefined })} placeholder="例: match_result" />
+      </Field>
+    </>
+  )
+}
+
+function WaitWindowEditor({ step, onUpdate }: { step: ScenarioStep; onUpdate: (p: Partial<ScenarioStep>) => void }) {
+  return (
+    <>
+      <Field label="ウィンドウタイトル（含む）">
+        <TextInput value={(step.title_contains as string) ?? ''} onChange={v => onUpdate({ title_contains: v })} placeholder="例: メモ帳" />
+      </Field>
+      <Field label="待機する状態">
+        <Select
+          value={(step.state as string) ?? 'exists'}
+          options={[
+            { value: 'exists',   label: '出現するまで待機' },
+            { value: 'closed',   label: '消えるまで待機' },
+            { value: 'operable', label: '操作可能になるまで待機' },
+          ]}
+          onChange={v => onUpdate({ state: v })}
+        />
+      </Field>
+      <Field label="タイムアウト (ms, 省略可)">
+        <NumberInput value={(step.timeout_ms as number) ?? 5000} min={0} onChange={v => onUpdate({ timeout_ms: v })} />
+      </Field>
+      <Field label="保存する変数名 (省略可、指定時はタイムアウトでもエラーにせずfalseを保存)">
+        <TextInput value={(step.save_as as string) ?? ''} onChange={v => onUpdate({ save_as: v || undefined })} />
+      </Field>
     </>
   )
 }
@@ -626,6 +986,21 @@ const STEP_LABELS: Record<string, string> = {
   import_vars:      '変数インポート',
   foreach:          'ループ (foreach)',
   call_scenario:    'シナリオ呼び出し',
+  group:            'グループ',
+  if:               '分岐 (if)',
+  switch:           '多分岐 (switch)',
+  repeat:           '繰り返し (repeat)',
+  while:            '繰り返し (while)',
+  do_while:         '後判定繰返 (do_while)',
+  try_catch:        '例外処理',
+  match_rect:       '矩形マッチング',
+  wait_window:      'ウィンドウ状態待機',
+  dialog_wait:      '待機ボックス',
+  dialog_input:     'インプットボックス',
+  dialog_select:    '選択ボックス',
+  copy_var:         '変数値コピー',
+  get_datetime:     '日時取得',
+  increment:        'カウントアップ',
 }
 
 function typeLabel(t?: string) {
@@ -650,7 +1025,23 @@ function TypeSpecificEditor({
     case 'csv_read':         return <CsvReadEditor step={step} onUpdate={onUpdate} />
     case 'import_vars':      return <ImportVarsEditor step={step} onUpdate={onUpdate} />
     case 'call_scenario':    return <CallScenarioEditor step={step} onUpdate={onUpdate} />
-    case 'foreach':          return <ForeachChildStepsEditor step={step} onUpdate={onUpdate} />
+    case 'foreach':          return <ForeachEditor step={step} onUpdate={onUpdate} />
+    case 'group':            return <GroupEditor step={step} onUpdate={onUpdate} />
+    case 'if':               return <IfEditor step={step} onUpdate={onUpdate} />
+    case 'while':            return <WhileLikeEditor step={step} onUpdate={onUpdate} condHint="ループ前に判定" />
+    case 'do_while':         return <WhileLikeEditor step={step} onUpdate={onUpdate} condHint="ループ後に判定" />
+    case 'repeat':           return <RepeatEditor step={step} onUpdate={onUpdate} />
+    case 'try_catch':        return <TryCatchEditor step={step} onUpdate={onUpdate} />
+    case 'switch':           return <SwitchEditor step={step} onUpdate={onUpdate} />
+    case 'dialog_wait':      return <DialogWaitEditor step={step} onUpdate={onUpdate} />
+    case 'dialog_input':     return <DialogInputEditor step={step} onUpdate={onUpdate} />
+    case 'dialog_select':    return <DialogSelectEditor step={step} onUpdate={onUpdate} />
+    case 'copy_var':         return <CopyVarEditor step={step} onUpdate={onUpdate} />
+    case 'get_datetime':     return <GetDatetimeEditor step={step} onUpdate={onUpdate} />
+    case 'increment':        return <IncrementEditor step={step} onUpdate={onUpdate} />
+    case 'wait_image':       return <WaitImagePropsEditor step={step} onUpdate={onUpdate} />
+    case 'match_rect':       return <MatchRectEditor step={step} onUpdate={onUpdate} />
+    case 'wait_window':      return <WaitWindowEditor step={step} onUpdate={onUpdate} />
     default:
       return (
         <p className="se-no-editor">
@@ -692,6 +1083,18 @@ export function StepEditor({ step, stepIndex, onUpdate, onClose, onSave, onRunSt
             onChange={(v) => onUpdate({ name: v })}
             placeholder="例: ウィンドウをフォーカス"
           />
+        </Field>
+
+        {/* 全ステップ共通: 有効/無効(スキップ) */}
+        <Field label="有効">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={(step.enabled as boolean) ?? true}
+              onChange={(e) => onUpdate({ enabled: e.target.checked })}
+            />
+            <span style={{ fontSize: 13, color: '#9090b0' }}>チェック OFF でこのステップを実行時にスキップ</span>
+          </label>
         </Field>
 
         <div className="se-divider" />

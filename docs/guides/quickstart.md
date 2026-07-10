@@ -30,7 +30,7 @@ rpa.exe
 **From source:**
 
 ```bash
-cargo run -p robost-editor
+cargo run -p robost-cli --features embed-editor -- agent
 ```
 
 ## 2. Build your first scenario

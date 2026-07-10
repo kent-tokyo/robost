@@ -14,6 +14,7 @@ import {
   type Connection,
   type NodeMouseHandler,
   type NodeProps,
+  type ReactFlowInstance,
   BackgroundVariant,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -28,7 +29,9 @@ import { useRunStore } from '../store/runStore'
 import { AiChat } from '../components/AiChat'
 import { StepEditor } from '../components/StepEditor'
 import { ScenarioListItem } from '../components/ScenarioListItem'
+import { NodePalette } from '../components/NodePalette'
 import { yamlToNodes, nodesToYaml, updateStepInYaml, getDataSourceFromYaml, type ScenarioStep } from '../utils/yamlFlow'
+import { STEP_TEMPLATES } from '../utils/stepTemplates'
 import './ScenarioPage.css'
 
 // ── カスタムステップノード ────────────────────────────────────────────────
@@ -42,7 +45,11 @@ function StepNode({ data }: NodeProps) {
   const save = useScenarioStore((s) => s.save)
   const activeScenario = useScenarioStore((s) => s.activeScenario)
   const startRunStep = useRunStore((s) => s.startRunStep)
-  const isRunning = useRunStore((s) => s.status === 'running')
+  const status = useRunStore((s) => s.status)
+  const isRunning = status === 'running'
+  const currentStep = useRunStore((s) => s.currentStep)
+  const isActive = isRunning && stepIndex === currentStep
+  const isFailed = status === 'failed' && stepIndex === currentStep
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -57,7 +64,7 @@ function StepNode({ data }: NodeProps) {
   }
 
   return (
-    <div className="step-node">
+    <div className={`step-node${isActive ? ' running' : ''}${isFailed ? ' error' : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="step-node-body">
         <span className="step-node-label">{label}</span>
@@ -82,31 +89,6 @@ function StepNode({ data }: NodeProps) {
 }
 
 const nodeTypes = { stepNode: StepNode }
-
-// ── ステップテンプレート ──────────────────────────────────────────────────
-
-interface StepTemplate {
-  type: string
-  label: string
-  defaults: Record<string, unknown>
-}
-
-const STEP_TEMPLATES: StepTemplate[] = [
-  { type: 'window_control',   label: 'ウィンドウ前面化',       defaults: { title_contains: '', action: 'focus' } },
-  { type: 'click_text',       label: '文字クリック',           defaults: { text: '', lang: 'jpn', action: 'left' } },
-  { type: 'move_to_text',     label: 'テキストへ移動',         defaults: { text: '', lang: 'jpn' } },
-  { type: 'click_image',      label: '画像クリック',           defaults: { template: '', threshold: 0.87 } },
-  { type: 'wait_image',       label: '画像待機',               defaults: { template: '' } },
-  { type: 'type',             label: 'テキスト入力',           defaults: { text: '' } },
-  { type: 'wait_ms',          label: '待機',                   defaults: { ms: 1000 } },
-  { type: 'excel_read_sheet', label: 'Excel/CSV読み込み',     defaults: { file: '', has_header: true, save_as: 'rows' } },
-  { type: 'csv_read',         label: 'CSV読み込み',            defaults: { path: '', has_header: true, save_as: 'rows' } },
-  { type: 'foreach',          label: 'ループ (foreach)',       defaults: { var: 'rows', do: [] } },
-  { type: 'call_scenario',   label: 'シナリオ呼び出し',       defaults: { path: '', inputs: {} } },
-  { type: 'import_vars',      label: '変数インポート (1行)',   defaults: { file: '', row: 0, prefix: '' } },
-  { type: 'script',           label: 'スクリプト',             defaults: { code: '' } },
-  { type: 'shell',            label: 'シェル実行',             defaults: { cmd: '' } },
-]
 
 // ── ステップ追加ドロップダウン ────────────────────────────────────────────
 
@@ -269,6 +251,7 @@ export function ScenarioPage() {
   const [dsSheet, setDsSheet] = useState('')
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const rfInstance = useRef<ReactFlowInstance | null>(null)
 
   useEffect(() => { loadList() }, [loadList])
 
@@ -305,6 +288,25 @@ export function ScenarioPage() {
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges],
+  )
+
+  const onPaletteDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  const onPaletteDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      if (!activeScenario) return
+      const raw = e.dataTransfer.getData('application/reactflow')
+      if (!raw) return
+      const { type, defaults } = JSON.parse(raw) as { type: string; defaults: Record<string, unknown> }
+      const dropPos = rfInstance.current?.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+      const atIndex = dropPos ? nodes.filter((n) => n.position.y < dropPos.y).length : undefined
+      addStep(type, defaults, atIndex)
+    },
+    [activeScenario, nodes, addStep],
   )
 
   const onNodeClick: NodeMouseHandler = useCallback((_event, node) => {
@@ -457,6 +459,9 @@ export function ScenarioPage() {
           <p className="scenario-list-empty">シナリオがありません</p>
         )}
       </div>
+
+      {/* Node palette panel */}
+      <NodePalette />
 
       {/* Main canvas area */}
       <div className="scenario-canvas-area">
@@ -638,7 +643,7 @@ export function ScenarioPage() {
         )}
 
         {/* ReactFlow canvas */}
-        <div className="flow-container">
+        <div className="flow-container" onDragOver={onPaletteDragOver} onDrop={onPaletteDrop}>
           {!activeScenario ? (
             <div className="flow-empty">
               <FolderOpen size={48} />
@@ -653,6 +658,7 @@ export function ScenarioPage() {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onNodeClick={onNodeClick}
+              onInit={(instance) => { rfInstance.current = instance }}
               fitView
             >
               <Background variant={BackgroundVariant.Dots} color="#2d2d4e" />

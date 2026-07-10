@@ -1,9 +1,36 @@
 # クイックスタート
 
+## Windows — ビルド不要
+
+1. [rpa-x86_64-windows.zip](https://github.com/kent-tokyo/robost/releases/latest/download/rpa-x86_64-windows.zip) をダウンロード
+2. 任意の場所（例: `C:\Tools\robost`）に展開
+3. **`rpa.exe`** をダブルクリック — ブラウザが自動でビジュアルエディタを開く
+
+Rust・Cargo・Visual Studio は不要です。
+
+コマンドラインからシナリオを実行する:
+
+```
+rpa run examples\windows\calculator.yaml
+rpa run examples\windows\calculator.yaml --dry-run
+```
+
+> **開発者向け（ソースからビルド）:** `cargo build --workspace`
+
+---
+
 ## 1. エディタを起動する
 
+**インストーラー / ポータブル ZIP:**
+
+```
+rpa.exe
+```
+
+**ソースから:**
+
 ```bash
-cargo run -p robost-editor
+cargo run -p robost-cli --features embed-editor -- agent
 ```
 
 ## 2. 最初のシナリオを作成する

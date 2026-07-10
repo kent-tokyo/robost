@@ -7,18 +7,22 @@ use std::collections::HashMap;
 pub struct Variables(HashMap<String, Value>);
 
 impl Variables {
+    /// Create an empty variable store.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set (or overwrite) the value of `key`.
     pub fn set(&mut self, key: impl Into<String>, value: impl Into<Value>) {
         self.0.insert(key.into(), value.into());
     }
 
+    /// Look up the value of `key`, if set.
     pub fn get(&self, key: &str) -> Option<&Value> {
         self.0.get(key)
     }
 
+    /// Borrow the underlying key/value map.
     pub fn as_map(&self) -> &HashMap<String, Value> {
         &self.0
     }

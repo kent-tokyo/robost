@@ -1,10 +1,14 @@
 use chrono::{DateTime, Local};
 use std::path::{Path, PathBuf};
 
+/// The result of executing a single scenario step, recorded in a [`StepRecord`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum StepOutcome {
+    /// The step completed successfully.
     Ok,
+    /// The step was skipped (e.g. by a conditional).
     Skipped,
+    /// The step failed, with a human-readable error message.
     Failed(String),
 }
 
@@ -41,19 +45,34 @@ impl StepOutcome {
     }
 }
 
+/// The final result of a whole scenario run, recorded in an [`ExecutionReport`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum Outcome {
+    /// Every step completed (or was skipped) without failure.
     Success,
-    Failed { step_index: usize, message: String },
+    /// A step failed; the run stopped there.
+    Failed {
+        /// Index of the step that failed.
+        step_index: usize,
+        /// The failure's error message.
+        message: String,
+    },
 }
 
+/// A record of one executed scenario step, for inclusion in an [`ExecutionReport`].
 #[derive(Debug, Clone)]
 pub struct StepRecord {
+    /// Zero-based index of this step within the scenario.
     pub index: usize,
+    /// Human-readable step name/description.
     pub name: String,
+    /// When execution of this step began.
     pub started_at: DateTime<Local>,
+    /// How long the step took to execute, in milliseconds.
     pub elapsed_ms: u64,
+    /// Whether the step succeeded, was skipped, or failed.
     pub outcome: StepOutcome,
+    /// Path to a screenshot captured for this step, if any.
     pub screenshot_path: Option<PathBuf>,
     /// NCC match score for image-matching steps (None for other step types).
     pub confidence: Option<f32>,
@@ -61,16 +80,23 @@ pub struct StepRecord {
     pub vars_json: Option<String>,
 }
 
+/// A complete record of a scenario run, exportable to CSV or HTML.
 #[derive(Debug, Clone)]
 pub struct ExecutionReport {
+    /// Name of the scenario that was run.
     pub scenario_name: String,
+    /// When the run began.
     pub started_at: DateTime<Local>,
+    /// When the run ended.
     pub finished_at: DateTime<Local>,
+    /// Per-step execution records, in order.
     pub steps: Vec<StepRecord>,
+    /// The run's overall outcome.
     pub outcome: Outcome,
 }
 
 impl ExecutionReport {
+    /// Write this report as a CSV file (one row per step, plus a summary row).
     pub fn write_csv(&self, path: &Path) -> std::io::Result<()> {
         use std::io::Write;
         let mut f = std::fs::File::create(path)?;
@@ -117,6 +143,7 @@ impl ExecutionReport {
         Ok(())
     }
 
+    /// Write this report as a self-contained HTML file with a per-step results table.
     pub fn write_html(&self, path: &Path) -> std::io::Result<()> {
         use std::io::Write;
         let total_ms = self

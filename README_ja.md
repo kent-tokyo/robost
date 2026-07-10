@@ -78,9 +78,11 @@ Rust 製 OSS デスクトップ自動化 (RPA) ツール。
 
 ## robost を選ぶ理由
 
-PyAutoGUI や SikuliX との一番の違いは **RDP/Citrix をエージェントなしで操作できる** 点です。ローカル側で RDP ウィンドウをキャプチャして enigo で入力を送るため、対象側の環境に依存しません。マルチスケール NCC マッチングで DPI スケーリング (100/125/150%) による座標ズレも自動で吸収します。
+PyAutoGUI や SikuliX との一番の違いは **RDP/Citrix をエージェントなしで操作できる** 点です。ローカル側で RDP ウィンドウをキャプチャして enigo で入力を送るため、対象側の環境に依存しません。マルチスケール NCC マッチングで DPI スケーリング (100/125/150%) による座標ズレも自動で吸収します — その耐性の実際のコストは [docs/benchmarks.md](docs/benchmarks.md) を参照してください。
 
 シナリオ形式は WinActor に近いノード語彙 (`click_image`、`wait_image`、`foreach`、`dialog_input` など) を持つため、既存の自動化処理からの移行がしやすいです。プレーン YAML なのでテキストエディタで読めますし、git で差分管理できます。
+
+crates.io 上の `robost` クレートはドキュメント入口のみで、実機能は `robost-core`・`robost-cli` など `crates/` 配下の各クレートにあります。
 
 プラグインは WASM サンドボックスで実行されます。権限は `plugin.toml` で宣言したものだけが許可され、プラグインがパニックしてもランナーは継続します。Rust・AssemblyScript・Go・C など `.wasm` にコンパイルできる言語であれば組み込めます。
 
@@ -154,8 +156,8 @@ rpa plugin install ./my-plugin.wasm   # 権限を確認してインストール
 ```bash
 cargo build --workspace
 cargo test --workspace
-cargo run -p robost-snip     # テンプレート採取ツール
-cargo run -p robost-editor   # ビジュアルシナリオエディタ
+cargo run -p robost-snip                                    # テンプレート採取ツール
+cargo run -p robost-cli --features embed-editor -- agent   # ビジュアルシナリオエディタ (ブラウザで開く)
 ```
 
 全クレートは [crates.io](https://crates.io/search?q=robost) で公開中 (v0.1.2)。
@@ -166,6 +168,11 @@ cargo run -p robost-editor   # ビジュアルシナリオエディタ
 |---|---|---|
 | **Phase 1** | ✅ 完了 | 200+ シナリオノード · CLI · ビジュアルエディタ (AI チャット・DnD・多言語) · snip · Web/UIA/Excel/Mail/OCR/スケジューラー · 全クレート crates.io 公開 |
 | **Phase 2** | 🔜 計画中 | シナリオ記録 · Word/SFTP/ML 検出/並列実行/レジストリ/M365 |
+
+**Phase 2 優先度**（社内計画、変更の可能性あり）:
+- 🔴 高: Word文書自動化、SFTP、DBドライバ追加（MySQL/PostgreSQL）、ML検出の強化、OCR前処理、`parallel`実行ノード、Windowsレジストリ/イベントログ操作
+- 🟡 中: Microsoft 365 / Google Workspace連携、PDF項目抽出、画面録画、SAP GUI、回転不変テンプレートマッチング
+- 🟢 低（Phase 3候補）: Orchestrator、Process Mining、AI支援シナリオ生成、Test Suite
 
 ## コントリビュート
 

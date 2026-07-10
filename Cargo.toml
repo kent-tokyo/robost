@@ -120,7 +120,7 @@ imap       = { version = "2", default-features = false, features = ["tls"] }
 native-tls = "0.2"
 
 # Database (robost-stdlib db feature)
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 
 # Archive
 zip = "2"
@@ -133,12 +133,13 @@ notify-rust  = "4"
 
 # Test utilities
 tempfile = "3"
+criterion = "0.8"
 
 # Scheduler (cron expression parsing)
 croner = "2"
 
 # OS keychain credential storage
-keyring = "3"
+keyring = "4"
 
 # FTP/FTPS client (robost-stdlib ftp feature)
-suppaftp = { version = "6", features = ["native-tls"] }
+suppaftp = { version = "9", features = ["native-tls"] }

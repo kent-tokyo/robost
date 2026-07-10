@@ -78,9 +78,11 @@
 
 ## 为什么选 robost？
 
-相比 PyAutoGUI 和 SikuliX，最主要的区别是**无需在目标机器安装代理就能操作 RDP/Citrix**。它在本地捕获远程桌面窗口并通过 enigo 发送输入，不依赖对端运行的环境。多尺度 NCC 匹配也能自动处理会让像素精确工具失效的 DPI 缩放（100/125/150%）。
+相比 PyAutoGUI 和 SikuliX，最主要的区别是**无需在目标机器安装代理就能操作 RDP/Citrix**。它在本地捕获远程桌面窗口并通过 enigo 发送输入，不依赖对端运行的环境。多尺度 NCC 匹配也能自动处理会让像素精确工具失效的 DPI 缩放（100/125/150%）— 该耐性的实际开销参见 [docs/benchmarks.md](docs/benchmarks.md)。
 
 场景格式的节点词汇贴近 WinActor（`click_image`、`wait_image`、`foreach`、`dialog_input` 等），从现有自动化流程迁移比较直接。场景是纯 YAML，能在文本编辑器里看，用 git 管理变更，不需要专有工具。
+
+crates.io 上的 `robost` crate 只是一个文档入口，实际功能都在 `robost-core`、`robost-cli` 等 `crates/` 目录下的各个 crate 中。
 
 插件在 WASM 沙箱里运行：权限在 `plugin.toml` 里声明并在运行时强制检查。插件只能访问它声明过的资源，崩溃了主进程也继续运行。用 Rust、AssemblyScript、Go 或 C 编译成 `.wasm` 就能集成，不需要 fork 核心。
 
@@ -154,8 +156,8 @@ rpa plugin install ./my-plugin.wasm   # 确认权限后安装
 ```bash
 cargo build --workspace
 cargo test --workspace
-cargo run -p robost-snip     # 模板截取工具
-cargo run -p robost-editor   # 可视化场景编辑器
+cargo run -p robost-snip                                    # 模板截取工具
+cargo run -p robost-cli --features embed-editor -- agent   # 可视化场景编辑器（在浏览器中打开）
 ```
 
 所有 crate 已发布至 [crates.io](https://crates.io/search?q=robost)（v0.1.2）。
@@ -166,6 +168,11 @@ cargo run -p robost-editor   # 可视化场景编辑器
 |---|---|---|
 | **Phase 1** | ✅ 已完成 | 200+ 场景节点 · CLI · 可视化编辑器（AI 聊天·拖放·多语言）· snip 工具 · Web/UIA/Excel/Mail/OCR/调度器 · 所有 crate 已发布至 crates.io |
 | **Phase 2** | 🔜 计划中 | 场景录制 · Word/SFTP/ML 检测/并行执行/注册表/M365 |
+
+**Phase 2 优先级**（内部规划，可能会调整）:
+- 🔴 高: Word 文档自动化、SFTP、更多数据库驱动（MySQL/PostgreSQL）、增强 ML 检测、OCR 预处理、`parallel` 并行执行节点、Windows 注册表/事件日志操作
+- 🟡 中: Microsoft 365 / Google Workspace 集成、PDF 字段提取、屏幕录制、SAP GUI、旋转不变模板匹配
+- 🟢 低（Phase 3 候选）: Orchestrator、Process Mining、AI 辅助场景生成、Test Suite
 
 ## 贡献
 

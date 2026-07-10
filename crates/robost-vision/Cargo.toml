@@ -54,3 +54,8 @@ objc2-core-foundation = { version = "0.3", optional = true }
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "template_match"
+harness = false

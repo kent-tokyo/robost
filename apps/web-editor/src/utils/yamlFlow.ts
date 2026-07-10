@@ -41,6 +41,7 @@ export function normalizeStep(raw: Record<string, unknown>): ScenarioStep {
       return {
         type: key,
         name: raw.name as string | undefined,
+        enabled: (raw.enabled as boolean) ?? true,
         ...data,
       }
     }
@@ -51,15 +52,17 @@ export function normalizeStep(raw: Record<string, unknown>): ScenarioStep {
 
 /** Convert a normalized ScenarioStep back to Rust-format YAML object. */
 export function denormalizeStep(step: ScenarioStep): Record<string, unknown> {
-  const { type, name, ...data } = step as {
+  const { type, name, enabled, ...data } = step as {
     type?: string
     name?: string
+    enabled?: boolean
     [key: string]: unknown
   }
   if (type && (KNOWN_STEP_TYPES as readonly string[]).includes(type)) {
     const stepData = Object.keys(data).length > 0 ? data : null
     const result: Record<string, unknown> = { [type]: stepData }
     if (name) result.name = name
+    if (enabled === false) result.enabled = false
     return result
   }
   return step as Record<string, unknown>
@@ -166,11 +169,12 @@ export function deleteStepFromYaml(yamlText: string, stepIndex: number): string 
   return yaml.dump(scenario, { lineWidth: -1, noRefs: true })
 }
 
-/** Append a new step of the given type to the scenario YAML. */
+/** Add a new step of the given type to the scenario YAML, at `atIndex` or appended if omitted. */
 export function addStepToYaml(
   yamlText: string,
   stepType: KnownStepType | string,
   defaults: Record<string, unknown> = {},
+  atIndex?: number,
 ): string {
   let scenario: Scenario
   try {
@@ -181,7 +185,13 @@ export function addStepToYaml(
 
   if (!scenario.steps) scenario.steps = []
   const stepData = Object.keys(defaults).length > 0 ? defaults : null
-  ;(scenario.steps as unknown[]).push({ [stepType]: stepData })
+  const steps = scenario.steps as unknown[]
+  const entry = { [stepType]: stepData }
+  if (atIndex === undefined || atIndex < 0 || atIndex >= steps.length) {
+    steps.push(entry)
+  } else {
+    steps.splice(atIndex, 0, entry)
+  }
 
   return yaml.dump(scenario, { lineWidth: -1, noRefs: true })
 }

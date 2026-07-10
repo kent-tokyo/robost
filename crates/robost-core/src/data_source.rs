@@ -3,20 +3,27 @@ use std::path::Path;
 use calamine::{open_workbook_auto, Reader};
 use thiserror::Error;
 
+/// Errors that can occur while loading a [`DataSource`](crate::scenario::DataSource) file.
 #[derive(Debug, Error)]
 pub enum DataSourceError {
+    /// The file at the given path doesn't exist.
     #[error("data source file not found: {0}")]
     NotFound(String),
+    /// The file failed to parse as CSV.
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
+    /// The file failed to parse as XLSX.
     #[error("XLSX error: {0}")]
     Xlsx(#[from] calamine::Error),
+    /// The requested sheet name doesn't exist in the workbook.
     #[error("sheet '{0}' not found in workbook")]
     SheetNotFound(String),
+    /// The file has no header row to derive column names from.
     #[error("data source has no header row")]
     EmptyHeaders,
 }
 
+/// A single data row, keyed by column header name.
 pub type DataRow = std::collections::HashMap<String, serde_json::Value>;
 
 /// Load a CSV or XLSX file and return rows as maps keyed by header names.

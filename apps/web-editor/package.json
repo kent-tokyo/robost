@@ -12,7 +12,7 @@
     "@anthropic-ai/sdk": "^0.37.0",
     "@xyflow/react": "^12.0.0",
     "js-yaml": "^4.1.0",
-    "lucide-react": "^0.460.0",
+    "lucide-react": "^1.22.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^5.0.0"
