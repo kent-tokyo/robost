@@ -120,7 +120,7 @@ imap       = { version = "2", default-features = false, features = ["tls"] }
 native-tls = "0.2"
 
 # Database (robost-stdlib db feature)
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 
 # Archive
 zip = "2"
