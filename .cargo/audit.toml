@@ -1,0 +1,15 @@
+# cargo-audit configuration.
+#
+# ponytail: quick-xml is pulled at four different old versions (0.30/0.31/0.37/0.39)
+# by deps we don't control the version of directly (xcb, wayland-scanner, zbus_xml -
+# Linux clipboard/window-system glue) or only indirectly (calamine, umya-spreadsheet -
+# checked 2026-07-10, their latest majors still require quick-xml ^0.39/^0.37, so no
+# non-breaking upgrade path to the >=0.41 fix exists yet). Risk is low: xcb/wayland-
+# scanner/zbus_xml parse only trusted build-time/system XML, and calamine/umya-
+# spreadsheet parse local xlsx files opened by the desktop user, not attacker-supplied
+# network input. Re-check when calamine/umya-spreadsheet ship a quick-xml >=0.41 major.
+[advisories]
+ignore = [
+    "RUSTSEC-2026-0194", # quick-xml quadratic runtime on duplicate attrs
+    "RUSTSEC-2026-0195", # quick-xml unbounded NsReader allocation
+]
