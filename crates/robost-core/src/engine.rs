@@ -3430,7 +3430,9 @@ impl ScenarioEngine {
                 .ok()
                 .filter(|k| !k.is_empty())
                 .or_else(keychain_anthropic_key)
-                .ok_or_else(|| EngineError::Other("llm-ocr: ANTHROPIC_API_KEY not set".to_owned()))?,
+                .ok_or_else(|| {
+                    EngineError::Other("llm-ocr: ANTHROPIC_API_KEY not set".to_owned())
+                })?,
             LlmProvider::Openai => std::env::var("OPENAI_API_KEY")
                 .map_err(|_| EngineError::Other("llm-ocr: OPENAI_API_KEY not set".to_owned()))?,
         };
