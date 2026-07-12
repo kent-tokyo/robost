@@ -15,7 +15,7 @@ export function AiChat() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const { yaml, setYaml } = useScenarioStore()
+  const { yaml, setYaml, createScenarioFromYaml } = useScenarioStore()
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -34,9 +34,17 @@ export function AiChat() {
       const reply = await api.chat(next, yaml || undefined)
       setMessages([...next, { role: 'assistant', content: reply }])
 
-      // YAMLコードブロックが返ってきたら自動反映
-      const match = reply.match(/```ya?ml\n([\s\S]*?)```/)
-      if (match) setYaml(match[1].trim())
+      // YAMLコードブロックが返ってきたら自動反映（未選択なら新規シナリオとして開く）
+      const match = reply.match(/```ya?ml[ \t]*\r?\n([\s\S]*?)```/)
+      if (match) {
+        const generatedYaml = match[1].trim()
+        // 応答待ち中に別シナリオが開かれた場合に備え、判定直前の最新状態を読む
+        if (useScenarioStore.getState().activeScenario) {
+          setYaml(generatedYaml)
+        } else {
+          await createScenarioFromYaml(generatedYaml)
+        }
+      }
     } catch (err) {
       setMessages([
         ...next,
@@ -44,13 +52,6 @@ export function AiChat() {
       ])
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      send()
     }
   }
 
@@ -104,10 +105,9 @@ export function AiChat() {
           <div className="ai-chat-input-row">
             <textarea
               className="ai-chat-input"
-              placeholder="メッセージを入力（Enter で送信、Shift+Enter で改行）"
+              placeholder="メッセージを入力"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKey}
               rows={2}
             />
             <button

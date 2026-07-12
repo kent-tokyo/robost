@@ -117,9 +117,32 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages, scenario_yaml: scenarioYaml }),
     })
-    if (!res.ok) throw new Error(`Chat API error: ${res.status}`)
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { message?: string }
+      throw new Error(body.message ?? `Chat API error: HTTP ${res.status}`)
+    }
     const data = await res.json() as { reply: string }
     return data.reply
+  },
+
+  // ── Settings ───────────────────────────────────────────────────────────────
+  async getSettings(): Promise<{ hasApiKey: boolean }> {
+    const res = await fetch(`${BASE}/api/settings`)
+    const data = await res.json() as { has_api_key: boolean }
+    return { hasApiKey: data.has_api_key }
+  },
+
+  async saveSettings(apiKey: string): Promise<{ message: string | null }> {
+    const res = await fetch(`${BASE}/api/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey }),
+    })
+    const body = await res.json().catch(() => ({})) as { message?: string }
+    if (!res.ok) {
+      throw new Error(body.message ?? `Settings save failed: HTTP ${res.status}`)
+    }
+    return { message: body.message ?? null }
   },
 
   // ── Screenshot ─────────────────────────────────────────────────────────────

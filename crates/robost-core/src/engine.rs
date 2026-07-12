@@ -3416,9 +3416,21 @@ impl ScenarioEngine {
     ) -> Result<()> {
         use crate::scenario::LlmProvider;
 
+        // Same keychain entry the robost-cli Settings UI writes to (service="robost",
+        // account="anthropic_api_key"); lets llm-ocr see a key saved there, not just via env var.
+        fn keychain_anthropic_key() -> Option<String> {
+            keyring::Entry::new("robost", "anthropic_api_key")
+                .ok()?
+                .get_password()
+                .ok()
+        }
+
         let api_key = match &llm_config.provider {
             LlmProvider::Anthropic => std::env::var("ANTHROPIC_API_KEY")
-                .map_err(|_| EngineError::Other("llm-ocr: ANTHROPIC_API_KEY not set".to_owned()))?,
+                .ok()
+                .filter(|k| !k.is_empty())
+                .or_else(keychain_anthropic_key)
+                .ok_or_else(|| EngineError::Other("llm-ocr: ANTHROPIC_API_KEY not set".to_owned()))?,
             LlmProvider::Openai => std::env::var("OPENAI_API_KEY")
                 .map_err(|_| EngineError::Other("llm-ocr: OPENAI_API_KEY not set".to_owned()))?,
         };

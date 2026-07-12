@@ -1,6 +1,21 @@
 import { create } from 'zustand'
+import * as yaml from 'js-yaml'
 import { api, type FolderEntry } from '../api/client'
 import { addStepToYaml, deleteStepFromYaml, setDataSourceInYaml } from '../utils/yamlFlow'
+
+function uniqueScenarioName(base: string, ext: string, existing: string[], sep = '_'): string {
+  let name = `${base}${ext}`
+  let n = 2
+  while (existing.includes(name)) {
+    name = `${base}${sep}${n}${ext}`
+    n++
+  }
+  return name
+}
+
+function allScenarioNames(scenarios: string[], folders: FolderEntry[]): string[] {
+  return [...scenarios, ...folders.flatMap((f) => f.scenarios.map((s) => `${f.name}/${s}`))]
+}
 
 interface ScenarioStore {
   scenarios: string[]
@@ -15,6 +30,7 @@ interface ScenarioStore {
   setYaml: (yaml: string) => void
   save: () => Promise<void>
   newScenario: (name: string, folder?: string) => Promise<void>
+  createScenarioFromYaml: (yamlContent: string) => Promise<void>
   duplicateScenario: (name: string) => Promise<void>
   deleteScenario: (name: string) => Promise<void>
   addStep: (stepType: string, defaults?: Record<string, unknown>, atIndex?: number) => void
@@ -66,27 +82,35 @@ export const useScenarioStore = create<ScenarioStore>((set, get) => ({
     set({ activeScenario: fullName, yaml: initialYaml, dirty: false })
   },
 
+  createScenarioFromYaml: async (yamlContent) => {
+    let parsedName: string | undefined
+    try {
+      const parsed = yaml.load(yamlContent) as { name?: unknown } | undefined
+      if (typeof parsed?.name === 'string') parsedName = parsed.name
+    } catch {
+      // malformed YAML from the AI — fall back to a generic name
+    }
+    const base = (parsedName || 'ai-scenario').replace(/[/\\]/g, '_')
+    const { scenarios, folders } = get()
+    const name = uniqueScenarioName(base, '.yaml', allScenarioNames(scenarios, folders))
+
+    await api.saveScenario(name, yamlContent)
+    await get().loadList()
+    set({ activeScenario: name, yaml: yamlContent, dirty: false })
+  },
+
   duplicateScenario: async (name) => {
-    const yaml = await api.getScenario(name)
+    const content = await api.getScenario(name)
     const slash = name.lastIndexOf('/')
     const folder = slash >= 0 ? name.slice(0, slash + 1) : ''
     const base = name.slice(slash + 1).replace(/\.ya?ml$/i, '')
     const ext = name.match(/\.ya?ml$/i)?.[0] ?? '.yaml'
     const { scenarios, folders } = get()
 
-    const allNames = [
-      ...scenarios,
-      ...folders.flatMap((f) => f.scenarios.map((s) => `${f.name}/${s}`)),
-    ]
+    // sep='' preserves the original on-disk convention: foo_copy2.yaml, not foo_copy_2.yaml
+    const copyName = uniqueScenarioName(`${folder}${base}_copy`, ext, allScenarioNames(scenarios, folders), '')
 
-    let copyName = `${folder}${base}_copy${ext}`
-    let n = 2
-    while (allNames.includes(copyName)) {
-      copyName = `${folder}${base}_copy${n}${ext}`
-      n++
-    }
-
-    await api.saveScenario(copyName, yaml)
+    await api.saveScenario(copyName, content)
     await get().loadList()
   },
 

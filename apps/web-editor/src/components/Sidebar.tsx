@@ -8,13 +8,13 @@ const items: { page: Page; icon: React.ReactNode; label: string }[] = [
 ]
 
 export function Sidebar() {
-  const { page, setPage } = useAppStore()
+  const { page, setPage, appTitle } = useAppStore()
 
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
         <Bot size={24} />
-        <span>robost</span>
+        <span>{appTitle}</span>
       </div>
       <nav className="sidebar-nav">
         {items.map((item) => (

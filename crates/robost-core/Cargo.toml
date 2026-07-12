@@ -16,7 +16,7 @@ _ocr = []
 ml  = ["robost-vision/ml"]
 excel-write = []
 http = ["dep:ureq"]
-llm-ocr = ["dep:ureq"]
+llm-ocr = ["dep:ureq", "dep:keyring"]
 uia = []
 web = ["dep:robost-web"]
 db       = ["robost-stdlib/db"]
@@ -55,6 +55,7 @@ calamine.workspace = true
 umya-spreadsheet.workspace = true
 regex.workspace = true
 ureq        = { workspace = true, optional = true }
+keyring     = { workspace = true, optional = true }
 notify-rust = { workspace = true, optional = true }
 arboard     = { workspace = true, optional = true }
 glob        = { workspace = true, optional = true }

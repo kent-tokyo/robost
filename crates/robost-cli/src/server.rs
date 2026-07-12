@@ -649,11 +649,33 @@ async fn agent_upload_file(
         .into_response()
 }
 
-async fn agent_chat(Json(body): Json<ChatBody>) -> impl IntoResponse {
-    let api_key = match std::env::var("ANTHROPIC_API_KEY")
+const KEYCHAIN_SERVICE: &str = "robost";
+const KEYCHAIN_API_KEY_ACCOUNT: &str = "anthropic_api_key";
+
+fn keychain_get_api_key() -> Option<String> {
+    keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_API_KEY_ACCOUNT)
+        .ok()?
+        .get_password()
+        .ok()
+}
+
+/// Env var wins if set (no I/O); otherwise falls back to the OS keychain, which is
+/// blocking I/O and must not run directly on the async executor thread.
+async fn resolve_api_key() -> Option<String> {
+    if let Some(k) = std::env::var("ANTHROPIC_API_KEY")
         .ok()
         .filter(|k| !k.is_empty())
     {
+        return Some(k);
+    }
+    tokio::task::spawn_blocking(keychain_get_api_key)
+        .await
+        .ok()
+        .flatten()
+}
+
+async fn agent_chat(Json(body): Json<ChatBody>) -> impl IntoResponse {
+    let api_key = match resolve_api_key().await {
         Some(k) => k,
         None => {
             return (
@@ -661,7 +683,7 @@ async fn agent_chat(Json(body): Json<ChatBody>) -> impl IntoResponse {
                 Json(OkResponse {
                     ok: false,
                     message: Some(
-                        "ANTHROPIC_API_KEY is not set. Add it to .env and restart the agent."
+                        "ANTHROPIC_API_KEY is not set. Set it in Settings, or export it in the shell that starts the agent: `export ANTHROPIC_API_KEY=sk-...`"
                             .into(),
                     ),
                 }),
@@ -719,11 +741,99 @@ async fn agent_chat(Json(body): Json<ChatBody>) -> impl IntoResponse {
                 .to_string();
             Json(ChatResponse { reply }).into_response()
         }
-        Ok(Err(e)) => (
-            StatusCode::BAD_GATEWAY,
+        Ok(Err(e)) => {
+            let message = match *e {
+                ureq::Error::Status(code, response) => {
+                    let detail = response
+                        .into_json::<serde_json::Value>()
+                        .ok()
+                        .and_then(|b| b["error"]["message"].as_str().map(str::to_string));
+                    match code {
+                        401 => format!(
+                            "Anthropic APIキーが無効です(401 Unauthorized)。設定画面でキーを確認・再設定してください。{}",
+                            detail.map(|d| format!("詳細: {d}")).unwrap_or_default()
+                        ),
+                        429 => "Anthropicのレート制限に達しました(429)。しばらく待って再試行してください。".to_string(),
+                        _ => format!(
+                            "Anthropic APIエラー ({code}){}",
+                            detail.map(|d| format!(": {d}")).unwrap_or_default()
+                        ),
+                    }
+                }
+                ureq::Error::Transport(t) => format!("Anthropic APIに接続できませんでした: {t}"),
+            };
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(OkResponse {
+                    ok: false,
+                    message: Some(message),
+                }),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
             Json(OkResponse {
                 ok: false,
                 message: Some(e.to_string()),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Serialize)]
+struct SettingsResponse {
+    has_api_key: bool,
+}
+
+async fn agent_get_settings() -> impl IntoResponse {
+    let has_api_key = resolve_api_key().await.is_some();
+    Json(SettingsResponse { has_api_key })
+}
+
+#[derive(Deserialize)]
+struct SaveSettingsBody {
+    api_key: String,
+}
+
+/// Runs the actual (blocking) keychain write/delete off the async executor thread.
+/// Returns `Ok(Some(message))` on success with an optional user-facing note,
+/// `Err(message)` on a real failure (an already-absent entry is not an error).
+fn save_settings_blocking(key: String) -> std::result::Result<Option<String>, String> {
+    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_API_KEY_ACCOUNT)
+        .map_err(|e| e.to_string())?;
+
+    if key.is_empty() {
+        if let Err(e) = entry.delete_credential() {
+            if !matches!(e, keyring::Error::NoEntry) {
+                return Err(format!("キーチェーンからの削除に失敗しました: {e}"));
+            }
+        }
+        let env_key_present = std::env::var("ANTHROPIC_API_KEY")
+            .ok()
+            .filter(|k| !k.is_empty())
+            .is_some();
+        let message = env_key_present.then(|| {
+            "キーチェーンからは削除しましたが、環境変数 ANTHROPIC_API_KEY が設定されているため引き続きそちらが使用されます。"
+                .to_string()
+        });
+        return Ok(message);
+    }
+
+    entry.set_password(&key).map_err(|e| e.to_string())?;
+    Ok(None)
+}
+
+async fn agent_save_settings(Json(body): Json<SaveSettingsBody>) -> impl IntoResponse {
+    let key = body.api_key.trim().to_string();
+    match tokio::task::spawn_blocking(move || save_settings_blocking(key)).await {
+        Ok(Ok(message)) => Json(OkResponse { ok: true, message }).into_response(),
+        Ok(Err(message)) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(OkResponse {
+                ok: false,
+                message: Some(message),
             }),
         )
             .into_response(),
@@ -869,6 +979,10 @@ pub async fn run_agent_server(bind_addr: &str, scenarios_dir: PathBuf) -> Result
         .route("/api/status", get(agent_status))
         // AI chat
         .route("/api/chat", post(agent_chat))
+        .route(
+            "/api/settings",
+            get(agent_get_settings).post(agent_save_settings),
+        )
         // Web UI (fallback)
         .fallback(agent_index)
         .with_state(state);

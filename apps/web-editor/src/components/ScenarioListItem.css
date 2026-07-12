@@ -8,23 +8,23 @@
   transition: background 0.1s;
   gap: 4px;
 }
-.sli-row:hover { background: #2d2d4e; }
+.sli-row:hover { background: var(--surface); }
 .sli-row.active {
-  border-left-color: #7c6af7;
-  background: #2d2d4e;
+  border-left-color: var(--accent);
+  background: var(--surface);
 }
 .sli-row.sli-confirming { background: rgba(220, 38, 38, 0.12); }
 
 .sli-name {
   flex: 1;
   font-size: 13px;
-  color: #9090b0;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
-.sli-row.active .sli-name { color: #c0b0ff; }
+.sli-row.active .sli-name { color: var(--accent-light); }
 .sli-name-sm { font-size: 12px; color: #e06060; }
 
 /* アクションボタン: 通常は非表示、hover で表示 */
@@ -47,12 +47,11 @@
   background: none;
   border: none;
   border-radius: 4px;
-  color: #6060809;
-  color: #606090;
+  color: var(--text-faint-2);
   cursor: pointer;
   font-size: 11px;
   transition: background 0.1s, color 0.1s;
 }
-.sli-btn:hover { background: #3d3d5e; color: #d0d0e8; }
+.sli-btn:hover { background: var(--border); color: var(--text); }
 .sli-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.sli-btn-danger:hover { background: rgba(220, 38, 38, 0.2); color: #f87171; }
+.sli-btn-danger:hover { background: rgba(220, 38, 38, 0.2); color: var(--danger); }
