@@ -136,7 +136,7 @@ tempfile = "3"
 criterion = "0.8"
 
 # Scheduler (cron expression parsing)
-croner = "2"
+croner = "3"
 
 # OS keychain credential storage
 keyring = "4"
