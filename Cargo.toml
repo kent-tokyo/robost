@@ -96,7 +96,7 @@ chrono = { version = "0.4", features = ["clock"] }
 
 # Data source (CSV / XLSX)
 csv               = "1"
-calamine          = "0.26"
+calamine          = "0.36"
 umya-spreadsheet  = "2"
 
 # String / file utilities
